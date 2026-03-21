@@ -1123,6 +1123,140 @@ def create_app():
     def api_health():
         return jsonify({'status': 'ok', 'version': VERSION})
 
+    # ─── Update Checker ───────────────────────────────────────────────
+
+    @app.route('/api/update-check')
+    def api_update_check():
+        """Check GitHub for newer release."""
+        try:
+            import requests as rq
+            resp = rq.get('https://api.github.com/repos/SysAdminDoc/nomad-windows/releases/latest', timeout=10)
+            if resp.ok:
+                data = resp.json()
+                latest = data.get('tag_name', '').lstrip('v')
+                current = VERSION
+                # Simple version comparison
+                is_newer = False
+                try:
+                    from packaging.version import Version
+                    is_newer = Version(latest) > Version(current)
+                except Exception:
+                    is_newer = latest != current and latest > current
+                return jsonify({
+                    'current': current,
+                    'latest': latest,
+                    'update_available': is_newer,
+                    'download_url': data.get('html_url', ''),
+                    'release_name': data.get('name', ''),
+                })
+        except Exception as e:
+            log.warning(f'Update check failed: {e}')
+        return jsonify({'current': VERSION, 'latest': VERSION, 'update_available': False})
+
+    # ─── Windows Startup Toggle ───────────────────────────────────────
+
+    @app.route('/api/startup')
+    def api_startup_get():
+        """Check if app is set to start with Windows."""
+        import winreg
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                 r'Software\Microsoft\Windows\CurrentVersion\Run', 0, winreg.KEY_READ)
+            winreg.QueryValueEx(key, 'ProjectNOMAD')
+            winreg.CloseKey(key)
+            return jsonify({'enabled': True})
+        except Exception:
+            return jsonify({'enabled': False})
+
+    @app.route('/api/startup', methods=['PUT'])
+    def api_startup_set():
+        """Enable or disable start with Windows."""
+        import winreg
+        data = request.get_json()
+        enabled = data.get('enabled', False)
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                 r'Software\Microsoft\Windows\CurrentVersion\Run', 0, winreg.KEY_SET_VALUE)
+            if enabled:
+                exe_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath('nomad.py')
+                if getattr(sys, 'frozen', False):
+                    winreg.SetValueEx(key, 'ProjectNOMAD', 0, winreg.REG_SZ, f'"{exe_path}"')
+                else:
+                    winreg.SetValueEx(key, 'ProjectNOMAD', 0, winreg.REG_SZ, f'"{sys.executable}" "{exe_path}"')
+            else:
+                try:
+                    winreg.DeleteValue(key, 'ProjectNOMAD')
+                except FileNotFoundError:
+                    pass
+            winreg.CloseKey(key)
+            return jsonify({'status': 'ok', 'enabled': enabled})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    # ─── Export / Import Config ───────────────────────────────────────
+
+    @app.route('/api/export-config')
+    def api_export_config():
+        """Export settings and database as a ZIP."""
+        import io
+        import zipfile as zf
+        from db import get_db_path
+
+        buf = io.BytesIO()
+        with zf.ZipFile(buf, 'w', zf.ZIP_DEFLATED) as z:
+            db_path = get_db_path()
+            if os.path.isfile(db_path):
+                z.write(db_path, 'nomad.db')
+        buf.seek(0)
+        return Response(buf.read(), mimetype='application/zip',
+                       headers={'Content-Disposition': 'attachment; filename="nomad-backup.zip"'})
+
+    @app.route('/api/import-config', methods=['POST'])
+    def api_import_config():
+        """Import a config backup ZIP."""
+        import zipfile as zf
+        import io
+        from db import get_db_path
+
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        file = request.files['file']
+        try:
+            with zf.ZipFile(io.BytesIO(file.read())) as z:
+                if 'nomad.db' in z.namelist():
+                    db_path = get_db_path()
+                    # Backup current first
+                    from db import backup_db
+                    backup_db()
+                    z.extract('nomad.db', os.path.dirname(db_path))
+                    return jsonify({'status': 'ok', 'message': 'Config restored. Restart app to apply.'})
+                else:
+                    return jsonify({'error': 'Invalid backup file'}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    # ─── Auto-pull default model after Ollama install ─────────────────
+
+    @app.route('/api/ai/auto-setup', methods=['POST'])
+    def api_ai_auto_setup():
+        """Auto-pull default model. Called after wizard installs Ollama."""
+        if not ollama.is_installed():
+            return jsonify({'error': 'Ollama not installed'}), 400
+
+        def do_setup():
+            # Wait for Ollama to be ready
+            for _ in range(30):
+                if ollama.running():
+                    break
+                time.sleep(1)
+            if ollama.running():
+                log.info('Auto-pulling default model llama3.2:3b...')
+                log_activity('auto_model_pull', 'ollama', 'llama3.2:3b')
+                ollama.pull_model('llama3.2:3b')
+
+        threading.Thread(target=do_setup, daemon=True).start()
+        return jsonify({'status': 'started'})
+
     # ─── Favicon ──────────────────────────────────────────────────────
 
     @app.route('/favicon.ico')
