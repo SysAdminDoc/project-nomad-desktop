@@ -274,16 +274,44 @@ def main():
     if is_first_run:
         start_url += '?wizard=1'
 
-    # Launch embedded WebView2 window
+    # Launch embedded WebView2 window with splash
+    splash_html = f'''<html><body style="margin:0;background:#060608;display:flex;align-items:center;justify-content:center;height:100vh;font-family:'Segoe UI',sans-serif;">
+    <div style="text-align:center;">
+      <div style="width:80px;height:80px;margin:0 auto 20px;">
+        <svg viewBox="0 0 64 64"><polygon points="32,4 60,32 32,60 4,32" fill="#5b9fff"/><polygon points="32,14 50,32 32,50 14,32" fill="#0d0d0d"/><polygon points="32,22 42,32 32,42 22,32" fill="#5b9fff"/></svg>
+      </div>
+      <h1 style="color:#e8e8ed;font-size:22px;font-weight:600;margin:0 0 8px;">Project N.O.M.A.D.</h1>
+      <p style="color:#55556a;font-size:13px;margin:0 0 24px;">Setting up your offline command center...</p>
+      <div style="width:200px;height:3px;background:#1e1e26;border-radius:2px;margin:0 auto;overflow:hidden;">
+        <div style="width:40%;height:100%;background:linear-gradient(90deg,#5b9fff,#b388ff);border-radius:2px;animation:load 1.5s ease infinite;"></div>
+      </div>
+    </div>
+    <style>@keyframes load{{0%{{transform:translateX(-100%)}}100%{{transform:translateX(350%)}}}}</style>
+    </body></html>'''
+
     global _window
     _window = webview.create_window(
         f'Project N.O.M.A.D. v{VERSION}',
-        start_url,
+        html=splash_html,
         width=1280,
         height=860,
         min_size=(900, 600),
-        background_color='#0d0d0d',
+        background_color='#060608',
     )
+
+    def _navigate_when_ready():
+        """Navigate to dashboard once Flask is serving."""
+        import requests as rq
+        for _ in range(60):
+            try:
+                rq.get(f'http://127.0.0.1:{PORT}/api/health', timeout=1)
+                if _window:
+                    _window.load_url(start_url)
+                return
+            except Exception:
+                time.sleep(0.3)
+
+    threading.Thread(target=_navigate_when_ready, daemon=True).start()
     _window.events.closing += on_window_closing
 
     webview.start(gui='edgechromium', debug=False)
