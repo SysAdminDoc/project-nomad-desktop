@@ -138,16 +138,16 @@ def setup_tray():
 
 
 def auto_start_services():
-    """Start services that were running when the app last closed."""
+    """Start all installed services on launch (turnkey behavior)."""
     mods = _get_service_modules()
     db = get_db()
-    rows = db.execute('SELECT id FROM services WHERE running = 1 AND installed = 1').fetchall()
+    rows = db.execute('SELECT id FROM services WHERE installed = 1').fetchall()
     db.close()
 
     for row in rows:
         sid = row['id']
         mod = mods.get(sid)
-        if mod and mod.is_installed():
+        if mod and mod.is_installed() and not mod.running():
             try:
                 log.info(f'Auto-starting {sid}...')
                 mod.start()
