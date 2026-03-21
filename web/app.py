@@ -29,7 +29,12 @@ SERVICE_MODULES = {
     'stirling': stirling,
 }
 
-VERSION = '0.7.0'
+VERSION = '0.8.0'
+
+
+def set_version(v):
+    global VERSION
+    VERSION = v
 
 # RAG / Knowledge Base state
 _embed_state = {'status': 'idle', 'doc_id': None, 'progress': 0, 'detail': ''}
@@ -50,7 +55,7 @@ def create_app():
 
     @app.route('/')
     def dashboard():
-        return render_template('index.html')
+        return render_template('index.html', version=VERSION)
 
     # ─── Service API ───────────────────────────────────────────────────
 
@@ -149,6 +154,20 @@ def create_app():
     @app.route('/api/services/<service_id>/progress')
     def api_service_progress(service_id):
         return jsonify(get_download_progress(service_id))
+
+    @app.route('/api/services/<service_id>/prereqs')
+    def api_service_prereqs(service_id):
+        """Check prerequisites for a service."""
+        if service_id == 'stirling':
+            java = stirling._find_java()
+            return jsonify({'met': java is not None, 'java_found': java is not None, 'java_path': java,
+                            'message': None if java else 'Java 17+ required. Install from https://adoptium.net'})
+        if service_id == 'kolibri':
+            import shutil
+            py = shutil.which('python') or shutil.which('python3')
+            return jsonify({'met': py is not None, 'python_found': py is not None,
+                            'message': None if py else 'Python required on PATH for Kolibri'})
+        return jsonify({'met': True, 'message': None})
 
     # ─── Ollama AI Chat API ───────────────────────────────────────────
 
