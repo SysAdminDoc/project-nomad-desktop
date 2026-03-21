@@ -112,10 +112,10 @@ pyinstaller build.spec
 - Benchmark disk test creates/deletes temp files in ProjectNOMAD\benchmark\
 
 ## Version
-v0.8.0
+v0.9.0
 
 ## Status
-Working v0.8.0 — Production polish release. 6 services (Ollama, Kiwix, CyberChef, Kolibri, Qdrant, Stirling PDF). v0.8.0 adds: typed toast notifications (success/error/warning/info with color-coded icons), service prerequisite checks (Java for Stirling, Python for Kolibri), inline conversation rename (no prompt() dialogs), service card error display with retry buttons, welcome banner for first-time users, enhanced markdown renderer (tables, horizontal rules, strikethrough), version consolidation via Jinja template vars, better offline map search messaging, fixed polling double-fetch. Previous: wizard presets, guided tour, splash screen, inline model picker, update checker, Windows startup toggle, config export/import, Inno Setup installer, app icon. ~7K lines across 14 files. 7-tab dashboard.
+Working v0.9.0 — Production polish release. 6 services (Ollama, Kiwix, CyberChef, Kolibri, Qdrant, Stirling PDF). v0.8.0 adds: typed toast notifications (success/error/warning/info with color-coded icons), service prerequisite checks (Java for Stirling, Python for Kolibri), inline conversation rename (no prompt() dialogs), service card error display with retry buttons, welcome banner for first-time users, enhanced markdown renderer (tables, horizontal rules, strikethrough), version consolidation via Jinja template vars, better offline map search messaging, fixed polling double-fetch. Previous: wizard presets, guided tour, splash screen, inline model picker, update checker, Windows startup toggle, config export/import, Inno Setup installer, app icon. ~7K lines across 14 files. 7-tab dashboard.
 
 ## Gotchas (v0.8.0)
 - Stirling PDF requires Java 17+ (downloads .jar, not .exe — no Windows exe in releases)
