@@ -63,7 +63,7 @@ pyinstaller build.spec
 - Kolibri: http://localhost:8300
 - Stirling PDF: http://localhost:8443
 
-## Features (v1.2.0)
+## Features (v1.3.0)
 - **6 services**: Ollama (AI), Kiwix (offline content), CyberChef (data tools), Kolibri (education), Qdrant (vector DB), Stirling PDF (PDF toolkit)
 - **Setup wizard** — capability selection (choose which services to install)
 - **Auto-start** — previously running services restart on app launch
@@ -112,10 +112,10 @@ pyinstaller build.spec
 - Benchmark disk test creates/deletes temp files in ProjectNOMAD\benchmark\
 
 ## Version
-v1.2.0
+v1.3.0
 
 ## Status
-Working v1.2.0 — Preparedness Edition. 8-tab dashboard. New Preparedness tab: 6 emergency checklist templates (72-hour kit, bug-out bag, medical, comms, vehicle, home supplies) with persistent checkable items; resource calculators (water, food, power/solar); comprehensive radio frequency reference (NOAA, FRS, GMRS, MURS, CB, HAM bands, shortwave); 5 quick-reference emergency protocols (CPR, bleeding control, water purification, shelter, fire starting). 12 AI system prompt presets (6 new prepper-focused: Field Medic, HAM Radio Tech, Homesteader, Water/Sanitation, Security/OPSEC, Foraging). All data persists offline in SQLite.
+Working v1.3.0 — Preparedness Edition. 8-tab dashboard with sub-navigated Preparedness tab (7 sub-sections: Checklists, Inventory, Contacts, Calculators, Radio Ref, Quick Ref, Protocols). Supply inventory tracker with expiration alerts, low-stock warnings, category filtering, search. Emergency contacts directory with callsigns, roles, skills, blood types, rally points, medical notes. LAN Chat widget for local network messaging (accessible from any tab). Quick reference cards: NATO phonetic alphabet, Morse code, unit converter (14 conversions), essential knots, weather prediction from observation, ground-to-air signals. Plus v1.2.0 features: 6 checklist templates, resource calculators, radio frequency reference, emergency protocols, 12 AI presets.
 
 ## Gotchas (v0.8.0)
 - Stirling PDF requires Java 17+ (downloads .jar, not .exe — no Windows exe in releases)

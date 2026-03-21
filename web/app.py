@@ -30,7 +30,7 @@ SERVICE_MODULES = {
     'stirling': stirling,
 }
 
-VERSION = '1.2.0'
+VERSION = '1.3.0'
 
 
 def set_version(v):
@@ -1775,6 +1775,197 @@ def create_app():
         db.commit()
         db.close()
         return jsonify({'status': 'deleted'})
+
+    # ─── Inventory API ────────────────────────────────────────────────
+
+    INVENTORY_CATEGORIES = [
+        'water', 'food', 'medical', 'ammo', 'fuel', 'tools',
+        'hygiene', 'comms', 'clothing', 'shelter', 'power', 'other',
+    ]
+
+    @app.route('/api/inventory')
+    def api_inventory_list():
+        db = get_db()
+        cat = request.args.get('category', '')
+        search = request.args.get('q', '').strip()
+        query = 'SELECT * FROM inventory'
+        params = []
+        clauses = []
+        if cat:
+            clauses.append('category = ?')
+            params.append(cat)
+        if search:
+            clauses.append('(name LIKE ? OR location LIKE ? OR notes LIKE ?)')
+            params.extend([f'%{search}%'] * 3)
+        if clauses:
+            query += ' WHERE ' + ' AND '.join(clauses)
+        query += ' ORDER BY category, name'
+        rows = db.execute(query, params).fetchall()
+        db.close()
+        return jsonify([dict(r) for r in rows])
+
+    @app.route('/api/inventory', methods=['POST'])
+    def api_inventory_create():
+        data = request.get_json()
+        db = get_db()
+        cur = db.execute(
+            'INSERT INTO inventory (name, category, quantity, unit, min_quantity, location, expiration, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            (data.get('name', ''), data.get('category', 'other'), data.get('quantity', 0),
+             data.get('unit', 'ea'), data.get('min_quantity', 0), data.get('location', ''),
+             data.get('expiration', ''), data.get('notes', '')))
+        db.commit()
+        item_id = cur.lastrowid
+        row = db.execute('SELECT * FROM inventory WHERE id = ?', (item_id,)).fetchone()
+        db.close()
+        return jsonify(dict(row)), 201
+
+    @app.route('/api/inventory/<int:item_id>', methods=['PUT'])
+    def api_inventory_update(item_id):
+        data = request.get_json()
+        db = get_db()
+        allowed = ['name', 'category', 'quantity', 'unit', 'min_quantity', 'location', 'expiration', 'notes']
+        fields = []
+        vals = []
+        for k in allowed:
+            if k in data:
+                fields.append(f'{k} = ?')
+                vals.append(data[k])
+        if not fields:
+            return jsonify({'error': 'No fields to update'}), 400
+        fields.append('updated_at = CURRENT_TIMESTAMP')
+        vals.append(item_id)
+        db.execute(f'UPDATE inventory SET {", ".join(fields)} WHERE id = ?', vals)
+        db.commit()
+        db.close()
+        return jsonify({'status': 'saved'})
+
+    @app.route('/api/inventory/<int:item_id>', methods=['DELETE'])
+    def api_inventory_delete(item_id):
+        db = get_db()
+        db.execute('DELETE FROM inventory WHERE id = ?', (item_id,))
+        db.commit()
+        db.close()
+        return jsonify({'status': 'deleted'})
+
+    @app.route('/api/inventory/summary')
+    def api_inventory_summary():
+        db = get_db()
+        total = db.execute('SELECT COUNT(*) as c FROM inventory').fetchone()['c']
+        low_stock = db.execute('SELECT COUNT(*) as c FROM inventory WHERE quantity <= min_quantity AND min_quantity > 0').fetchone()['c']
+        # Expiring within 30 days
+        from datetime import datetime, timedelta
+        soon = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
+        today = datetime.now().strftime('%Y-%m-%d')
+        expiring = db.execute("SELECT COUNT(*) as c FROM inventory WHERE expiration != '' AND expiration <= ? AND expiration >= ?", (soon, today)).fetchone()['c']
+        expired = db.execute("SELECT COUNT(*) as c FROM inventory WHERE expiration != '' AND expiration < ?", (today,)).fetchone()['c']
+        cats = db.execute('SELECT category, COUNT(*) as c, SUM(quantity) as qty FROM inventory GROUP BY category ORDER BY category').fetchall()
+        db.close()
+        return jsonify({
+            'total': total, 'low_stock': low_stock, 'expiring_soon': expiring, 'expired': expired,
+            'categories': [{'category': r['category'], 'count': r['c'], 'total_qty': r['qty'] or 0} for r in cats],
+        })
+
+    @app.route('/api/inventory/categories')
+    def api_inventory_categories():
+        return jsonify(INVENTORY_CATEGORIES)
+
+    # ─── Contacts API ─────────────────────────────────────────────────
+
+    @app.route('/api/contacts')
+    def api_contacts_list():
+        db = get_db()
+        search = request.args.get('q', '').strip()
+        if search:
+            rows = db.execute(
+                "SELECT * FROM contacts WHERE name LIKE ? OR callsign LIKE ? OR role LIKE ? OR skills LIKE ? ORDER BY name",
+                tuple(f'%{search}%' for _ in range(4))
+            ).fetchall()
+        else:
+            rows = db.execute('SELECT * FROM contacts ORDER BY name').fetchall()
+        db.close()
+        return jsonify([dict(r) for r in rows])
+
+    @app.route('/api/contacts', methods=['POST'])
+    def api_contacts_create():
+        data = request.get_json()
+        db = get_db()
+        cur = db.execute(
+            'INSERT INTO contacts (name, callsign, role, skills, phone, freq, email, address, rally_point, blood_type, medical_notes, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (data.get('name', ''), data.get('callsign', ''), data.get('role', ''),
+             data.get('skills', ''), data.get('phone', ''), data.get('freq', ''),
+             data.get('email', ''), data.get('address', ''), data.get('rally_point', ''),
+             data.get('blood_type', ''), data.get('medical_notes', ''), data.get('notes', '')))
+        db.commit()
+        cid = cur.lastrowid
+        row = db.execute('SELECT * FROM contacts WHERE id = ?', (cid,)).fetchone()
+        db.close()
+        return jsonify(dict(row)), 201
+
+    @app.route('/api/contacts/<int:cid>', methods=['PUT'])
+    def api_contacts_update(cid):
+        data = request.get_json()
+        db = get_db()
+        allowed = ['name', 'callsign', 'role', 'skills', 'phone', 'freq', 'email', 'address', 'rally_point', 'blood_type', 'medical_notes', 'notes']
+        fields = []
+        vals = []
+        for k in allowed:
+            if k in data:
+                fields.append(f'{k} = ?')
+                vals.append(data[k])
+        if not fields:
+            return jsonify({'error': 'No fields'}), 400
+        fields.append('updated_at = CURRENT_TIMESTAMP')
+        vals.append(cid)
+        db.execute(f'UPDATE contacts SET {", ".join(fields)} WHERE id = ?', vals)
+        db.commit()
+        db.close()
+        return jsonify({'status': 'saved'})
+
+    @app.route('/api/contacts/<int:cid>', methods=['DELETE'])
+    def api_contacts_delete(cid):
+        db = get_db()
+        db.execute('DELETE FROM contacts WHERE id = ?', (cid,))
+        db.commit()
+        db.close()
+        return jsonify({'status': 'deleted'})
+
+    # ─── LAN Chat API ─────────────────────────────────────────────────
+
+    @app.route('/api/lan/messages')
+    def api_lan_messages():
+        after_id = request.args.get('after', 0, type=int)
+        db = get_db()
+        if after_id:
+            rows = db.execute('SELECT * FROM lan_messages WHERE id > ? ORDER BY id ASC LIMIT 100', (after_id,)).fetchall()
+        else:
+            rows = db.execute('SELECT * FROM lan_messages ORDER BY id DESC LIMIT 50').fetchall()
+            rows = list(reversed(rows))
+        db.close()
+        return jsonify([dict(r) for r in rows])
+
+    @app.route('/api/lan/messages', methods=['POST'])
+    def api_lan_send():
+        data = request.get_json()
+        content = (data.get('content', '') or '').strip()
+        if not content:
+            return jsonify({'error': 'Empty message'}), 400
+        sender = (data.get('sender', '') or '').strip() or 'Anonymous'
+        msg_type = data.get('msg_type', 'text')
+        db = get_db()
+        cur = db.execute('INSERT INTO lan_messages (sender, content, msg_type) VALUES (?, ?, ?)',
+                         (sender[:50], content[:2000], msg_type))
+        db.commit()
+        msg = db.execute('SELECT * FROM lan_messages WHERE id = ?', (cur.lastrowid,)).fetchone()
+        db.close()
+        return jsonify(dict(msg)), 201
+
+    @app.route('/api/lan/messages/clear', methods=['POST'])
+    def api_lan_clear():
+        db = get_db()
+        db.execute('DELETE FROM lan_messages')
+        db.commit()
+        db.close()
+        return jsonify({'status': 'cleared'})
 
     # ─── Favicon ──────────────────────────────────────────────────────
 
