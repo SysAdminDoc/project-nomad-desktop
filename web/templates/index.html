@@ -403,6 +403,27 @@ a { color: var(--accent); text-decoration: none; }
 }
 .lan-banner a { font-weight: 600; }
 
+/* ─── Readiness ─── */
+.readiness-pill {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 600;
+  background: var(--surface); border: 1px solid var(--border);
+}
+.readiness-pill .rdot { width: 8px; height: 8px; border-radius: 50%; }
+.readiness-pill.ready .rdot { background: var(--green); }
+.readiness-pill.partial .rdot { background: var(--orange); }
+.readiness-pill.offline .rdot { background: var(--red); }
+
+/* ─── Activity Feed ─── */
+.activity-item {
+  padding: 4px 0; border-bottom: 1px solid var(--border);
+  display: flex; gap: 8px; align-items: baseline;
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-time { color: var(--text-muted); font-size: 10px; white-space: nowrap; }
+.activity-event { font-weight: 500; }
+.activity-detail { color: var(--text-dim); }
+
 /* ─── KB Panel ─── */
 .kb-panel {
   padding: 8px 16px; border-bottom: 1px solid var(--border);
@@ -461,7 +482,7 @@ a { color: var(--accent); text-decoration: none; }
 
 <div class="header">
   <div class="header-logo"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
-  <h1>Project N.O.M.A.D. <span class="version">v0.5.0</span></h1>
+  <h1>Project N.O.M.A.D. <span class="version">v0.6.0</span></h1>
   <div class="header-right">
     <span id="net-status" style="font-size:11px;display:flex;align-items:center;gap:5px;color:var(--text-muted);"></span>
   </div>
@@ -481,7 +502,17 @@ a { color: var(--accent); text-decoration: none; }
   <!-- Services Tab -->
   <div id="tab-services" class="tab-content active">
     <div class="lan-banner" id="lan-banner" style="display:none;"></div>
+    <!-- Mission Readiness -->
+    <div id="readiness-bar" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;"></div>
     <div class="services-grid" id="services-grid"></div>
+    <!-- Activity Feed -->
+    <div class="settings-card" style="margin-top:20px;">
+      <h3 style="display:flex;justify-content:space-between;align-items:center;">
+        Activity Feed
+        <button class="btn btn-sm" onclick="loadActivity()">Refresh</button>
+      </h3>
+      <div id="activity-feed" style="max-height:200px;overflow-y:auto;margin-top:8px;font-size:11px;"></div>
+    </div>
   </div>
 
   <!-- AI Chat Tab -->
@@ -1673,9 +1704,57 @@ async function loadBuilderTag() {
   } catch(e) {}
 }
 
+/* ─── Mission Readiness ─── */
+async function loadReadiness() {
+  try {
+    const services = await (await fetch('/api/services')).json();
+    const caps = [
+      {id:'ollama', label:'AI Chat', need:['ollama']},
+      {id:'kiwix', label:'Library', need:['kiwix']},
+      {id:'cyberchef', label:'Data Tools', need:['cyberchef']},
+      {id:'kolibri', label:'Education', need:['kolibri']},
+      {id:'qdrant', label:'Knowledge Base', need:['qdrant','ollama']},
+    ];
+    const svcMap = {};
+    services.forEach(s => svcMap[s.id] = s);
+
+    document.getElementById('readiness-bar').innerHTML = caps.map(c => {
+      const allInstalled = c.need.every(n => svcMap[n]?.installed);
+      const allRunning = c.need.every(n => svcMap[n]?.running);
+      const cls = allRunning ? 'ready' : allInstalled ? 'partial' : 'offline';
+      const label = allRunning ? 'Ready' : allInstalled ? 'Stopped' : 'Not Installed';
+      return `<div class="readiness-pill ${cls}"><span class="rdot"></span>${c.label}: ${label}</div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+/* ─── Activity Feed ─── */
+async function loadActivity() {
+  try {
+    const items = await (await fetch('/api/activity?limit=30')).json();
+    const el = document.getElementById('activity-feed');
+    if (!items.length) { el.innerHTML = '<span style="color:var(--text-muted);">No activity yet.</span>'; return; }
+    el.innerHTML = items.map(a => {
+      const t = new Date(a.created_at);
+      const time = t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      const date = t.toLocaleDateString([], {month:'short',day:'numeric'});
+      const color = a.level === 'error' ? 'var(--red)' : a.level === 'warning' ? 'var(--orange)' : 'var(--text)';
+      const event = a.event.replace(/_/g, ' ');
+      return `<div class="activity-item">
+        <span class="activity-time">${date} ${time}</span>
+        <span class="activity-event" style="color:${color}">${event}</span>
+        ${a.service ? `<span style="color:var(--accent);font-size:10px;">${a.service}</span>` : ''}
+        ${a.detail ? `<span class="activity-detail">${escapeHtml(a.detail)}</span>` : ''}
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
 /* ─── Init ─── */
 loadServices();
-setInterval(loadServices, 8000);
+loadReadiness();
+loadActivity();
+setInterval(() => { loadServices(); loadReadiness(); }, 8000);
 checkNetwork();
 setInterval(checkNetwork, 30000);
 checkWizard();
