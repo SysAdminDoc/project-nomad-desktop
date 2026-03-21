@@ -746,6 +746,43 @@ a { color: var(--accent); text-decoration: none; }
 .service-card svg { color: var(--accent); }
 .service-card:hover svg { color: var(--accent-hover); }
 
+/* ─── Prep Sub-tabs ─── */
+.prep-subtab {
+  padding: 6px 14px; cursor: pointer; color: var(--text-dim);
+  font-size: 12px; font-weight: 500; transition: all 0.2s ease;
+  background: none; border: none; border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+.prep-subtab:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.prep-subtab.active { color: #fff; background: linear-gradient(135deg, var(--accent), var(--green)); box-shadow: 0 2px 12px var(--accent-glow); }
+.prep-sub { display: none; animation: fadeSlideIn 0.3s ease; }
+.prep-sub.active { display: block; }
+
+/* ─── Inventory Alerts ─── */
+.inv-alert { display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;margin-right:6px;margin-bottom:4px; }
+.inv-alert.warn { background:var(--orange-dim);color:var(--orange); }
+.inv-alert.danger { background:var(--red-dim);color:var(--red); }
+.inv-alert.ok { background:var(--green-dim);color:var(--green); }
+
+/* ─── Contact Cards ─── */
+.contact-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; transition: border-color 0.2s;
+}
+.contact-card:hover { border-color: var(--border-hover); }
+.contact-card .cc-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.contact-card .cc-role { font-size: 11px; color: var(--accent); margin-bottom: 8px; }
+.contact-card .cc-field { font-size: 11px; color: var(--text-dim); margin-bottom: 2px; }
+.contact-card .cc-field strong { color: var(--text); font-weight: 500; }
+.contact-card .cc-actions { display:flex;gap:4px;margin-top:8px;justify-content:flex-end; }
+
+/* ─── LAN Chat ─── */
+.lan-msg { margin-bottom: 6px; }
+.lan-msg .lan-sender { font-weight: 600; font-size: 11px; color: var(--accent); }
+.lan-msg .lan-time { font-size: 9px; color: var(--text-muted); margin-left: 6px; }
+.lan-msg .lan-text { font-size: 12px; margin-top: 1px; line-height: 1.5; word-break: break-word; }
+.lan-msg.system { color: var(--text-muted); font-style: italic; font-size: 11px; }
+
 /* ─── Tab Indicator Animation ─── */
 .tab { transition: all 0.25s cubic-bezier(0.4,0,0.2,1); }
 .tab.active { transition: all 0.3s cubic-bezier(0.4,0,0.2,1); }
@@ -1123,8 +1160,19 @@ a { color: var(--accent); text-decoration: none; }
 
   <!-- Preparedness Tab -->
   <div id="tab-preparedness" class="tab-content">
+    <!-- Sub-navigation -->
+    <div class="prep-subtabs" style="display:flex;gap:2px;margin-bottom:20px;background:var(--surface);border-radius:var(--radius);padding:4px;border:1px solid var(--border);overflow-x:auto;">
+      <button class="prep-subtab active" data-psub="checklists" onclick="switchPrepSub('checklists')">Checklists</button>
+      <button class="prep-subtab" data-psub="inventory" onclick="switchPrepSub('inventory')">Inventory</button>
+      <button class="prep-subtab" data-psub="contacts" onclick="switchPrepSub('contacts')">Contacts</button>
+      <button class="prep-subtab" data-psub="calculators" onclick="switchPrepSub('calculators')">Calculators</button>
+      <button class="prep-subtab" data-psub="radio" onclick="switchPrepSub('radio')">Radio Ref</button>
+      <button class="prep-subtab" data-psub="reference" onclick="switchPrepSub('reference')">Quick Ref</button>
+      <button class="prep-subtab" data-psub="protocols" onclick="switchPrepSub('protocols')">Protocols</button>
+    </div>
 
-    <!-- Emergency Checklists -->
+    <!-- Sub: Checklists -->
+    <div id="psub-checklists" class="prep-sub active">
     <div class="prep-section">
       <h3>Emergency Checklists</h3>
       <div class="prep-layout">
@@ -1150,8 +1198,81 @@ a { color: var(--accent); text-decoration: none; }
         </div>
       </div>
     </div>
+    </div><!-- /psub-checklists -->
 
-    <!-- Resource Calculators -->
+    <!-- Sub: Inventory -->
+    <div id="psub-inventory" class="prep-sub">
+    <div class="prep-section">
+      <h3>Supply Inventory</h3>
+      <div id="inv-alerts" style="margin-bottom:12px;"></div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+        <select id="inv-cat-filter" class="preset-select" onchange="loadInventory()" style="min-width:120px;">
+          <option value="">All Categories</option>
+        </select>
+        <input id="inv-search" style="flex:1;min-width:200px;background:var(--surface);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:var(--radius-sm);font-size:12px;outline:none;" placeholder="Search supplies..." oninput="loadInventory()">
+        <button class="btn btn-sm btn-primary" onclick="showInvForm()">+ Add Item</button>
+      </div>
+      <!-- Add/Edit Form (hidden by default) -->
+      <div id="inv-form" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:12px;">
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Name *</label><input id="inv-name" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Category</label><select id="inv-category" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;"></select></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Location</label><input id="inv-location" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="e.g. Garage shelf 2"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Quantity</label><input id="inv-qty" type="number" min="0" step="0.5" value="1" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Unit</label><input id="inv-unit" value="ea" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="ea, lbs, gal, boxes"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Min Qty (alert)</label><input id="inv-min" type="number" min="0" step="0.5" value="0" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Expiration</label><input id="inv-exp" type="date" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;"></div>
+          <div style="grid-column:span 2;"><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Notes</label><input id="inv-notes" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="Optional notes"></div>
+        </div>
+        <input type="hidden" id="inv-edit-id" value="">
+        <div style="display:flex;gap:6px;margin-top:10px;">
+          <button class="btn btn-sm btn-primary" onclick="saveInvItem()">Save</button>
+          <button class="btn btn-sm" onclick="hideInvForm()">Cancel</button>
+        </div>
+      </div>
+      <div id="inv-table-wrap" style="overflow-x:auto;">
+        <table class="freq-table" id="inv-table">
+          <thead><tr><th>Name</th><th>Cat</th><th>Qty</th><th>Location</th><th>Expires</th><th>Notes</th><th style="width:70px;"></th></tr></thead>
+          <tbody id="inv-tbody"><tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px;">No items yet. Click "+ Add Item" to start tracking supplies.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    </div><!-- /psub-inventory -->
+
+    <!-- Sub: Contacts -->
+    <div id="psub-contacts" class="prep-sub">
+    <div class="prep-section">
+      <h3>Emergency Contacts & Comms Plan</h3>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+        <input id="contact-search" style="flex:1;min-width:200px;background:var(--surface);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:var(--radius-sm);font-size:12px;outline:none;" placeholder="Search contacts..." oninput="loadContacts()">
+        <button class="btn btn-sm btn-primary" onclick="showContactForm()">+ Add Contact</button>
+      </div>
+      <div id="contact-form" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:12px;">
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Name *</label><input id="ct-name" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Callsign</label><input id="ct-callsign" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="e.g. KD2ABC"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Role</label><input id="ct-role" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="e.g. Medic, Comms lead"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Skills</label><input id="ct-skills" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="e.g. First aid, radio, mechanical"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Phone</label><input id="ct-phone" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Radio Freq</label><input id="ct-freq" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="e.g. FRS Ch 3, 146.520"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Address</label><input id="ct-address" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Rally Point</label><input id="ct-rally" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="e.g. Church parking lot, GPS coords"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Blood Type</label><select id="ct-blood" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;"><option value="">Unknown</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
+          <div style="grid-column:span 2;"><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Medical Notes</label><input id="ct-medical" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="Allergies, conditions, medications"></div>
+          <div style="grid-column:span 3;"><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Notes</label><input id="ct-notes" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;"></div>
+        </div>
+        <input type="hidden" id="ct-edit-id" value="">
+        <div style="display:flex;gap:6px;margin-top:10px;">
+          <button class="btn btn-sm btn-primary" onclick="saveContact()">Save</button>
+          <button class="btn btn-sm" onclick="hideContactForm()">Cancel</button>
+        </div>
+      </div>
+      <div id="contacts-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;"></div>
+    </div>
+    </div><!-- /psub-contacts -->
+
+    <!-- Sub: Calculators -->
+    <div id="psub-calculators" class="prep-sub">
     <div class="prep-section">
       <h3>Resource Calculators</h3>
       <div class="calc-grid">
@@ -1188,8 +1309,10 @@ a { color: var(--accent); text-decoration: none; }
         </div>
       </div>
     </div>
+    </div><!-- /psub-calculators -->
 
-    <!-- Radio Frequency Reference -->
+    <!-- Sub: Radio -->
+    <div id="psub-radio" class="prep-sub">
     <div class="prep-section">
       <h3>Radio Frequency Reference</h3>
       <div class="settings-card" style="overflow-x:auto;">
@@ -1245,8 +1368,138 @@ a { color: var(--accent); text-decoration: none; }
         </table>
       </div>
     </div>
+    </div><!-- /psub-radio -->
 
-    <!-- Emergency Protocols Quick Reference -->
+    <!-- Sub: Quick Reference -->
+    <div id="psub-reference" class="prep-sub">
+    <div class="prep-section">
+      <h3>Quick Reference Cards</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;">
+
+        <!-- NATO Phonetic Alphabet -->
+        <div class="calc-card">
+          <h4>NATO Phonetic Alphabet</h4>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:2px;font-size:12px;font-family:'Cascadia Code','Consolas',monospace;">
+            <span><strong>A</strong> Alpha</span><span><strong>N</strong> November</span>
+            <span><strong>B</strong> Bravo</span><span><strong>O</strong> Oscar</span>
+            <span><strong>C</strong> Charlie</span><span><strong>P</strong> Papa</span>
+            <span><strong>D</strong> Delta</span><span><strong>Q</strong> Quebec</span>
+            <span><strong>E</strong> Echo</span><span><strong>R</strong> Romeo</span>
+            <span><strong>F</strong> Foxtrot</span><span><strong>S</strong> Sierra</span>
+            <span><strong>G</strong> Golf</span><span><strong>T</strong> Tango</span>
+            <span><strong>H</strong> Hotel</span><span><strong>U</strong> Uniform</span>
+            <span><strong>I</strong> India</span><span><strong>V</strong> Victor</span>
+            <span><strong>J</strong> Juliet</span><span><strong>W</strong> Whiskey</span>
+            <span><strong>K</strong> Kilo</span><span><strong>X</strong> X-ray</span>
+            <span><strong>L</strong> Lima</span><span><strong>Y</strong> Yankee</span>
+            <span><strong>M</strong> Mike</span><span><strong>Z</strong> Zulu</span>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--text-dim);">Numbers: 0=Zero, 1=Wun, 2=Too, 3=Tree, 4=Fow-er, 5=Fife, 6=Six, 7=Sev-en, 8=Ait, 9=Nin-er</div>
+        </div>
+
+        <!-- Morse Code -->
+        <div class="calc-card">
+          <h4>Morse Code</h4>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:2px;font-size:12px;font-family:'Cascadia Code','Consolas',monospace;">
+            <span><strong>A</strong> .-</span><span><strong>N</strong> -.</span>
+            <span><strong>B</strong> -...</span><span><strong>O</strong> ---</span>
+            <span><strong>C</strong> -.-.</span><span><strong>P</strong> .--.</span>
+            <span><strong>D</strong> -..</span><span><strong>Q</strong> --.-</span>
+            <span><strong>E</strong> .</span><span><strong>R</strong> .-.</span>
+            <span><strong>F</strong> ..-.</span><span><strong>S</strong> ...</span>
+            <span><strong>G</strong> --.</span><span><strong>T</strong> -</span>
+            <span><strong>H</strong> ....</span><span><strong>U</strong> ..-</span>
+            <span><strong>I</strong> ..</span><span><strong>V</strong> ...-</span>
+            <span><strong>J</strong> .---</span><span><strong>W</strong> .--</span>
+            <span><strong>K</strong> -.-</span><span><strong>X</strong> -..-</span>
+            <span><strong>L</strong> .-..</span><span><strong>Y</strong> -.--</span>
+            <span><strong>M</strong> --</span><span><strong>Z</strong> --..</span>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--text-dim);">SOS = ... --- ... | CQ = -.-. --.- (calling all stations)</div>
+        </div>
+
+        <!-- Unit Converter -->
+        <div class="calc-card">
+          <h4>Unit Converter</h4>
+          <div class="calc-row"><label>Value</label><input type="number" id="uc-value" value="1" oninput="convertUnit()"></div>
+          <div class="calc-row"><label>Convert</label>
+            <select id="uc-type" onchange="convertUnit()" style="flex:1;max-width:200px;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:var(--radius-sm);font-size:12px;">
+              <option value="mi-km">Miles to Km</option>
+              <option value="km-mi">Km to Miles</option>
+              <option value="lb-kg">Pounds to Kg</option>
+              <option value="kg-lb">Kg to Pounds</option>
+              <option value="gal-L">Gallons to Liters</option>
+              <option value="L-gal">Liters to Gallons</option>
+              <option value="F-C">Fahrenheit to Celsius</option>
+              <option value="C-F">Celsius to Fahrenheit</option>
+              <option value="ft-m">Feet to Meters</option>
+              <option value="m-ft">Meters to Feet</option>
+              <option value="in-cm">Inches to cm</option>
+              <option value="oz-g">Ounces to Grams</option>
+              <option value="fl-mL">Fluid oz to mL</option>
+              <option value="acre-ha">Acres to Hectares</option>
+            </select>
+          </div>
+          <div class="calc-result" id="uc-result" style="margin-top:8px;"></div>
+        </div>
+
+        <!-- Essential Knots -->
+        <div class="calc-card">
+          <h4>Essential Knots</h4>
+          <div style="font-size:12px;line-height:1.8;">
+            <div><strong>Bowline</strong> — Non-slip loop. Rescue, anchoring. "Rabbit comes out of the hole, around the tree, back down the hole."</div>
+            <div><strong>Clove Hitch</strong> — Quick attach to post/pole. Adjustable. Starting knot for lashings.</div>
+            <div><strong>Taut-Line Hitch</strong> — Adjustable loop for tent guy lines. Slides to tighten, holds under load.</div>
+            <div><strong>Square Knot</strong> — Join two ropes of equal size. Bandages, packages. Right over left, left over right.</div>
+            <div><strong>Sheet Bend</strong> — Join two ropes of different sizes. Stronger than square knot.</div>
+            <div><strong>Figure Eight</strong> — Stopper knot. Prevents rope from pulling through. Easy to untie.</div>
+            <div><strong>Trucker's Hitch</strong> — 3:1 mechanical advantage. Tie-downs, load securing. The "king of knots."</div>
+            <div><strong>Prusik Knot</strong> — Slides when unloaded, grips under weight. Ascending rope, rescue.</div>
+          </div>
+        </div>
+
+        <!-- Weather Signs -->
+        <div class="calc-card">
+          <h4>Weather Prediction from Observation</h4>
+          <div style="font-size:12px;line-height:1.8;">
+            <div><strong>Pressure falling rapidly</strong> — Storm approaching within 12-24 hours</div>
+            <div><strong>Pressure rising steadily</strong> — Fair weather coming</div>
+            <div><strong>Red sky at morning</strong> — Rain likely (moisture in western sky moving east)</div>
+            <div><strong>Red sky at night</strong> — Fair weather ahead (dry air to the west)</div>
+            <div><strong>Cumulus towers building</strong> — Afternoon thunderstorms likely</div>
+            <div><strong>Halo around moon/sun</strong> — Rain/snow within 24-48 hours (cirrostratus clouds)</div>
+            <div><strong>Wind shifting clockwise</strong> — Fair weather (high pressure)</div>
+            <div><strong>Wind shifting counter-clockwise</strong> — Deteriorating weather (low pressure)</div>
+            <div><strong>Dew on grass in morning</strong> — Fair day ahead (clear night allowed cooling)</div>
+            <div><strong>No dew + south wind</strong> — Rain likely</div>
+            <div><strong>Smoke rising straight</strong> — High pressure, fair weather</div>
+            <div><strong>Smoke hangs low/drifts</strong> — Low pressure, rain coming</div>
+          </div>
+        </div>
+
+        <!-- Ground-to-Air Signals -->
+        <div class="calc-card">
+          <h4>Ground-to-Air Emergency Signals</h4>
+          <div style="font-size:12px;line-height:1.8;">
+            <div><strong>V</strong> — Require assistance</div>
+            <div><strong>X</strong> — Require medical help</div>
+            <div><strong>N</strong> — No / Negative</div>
+            <div><strong>Y</strong> — Yes / Affirmative</div>
+            <div><strong>&#8593;</strong> (Arrow) — Traveling this direction</div>
+            <div><strong>I</strong> — Need medical supplies</div>
+            <div><strong>F</strong> — Need food and water</div>
+            <div><strong>II</strong> — Need weapons/ammunition</div>
+            <div><strong>L</strong> — Need fuel and oil</div>
+            <div><strong>LL</strong> — All is well</div>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--text-dim);">Make symbols at least 10 feet tall. Use contrasting materials (rocks on snow, branches on sand). Three fires in a triangle = universal distress signal.</div>
+        </div>
+      </div>
+    </div>
+    </div><!-- /psub-reference -->
+
+    <!-- Sub: Protocols -->
+    <div id="psub-protocols" class="prep-sub">
     <div class="prep-section">
       <h3>Emergency Protocols Quick Reference</h3>
 
@@ -1365,6 +1618,28 @@ a { color: var(--accent); text-decoration: none; }
           <div class="proto-warn">Always have a fire extinguishment plan. Clear area around fire. Never leave unattended. Build fire INSIDE shelter entrance, not inside enclosed shelter (CO poisoning).</div>
         </div>
       </div>
+    </div>
+    </div><!-- /psub-protocols -->
+  </div>
+
+  <!-- LAN Chat Widget -->
+  <div id="lan-chat-btn" onclick="toggleLanChat()" style="position:fixed;bottom:20px;left:20px;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--green));color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:9990;font-size:18px;transition:transform 0.2s;" title="LAN Chat">&#9993;</div>
+  <div id="lan-chat-panel" style="display:none;position:fixed;bottom:80px;left:20px;width:360px;height:440px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);z-index:9990;display:none;flex-direction:column;overflow:hidden;">
+    <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-weight:600;font-size:13px;">LAN Chat</span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <span style="font-size:10px;color:var(--text-muted);" id="lan-chat-status">Local network</span>
+        <button class="btn btn-sm btn-ghost" onclick="toggleLanChat()" style="font-size:16px;padding:2px 6px;">x</button>
+      </div>
+    </div>
+    <div style="padding:6px 14px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;">
+      <label style="font-size:11px;color:var(--text-dim);">Name:</label>
+      <input id="lan-chat-name" style="flex:1;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:6px;font-size:11px;outline:none;" placeholder="Your name" oninput="localStorage.setItem('nomad-lan-name',this.value)">
+    </div>
+    <div id="lan-chat-messages" style="flex:1;overflow-y:auto;padding:8px 14px;font-size:12px;"></div>
+    <div style="padding:8px 14px;border-top:1px solid var(--border);display:flex;gap:6px;">
+      <input id="lan-chat-input" style="flex:1;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:var(--radius-sm);font-size:12px;outline:none;" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendLanMsg()">
+      <button class="btn btn-sm btn-primary" onclick="sendLanMsg()">Send</button>
     </div>
   </div>
 
@@ -3344,6 +3619,16 @@ async function importConfig() {
   toast(r.message || r.error || 'Import complete');
 }
 
+/* ─── Prep Sub-Tab Navigation ─── */
+function switchPrepSub(sub) {
+  document.querySelectorAll('.prep-subtab').forEach(b => b.classList.toggle('active', b.dataset.psub === sub));
+  document.querySelectorAll('.prep-sub').forEach(p => p.classList.toggle('active', p.id === 'psub-' + sub));
+  if (sub === 'inventory') loadInventory();
+  if (sub === 'contacts') loadContacts();
+  if (sub === 'calculators') { calcWater(); calcFood(); calcPower(); }
+  if (sub === 'reference') convertUnit();
+}
+
 /* ─── Preparedness ─── */
 let _prepLoaded = false;
 let _currentChecklistId = null;
@@ -3514,6 +3799,305 @@ function calcPower() {
      Battery bank: <strong>${batteryAh12v} Ah</strong> @ 12V (per day, with 20% margin)<br>
      Solar panel: <strong>${solarWatts}W</strong> minimum (with ${sunHrs}h sun, 30% loss factor)<br>
      <span style="font-size:11px;color:var(--text-dim);">For LiFePO4 batteries, use 80% depth of discharge. Lead-acid: 50% DOD max.</span>`;
+}
+
+/* ─── Inventory ─── */
+async function loadInventory() {
+  const cat = document.getElementById('inv-cat-filter').value;
+  const q = document.getElementById('inv-search').value.trim();
+  let url = '/api/inventory?';
+  if (cat) url += `category=${encodeURIComponent(cat)}&`;
+  if (q) url += `q=${encodeURIComponent(q)}&`;
+  try {
+    const items = await (await fetch(url)).json();
+    const tbody = document.getElementById('inv-tbody');
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px;">No items found.</td></tr>';
+    } else {
+      const today = new Date().toISOString().slice(0,10);
+      const soon = new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+      tbody.innerHTML = items.map(i => {
+        let expCls = '';
+        if (i.expiration) {
+          if (i.expiration < today) expCls = 'color:var(--red);font-weight:600;';
+          else if (i.expiration <= soon) expCls = 'color:var(--orange);font-weight:600;';
+        }
+        const lowStock = i.min_quantity > 0 && i.quantity <= i.min_quantity;
+        return `<tr>
+          <td style="${lowStock?'color:var(--red);font-weight:600;':''}">${escapeHtml(i.name)}</td>
+          <td><span class="check-cat">${i.category}</span></td>
+          <td style="${lowStock?'color:var(--red);font-weight:600;':''}">${i.quantity} ${escapeHtml(i.unit)}</td>
+          <td style="font-size:11px;">${escapeHtml(i.location)}</td>
+          <td style="${expCls}font-size:11px;">${i.expiration||'-'}</td>
+          <td style="font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(i.notes)}</td>
+          <td><span style="cursor:pointer;color:var(--accent);font-size:11px;margin-right:6px;" onclick="editInvItem(${i.id})">edit</span><span style="cursor:pointer;color:var(--red);font-size:11px;" onclick="deleteInvItem(${i.id})">x</span></td>
+        </tr>`;
+      }).join('');
+    }
+    // Load summary alerts
+    const summary = await (await fetch('/api/inventory/summary')).json();
+    const alerts = document.getElementById('inv-alerts');
+    let html = '';
+    if (summary.expired > 0) html += `<span class="inv-alert danger">${summary.expired} expired</span>`;
+    if (summary.expiring_soon > 0) html += `<span class="inv-alert warn">${summary.expiring_soon} expiring soon</span>`;
+    if (summary.low_stock > 0) html += `<span class="inv-alert warn">${summary.low_stock} low stock</span>`;
+    if (summary.total > 0 && !summary.expired && !summary.expiring_soon && !summary.low_stock) html += `<span class="inv-alert ok">${summary.total} items tracked - all good</span>`;
+    alerts.innerHTML = html;
+    // Populate category filter
+    const sel = document.getElementById('inv-cat-filter');
+    if (sel.options.length <= 1) {
+      const cats = await (await fetch('/api/inventory/categories')).json();
+      cats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
+    }
+  } catch(e) {}
+}
+
+function showInvForm(item) {
+  document.getElementById('inv-form').style.display = 'block';
+  if (item) {
+    document.getElementById('inv-edit-id').value = item.id;
+    document.getElementById('inv-name').value = item.name;
+    document.getElementById('inv-category').value = item.category;
+    document.getElementById('inv-qty').value = item.quantity;
+    document.getElementById('inv-unit').value = item.unit;
+    document.getElementById('inv-min').value = item.min_quantity;
+    document.getElementById('inv-location').value = item.location;
+    document.getElementById('inv-exp').value = item.expiration;
+    document.getElementById('inv-notes').value = item.notes;
+  } else {
+    document.getElementById('inv-edit-id').value = '';
+    ['inv-name','inv-location','inv-notes'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('inv-qty').value = 1;
+    document.getElementById('inv-unit').value = 'ea';
+    document.getElementById('inv-min').value = 0;
+    document.getElementById('inv-exp').value = '';
+  }
+  // Populate category dropdown
+  const sel = document.getElementById('inv-category');
+  if (sel.options.length === 0) {
+    fetch('/api/inventory/categories').then(r=>r.json()).then(cats => {
+      cats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
+      if (item) sel.value = item.category;
+    });
+  }
+}
+function hideInvForm() { document.getElementById('inv-form').style.display = 'none'; }
+
+async function saveInvItem() {
+  const editId = document.getElementById('inv-edit-id').value;
+  const data = {
+    name: document.getElementById('inv-name').value.trim(),
+    category: document.getElementById('inv-category').value,
+    quantity: parseFloat(document.getElementById('inv-qty').value) || 0,
+    unit: document.getElementById('inv-unit').value.trim() || 'ea',
+    min_quantity: parseFloat(document.getElementById('inv-min').value) || 0,
+    location: document.getElementById('inv-location').value.trim(),
+    expiration: document.getElementById('inv-exp').value,
+    notes: document.getElementById('inv-notes').value.trim(),
+  };
+  if (!data.name) { toast('Name is required', 'warning'); return; }
+  if (editId) {
+    await fetch(`/api/inventory/${editId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    toast('Item updated', 'success');
+  } else {
+    await fetch('/api/inventory', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    toast('Item added', 'success');
+  }
+  hideInvForm();
+  loadInventory();
+}
+
+async function editInvItem(id) {
+  const items = await (await fetch('/api/inventory')).json();
+  const item = items.find(i => i.id === id);
+  if (item) showInvForm(item);
+}
+
+async function deleteInvItem(id) {
+  await fetch(`/api/inventory/${id}`, {method:'DELETE'});
+  toast('Item deleted');
+  loadInventory();
+}
+
+/* ─── Contacts ─── */
+async function loadContacts() {
+  const q = document.getElementById('contact-search').value.trim();
+  let url = '/api/contacts';
+  if (q) url += `?q=${encodeURIComponent(q)}`;
+  try {
+    const contacts = await (await fetch(url)).json();
+    const el = document.getElementById('contacts-grid');
+    if (!contacts.length) {
+      el.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:40px;font-size:13px;">No contacts yet. Add your emergency contacts, team members, and neighbors.</div>';
+      return;
+    }
+    el.innerHTML = contacts.map(c => {
+      let fields = '';
+      if (c.callsign) fields += `<div class="cc-field"><strong>Callsign:</strong> ${escapeHtml(c.callsign)}</div>`;
+      if (c.phone) fields += `<div class="cc-field"><strong>Phone:</strong> ${escapeHtml(c.phone)}</div>`;
+      if (c.freq) fields += `<div class="cc-field"><strong>Freq:</strong> ${escapeHtml(c.freq)}</div>`;
+      if (c.skills) fields += `<div class="cc-field"><strong>Skills:</strong> ${escapeHtml(c.skills)}</div>`;
+      if (c.rally_point) fields += `<div class="cc-field"><strong>Rally:</strong> ${escapeHtml(c.rally_point)}</div>`;
+      if (c.blood_type) fields += `<div class="cc-field"><strong>Blood:</strong> ${escapeHtml(c.blood_type)}</div>`;
+      if (c.medical_notes) fields += `<div class="cc-field"><strong>Medical:</strong> ${escapeHtml(c.medical_notes)}</div>`;
+      if (c.address) fields += `<div class="cc-field"><strong>Address:</strong> ${escapeHtml(c.address)}</div>`;
+      if (c.notes) fields += `<div class="cc-field" style="margin-top:4px;font-style:italic;">${escapeHtml(c.notes)}</div>`;
+      return `<div class="contact-card">
+        <div class="cc-name">${escapeHtml(c.name)}</div>
+        ${c.role ? `<div class="cc-role">${escapeHtml(c.role)}</div>` : ''}
+        ${fields}
+        <div class="cc-actions">
+          <button class="btn btn-sm" onclick="editContact(${c.id})">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteContact(${c.id})">Delete</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+function showContactForm(contact) {
+  document.getElementById('contact-form').style.display = 'block';
+  const fields = ['name','callsign','role','skills','phone','freq','address','rally','blood','medical','notes'];
+  const keys = ['name','callsign','role','skills','phone','freq','address','rally_point','blood_type','medical_notes','notes'];
+  if (contact) {
+    document.getElementById('ct-edit-id').value = contact.id;
+    fields.forEach((f,i) => document.getElementById('ct-'+f).value = contact[keys[i]] || '');
+  } else {
+    document.getElementById('ct-edit-id').value = '';
+    fields.forEach(f => document.getElementById('ct-'+f).value = '');
+  }
+}
+function hideContactForm() { document.getElementById('contact-form').style.display = 'none'; }
+
+async function saveContact() {
+  const editId = document.getElementById('ct-edit-id').value;
+  const data = {
+    name: document.getElementById('ct-name').value.trim(),
+    callsign: document.getElementById('ct-callsign').value.trim(),
+    role: document.getElementById('ct-role').value.trim(),
+    skills: document.getElementById('ct-skills').value.trim(),
+    phone: document.getElementById('ct-phone').value.trim(),
+    freq: document.getElementById('ct-freq').value.trim(),
+    address: document.getElementById('ct-address').value.trim(),
+    rally_point: document.getElementById('ct-rally').value.trim(),
+    blood_type: document.getElementById('ct-blood').value,
+    medical_notes: document.getElementById('ct-medical').value.trim(),
+    notes: document.getElementById('ct-notes').value.trim(),
+  };
+  if (!data.name) { toast('Name is required', 'warning'); return; }
+  if (editId) {
+    await fetch(`/api/contacts/${editId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    toast('Contact updated', 'success');
+  } else {
+    await fetch('/api/contacts', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    toast('Contact added', 'success');
+  }
+  hideContactForm();
+  loadContacts();
+}
+
+async function editContact(id) {
+  const contacts = await (await fetch('/api/contacts')).json();
+  const c = contacts.find(x => x.id === id);
+  if (c) showContactForm(c);
+}
+
+async function deleteContact(id) {
+  await fetch(`/api/contacts/${id}`, {method:'DELETE'});
+  toast('Contact deleted');
+  loadContacts();
+}
+
+/* ─── Unit Converter ─── */
+function convertUnit() {
+  const val = parseFloat(document.getElementById('uc-value').value) || 0;
+  const type = document.getElementById('uc-type').value;
+  const conversions = {
+    'mi-km': [1.60934, 'km'], 'km-mi': [0.621371, 'miles'],
+    'lb-kg': [0.453592, 'kg'], 'kg-lb': [2.20462, 'lbs'],
+    'gal-L': [3.78541, 'liters'], 'L-gal': [0.264172, 'gallons'],
+    'F-C': [null, null], 'C-F': [null, null],
+    'ft-m': [0.3048, 'meters'], 'm-ft': [3.28084, 'feet'],
+    'in-cm': [2.54, 'cm'], 'oz-g': [28.3495, 'grams'],
+    'fl-mL': [29.5735, 'mL'], 'acre-ha': [0.404686, 'hectares'],
+  };
+  let result;
+  if (type === 'F-C') result = `<strong>${((val-32)*5/9).toFixed(2)}</strong> degrees Celsius`;
+  else if (type === 'C-F') result = `<strong>${(val*9/5+32).toFixed(2)}</strong> degrees Fahrenheit`;
+  else { const [factor, unit] = conversions[type]; result = `<strong>${(val*factor).toFixed(4)}</strong> ${unit}`; }
+  document.getElementById('uc-result').innerHTML = result;
+}
+
+/* ─── LAN Chat ─── */
+let _lanChatOpen = false;
+let _lanPoll = null;
+let _lanLastId = 0;
+
+function toggleLanChat() {
+  _lanChatOpen = !_lanChatOpen;
+  const panel = document.getElementById('lan-chat-panel');
+  panel.style.display = _lanChatOpen ? 'flex' : 'none';
+  if (_lanChatOpen) {
+    const saved = localStorage.getItem('nomad-lan-name') || '';
+    document.getElementById('lan-chat-name').value = saved;
+    loadLanMessages();
+    if (!_lanPoll) _lanPoll = setInterval(pollLanMessages, 3000);
+  } else {
+    if (_lanPoll) { clearInterval(_lanPoll); _lanPoll = null; }
+  }
+}
+
+async function loadLanMessages() {
+  try {
+    const msgs = await (await fetch('/api/lan/messages')).json();
+    renderLanMessages(msgs);
+    if (msgs.length) _lanLastId = msgs[msgs.length-1].id;
+  } catch(e) {}
+}
+
+async function pollLanMessages() {
+  try {
+    const msgs = await (await fetch(`/api/lan/messages?after=${_lanLastId}`)).json();
+    if (msgs.length) {
+      const el = document.getElementById('lan-chat-messages');
+      msgs.forEach(m => el.innerHTML += renderLanMsg(m));
+      _lanLastId = msgs[msgs.length-1].id;
+      el.scrollTop = el.scrollHeight;
+    }
+  } catch(e) {}
+}
+
+function renderLanMessages(msgs) {
+  const el = document.getElementById('lan-chat-messages');
+  if (!msgs.length) { el.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px;font-size:11px;">No messages yet. Anyone on the local network can chat here.</div>'; return; }
+  el.innerHTML = msgs.map(renderLanMsg).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+function renderLanMsg(m) {
+  const t = new Date(m.created_at);
+  const ts = t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  return `<div class="lan-msg"><span class="lan-sender">${escapeHtml(m.sender)}</span><span class="lan-time">${ts}</span><div class="lan-text">${escapeHtml(m.content)}</div></div>`;
+}
+
+async function sendLanMsg() {
+  const input = document.getElementById('lan-chat-input');
+  const content = input.value.trim();
+  if (!content) return;
+  const sender = document.getElementById('lan-chat-name').value.trim() || 'Anonymous';
+  input.value = '';
+  try {
+    const msg = await (await fetch('/api/lan/messages', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({sender, content})
+    })).json();
+    const el = document.getElementById('lan-chat-messages');
+    // Remove empty state if present
+    if (el.querySelector('div[style*="text-align:center"]')) el.innerHTML = '';
+    el.innerHTML += renderLanMsg(msg);
+    _lanLastId = msg.id;
+    el.scrollTop = el.scrollHeight;
+  } catch(e) { toast('Failed to send', 'error'); }
 }
 
 /* ─── Emergency Protocols ─── */

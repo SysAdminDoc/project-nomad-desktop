@@ -135,6 +135,46 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS inventory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT 'other',
+            quantity REAL DEFAULT 0,
+            unit TEXT DEFAULT 'ea',
+            min_quantity REAL DEFAULT 0,
+            location TEXT DEFAULT '',
+            expiration TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS contacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            callsign TEXT DEFAULT '',
+            role TEXT DEFAULT '',
+            skills TEXT DEFAULT '',
+            phone TEXT DEFAULT '',
+            freq TEXT DEFAULT '',
+            email TEXT DEFAULT '',
+            address TEXT DEFAULT '',
+            rally_point TEXT DEFAULT '',
+            blood_type TEXT DEFAULT '',
+            medical_notes TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS lan_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender TEXT NOT NULL DEFAULT 'Anonymous',
+            content TEXT NOT NULL,
+            msg_type TEXT DEFAULT 'text',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
     ''')
     conn.commit()
     conn.close()
