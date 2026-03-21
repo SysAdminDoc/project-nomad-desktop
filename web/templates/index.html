@@ -8,7 +8,67 @@
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/pmtiles@4.0.0/dist/pmtiles.js"></script>
 <style>
-:root {
+/* ─── NOMAD Theme (Default — Desert/Tactical) ─── */
+:root, [data-theme="nomad"] {
+  --bg: #f7eedc;
+  --surface: rgba(255,255,255,0.85);
+  --surface-solid: #ffffff;
+  --surface2: #f0e8d4;
+  --surface3: #e5dcc8;
+  --border: rgba(66,68,32,0.18);
+  --border-hover: rgba(66,68,32,0.3);
+  --text: #1a1a0f;
+  --text-dim: #6b5d4f;
+  --text-muted: #8b7355;
+  --accent: #424420;
+  --accent-hover: #525530;
+  --accent-dim: rgba(66,68,32,0.1);
+  --accent-glow: rgba(66,68,32,0.15);
+  --green: #4a6b2a;
+  --green-dim: rgba(74,107,42,0.12);
+  --red: #994444;
+  --red-dim: rgba(153,68,68,0.1);
+  --orange: #a84a12;
+  --orange-dim: rgba(168,74,18,0.1);
+  --purple: #6d7042;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --shadow: 0 8px 30px rgba(100,80,50,0.15);
+  --shadow-sm: 0 4px 12px rgba(100,80,50,0.1);
+  --glass: backdrop-filter: blur(12px) saturate(1.1);
+  --card-text: #fff;
+}
+
+/* ─── Night Ops Theme (NOMAD Dark) ─── */
+[data-theme="nightops"] {
+  --bg: #1c1b16;
+  --surface: rgba(42,41,24,0.9);
+  --surface-solid: #2a2918;
+  --surface2: #353420;
+  --surface3: #3d3c2a;
+  --border: rgba(186,186,170,0.12);
+  --border-hover: rgba(186,186,170,0.2);
+  --text: #f7eedc;
+  --text-dim: #afafa5;
+  --text-muted: #8f8f82;
+  --accent: #858a55;
+  --accent-hover: #a5ab7d;
+  --accent-dim: rgba(133,138,85,0.15);
+  --accent-glow: rgba(133,138,85,0.2);
+  --green: #6d7042;
+  --green-dim: rgba(109,112,66,0.2);
+  --red: #b05555;
+  --red-dim: rgba(176,85,85,0.15);
+  --orange: #c85815;
+  --orange-dim: rgba(200,88,21,0.15);
+  --purple: #a5ab7d;
+  --shadow: 0 12px 40px rgba(0,0,0,0.5);
+  --shadow-sm: 0 4px 12px rgba(0,0,0,0.3);
+  --card-text: #f7eedc;
+}
+
+/* ─── Cyber Theme (Blue/Purple Dark) ─── */
+[data-theme="cyber"] {
   --bg: #060608;
   --surface: rgba(18,18,22,0.85);
   --surface-solid: #121216;
@@ -30,28 +90,38 @@
   --orange: #ff9800;
   --orange-dim: rgba(255,152,0,0.12);
   --purple: #b388ff;
-  --radius: 14px;
-  --radius-sm: 10px;
   --shadow: 0 12px 40px rgba(0,0,0,0.6);
   --shadow-sm: 0 4px 12px rgba(0,0,0,0.4);
-  --glass: backdrop-filter: blur(20px) saturate(1.2);
+  --card-text: #fff;
 }
+
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   background: var(--bg);
-  background-image: radial-gradient(ellipse at 20% 0%, rgba(91,159,255,0.04) 0%, transparent 60%),
-                    radial-gradient(ellipse at 80% 100%, rgba(179,136,255,0.03) 0%, transparent 60%);
   color: var(--text);
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 a { color: var(--accent); text-decoration: none; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* ─── Theme Switcher ─── */
+.theme-switcher { display: flex; gap: 4px; align-items: center; -webkit-app-region: no-drag; }
+.theme-btn {
+  width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border);
+  cursor: pointer; transition: all 0.2s; position: relative;
+}
+.theme-btn:hover { transform: scale(1.15); border-color: var(--accent); }
+.theme-btn.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
+.theme-btn[data-t="nomad"] { background: linear-gradient(135deg, #f7eedc, #424420); }
+.theme-btn[data-t="nightops"] { background: linear-gradient(135deg, #1c1b16, #858a55); }
+.theme-btn[data-t="cyber"] { background: linear-gradient(135deg, #060608, #5b9fff); }
 
 /* ─── Header ─── */
 .header {
@@ -68,10 +138,10 @@ a { color: var(--accent); text-decoration: none; }
 }
 .header-logo {
   width: 34px; height: 34px;
-  background: linear-gradient(135deg, #5b9fff, #b388ff);
+  background: linear-gradient(135deg, var(--accent), var(--green));
   border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 12px rgba(91,159,255,0.3);
+  box-shadow: 0 2px 12px var(--accent-glow);
 }
 .header-logo svg { width: 18px; height: 18px; fill: #fff; }
 .header h1 { font-size: 16px; font-weight: 600; letter-spacing: -0.3px; }
@@ -96,7 +166,7 @@ a { color: var(--accent); text-decoration: none; }
 }
 .tab:hover { color: var(--text); background: rgba(255,255,255,0.04); }
 .tab.active {
-  color: #fff; background: linear-gradient(135deg, var(--accent), #7c6fff);
+  color: #fff; background: linear-gradient(135deg, var(--accent), var(--green));
   box-shadow: 0 2px 12px var(--accent-glow);
 }
 .tab-content { display: none; animation: fadeSlideIn 0.3s ease; }
@@ -149,8 +219,8 @@ a { color: var(--accent); text-decoration: none; }
 .btn:hover { background: var(--surface3); border-color: var(--border-hover); }
 .btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .btn:active { transform: scale(0.97); }
-.btn-primary { background: linear-gradient(135deg, var(--accent), #7c6fff); color: #fff; border-color: transparent; box-shadow: 0 2px 8px var(--accent-glow); }
-.btn-primary:hover { background: linear-gradient(135deg, var(--accent-hover), #9585ff); box-shadow: 0 4px 16px var(--accent-glow); transform: translateY(-1px); }
+.btn-primary { background: linear-gradient(135deg, var(--accent), var(--green)); color: #fff; border-color: transparent; box-shadow: 0 2px 8px var(--accent-glow); }
+.btn-primary:hover { background: linear-gradient(135deg, var(--accent-hover), var(--accent)); box-shadow: 0 4px 16px var(--accent-glow); transform: translateY(-1px); }
 .btn-danger { color: var(--red); }
 .btn-danger:hover { border-color: var(--red); background: var(--red-dim); }
 .btn-ghost { background: transparent; border-color: transparent; }
@@ -160,7 +230,7 @@ a { color: var(--accent); text-decoration: none; }
 /* ─── Progress ─── */
 .progress-wrap { margin-top: 10px; }
 .progress-bar { width: 100%; height: 4px; background: var(--surface3); border-radius: 2px; overflow: hidden; }
-.progress-bar .fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--purple)); transition: width 0.3s; border-radius: 2px; box-shadow: 0 0 8px var(--accent-glow); }
+.progress-bar .fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--orange)); transition: width 0.3s; border-radius: 2px; box-shadow: 0 0 8px var(--accent-glow); }
 .progress-info { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 4px; }
 
 /* ─── Gauge ─── */
@@ -332,7 +402,7 @@ a { color: var(--accent); text-decoration: none; }
 
 /* ─── Shimmer Heading ─── */
 .shimmer-text {
-  background: linear-gradient(90deg, var(--accent), var(--purple), var(--accent));
+  background: linear-gradient(90deg, var(--accent), var(--orange), var(--accent));
   background-size: 200% auto;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -442,7 +512,7 @@ a { color: var(--accent); text-decoration: none; }
 .bench-score .score-val { font-size: 22px; font-weight: 700; color: var(--accent); }
 .bench-score .score-label { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
 .bench-big { font-size: 56px; font-weight: 800; margin: 16px 0; }
-.bench-big span { background: linear-gradient(135deg, var(--accent), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.bench-big span { background: linear-gradient(135deg, var(--accent), var(--orange)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
 /* ─── LAN Info ─── */
 .lan-banner {
@@ -498,7 +568,7 @@ a { color: var(--accent); text-decoration: none; }
 }
 .content-summary .cs-total {
   font-size: 22px; font-weight: 700;
-  background: linear-gradient(135deg, var(--accent), var(--purple));
+  background: linear-gradient(135deg, var(--accent), var(--orange));
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
 .content-summary .cs-label { font-size: 11px; color: var(--text-dim); }
@@ -649,6 +719,11 @@ a { color: var(--accent); text-decoration: none; }
   <div class="header-right">
     <a id="update-banner" href="#" target="_blank" style="display:none;font-size:11px;padding:4px 12px;background:var(--green-dim);color:var(--green);border-radius:20px;font-weight:600;">Update Available</a>
     <span id="net-status" style="font-size:11px;display:flex;align-items:center;gap:5px;color:var(--text-muted);"></span>
+    <div class="theme-switcher" title="Switch theme">
+      <div class="theme-btn active" data-t="nomad" onclick="setTheme('nomad')" title="NOMAD (Desert)"></div>
+      <div class="theme-btn" data-t="nightops" onclick="setTheme('nightops')" title="Night Ops (Dark)"></div>
+      <div class="theme-btn" data-t="cyber" onclick="setTheme('cyber')" title="Cyber (Blue Dark)"></div>
+    </div>
   </div>
 </div>
 
@@ -1045,6 +1120,21 @@ a { color: var(--accent); text-decoration: none; }
 
 <script>
 const VERSION = '{{ version }}';
+
+/* ─── Theme ─── */
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('nomad-theme', theme);
+  document.querySelectorAll('.theme-btn').forEach(b => b.classList.toggle('active', b.dataset.t === theme));
+  // Persist to server settings
+  fetch('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({theme})});
+}
+(function initTheme() {
+  const saved = localStorage.getItem('nomad-theme') || 'nomad';
+  if (saved !== 'nomad') document.documentElement.setAttribute('data-theme', saved);
+  document.querySelectorAll('.theme-btn').forEach(b => b.classList.toggle('active', b.dataset.t === saved));
+})();
+
 let chatMessages = [];
 let currentNoteId = null;
 let saveTimer = null;
@@ -1715,6 +1805,9 @@ async function loadSettings() {
     if (s.ai_name) {
       aiName = s.ai_name;
       document.getElementById('ai-name-input').value = aiName;
+    }
+    if (s.theme && !localStorage.getItem('nomad-theme')) {
+      setTheme(s.theme);
     }
   } catch(e) {}
 
