@@ -11,10 +11,11 @@ import shutil
 import subprocess
 from flask import Flask, render_template, jsonify, request, Response
 
-from db import get_db
+from db import get_db, log_activity
 from services import ollama, kiwix, cyberchef, kolibri, qdrant
 from services.manager import (
-    get_download_progress, get_dir_size, format_size, uninstall_service, get_services_dir
+    get_download_progress, get_dir_size, format_size, uninstall_service, get_services_dir,
+    ensure_dependencies, detect_gpu
 )
 
 log = logging.getLogger('nomad.web')
@@ -27,7 +28,7 @@ SERVICE_MODULES = {
     'qdrant': qdrant,
 }
 
-VERSION = '0.5.0'
+VERSION = '0.6.0'
 
 # RAG / Knowledge Base state
 _embed_state = {'status': 'idle', 'doc_id': None, 'progress': 0, 'detail': ''}
@@ -103,8 +104,13 @@ def create_app():
         if not mod.is_installed():
             return jsonify({'error': 'Not installed'}), 400
         try:
+            # Start dependencies first
+            deps_started = ensure_dependencies(service_id, SERVICE_MODULES)
             mod.start()
-            return jsonify({'status': 'started'})
+            result = {'status': 'started'}
+            if deps_started:
+                result['dependencies_started'] = deps_started
+            return jsonify(result)
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
@@ -995,6 +1001,22 @@ def create_app():
         except Exception as e:
             log.error(f'KB search failed: {e}')
             return jsonify([])
+
+    # ─── Activity Log ──────────────────────────────────────────────────
+
+    @app.route('/api/activity')
+    def api_activity():
+        limit = request.args.get('limit', 50, type=int)
+        db = get_db()
+        rows = db.execute('SELECT * FROM activity_log ORDER BY created_at DESC LIMIT ?', (limit,)).fetchall()
+        db.close()
+        return jsonify([dict(r) for r in rows])
+
+    # ─── GPU Info ──────────────────────────────────────────────────────
+
+    @app.route('/api/gpu')
+    def api_gpu():
+        return jsonify(detect_gpu())
 
     # ─── Health ────────────────────────────────────────────────────────
 
