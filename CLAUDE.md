@@ -112,7 +112,14 @@ pyinstaller build.spec
 - Benchmark disk test creates/deletes temp files in ProjectNOMAD\benchmark\
 
 ## Version
-v0.7.0
+v0.8.0
 
 ## Status
-Working v0.7.0 — 6 services (Ollama, Kiwix, CyberChef, Kolibri, Qdrant, Stirling PDF). Consumer-ready UX: preset-based setup wizard (Essentials/Full/Custom), auto-model-pull after install, guided first-use tour, splash screen, inline model picker (no prompt() dialogs), jargon-free labels, plain English error messages, update checker banner, Windows startup toggle, config export/import, Inno Setup installer script, app icon (multi-size ICO). ~6.5K lines across 14 files. 7-tab dashboard.
+Working v0.8.0 — Production polish release. 6 services (Ollama, Kiwix, CyberChef, Kolibri, Qdrant, Stirling PDF). v0.8.0 adds: typed toast notifications (success/error/warning/info with color-coded icons), service prerequisite checks (Java for Stirling, Python for Kolibri), inline conversation rename (no prompt() dialogs), service card error display with retry buttons, welcome banner for first-time users, enhanced markdown renderer (tables, horizontal rules, strikethrough), version consolidation via Jinja template vars, better offline map search messaging, fixed polling double-fetch. Previous: wizard presets, guided tour, splash screen, inline model picker, update checker, Windows startup toggle, config export/import, Inno Setup installer, app icon. ~7K lines across 14 files. 7-tab dashboard.
+
+## Gotchas (v0.8.0)
+- Stirling PDF requires Java 17+ (downloads .jar, not .exe — no Windows exe in releases)
+- Qdrant: --storage-path CLI arg removed — use QDRANT__STORAGE__STORAGE_PATH env var
+- Kiwix: won't start without ZIM files (raises RuntimeError with user-friendly message)
+- PyInstaller frozen exe: _bootstrap() must skip (sys.frozen check) or fork-bombs via sys.executable
+- Kolibri uses _python_exe() helper to find real Python on PATH when frozen
