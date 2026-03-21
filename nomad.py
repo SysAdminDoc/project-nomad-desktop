@@ -1,5 +1,5 @@
 """
-Project N.O.M.A.D. for Windows v0.5.0
+Project N.O.M.A.D. for Windows v0.6.0
 Node for Offline Media, Archives, and Data
 Native Windows edition — no Docker required.
 """
@@ -46,13 +46,26 @@ import webview
 import pystray
 from PIL import Image, ImageDraw
 from web.app import create_app
-from db import init_db, get_db
+from db import init_db, get_db, log_activity, backup_db
 
-VERSION = '0.5.0'
+VERSION = '0.6.0'
 PORT = 8080
 
 _tray_icon = None
 _window = None
+
+SERVICE_MODULES = None  # Lazy-loaded
+
+
+def _get_service_modules():
+    global SERVICE_MODULES
+    if SERVICE_MODULES is None:
+        from services import ollama, kiwix, cyberchef, kolibri, qdrant
+        SERVICE_MODULES = {
+            'ollama': ollama, 'kiwix': kiwix, 'cyberchef': cyberchef,
+            'kolibri': kolibri, 'qdrant': qdrant,
+        }
+    return SERVICE_MODULES
 
 
 def get_data_dir():
@@ -66,10 +79,8 @@ def get_log_path():
 
 
 def create_tray_icon():
-    """Create a 64x64 icon for the system tray."""
     img = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    # Draw a diamond/compass shape
     draw.polygon([(32, 4), (60, 32), (32, 60), (4, 32)], fill='#4f9cf7')
     draw.polygon([(32, 14), (50, 32), (32, 50), (14, 32)], fill='#0d0d0d')
     draw.polygon([(32, 22), (42, 32), (32, 42), (22, 32)], fill='#4f9cf7')
@@ -84,15 +95,31 @@ def tray_show_window(icon, item):
 
 
 def tray_quit(icon, item):
+    """Graceful shutdown: ordered service stop, DB flush, then exit."""
     global _window
-    # Stop all running services
-    from services import ollama, kiwix, cyberchef, kolibri, qdrant
-    for mod in [ollama, kiwix, cyberchef, kolibri, qdrant]:
-        try:
-            if mod.is_installed() and mod.running():
-                mod.stop()
-        except Exception:
-            pass
+    log.info('Graceful shutdown initiated...')
+    log_activity('app_shutdown', detail='User requested quit')
+
+    mods = _get_service_modules()
+    from services.manager import get_shutdown_order
+
+    # Stop services in dependency order
+    for sid in get_shutdown_order():
+        mod = mods.get(sid)
+        if mod:
+            try:
+                if mod.is_installed() and mod.running():
+                    log.info(f'Stopping {sid}...')
+                    mod.stop()
+            except Exception as e:
+                log.error(f'Error stopping {sid}: {e}')
+
+    # Final DB backup
+    try:
+        backup_db()
+    except Exception:
+        pass
+
     icon.stop()
     if _window:
         _window.destroy()
@@ -113,14 +140,11 @@ def setup_tray():
 
 def auto_start_services():
     """Start services that were running when the app last closed."""
-    from services import ollama, kiwix, cyberchef, kolibri, qdrant
-    from db import get_db as gdb
-
-    db = gdb()
+    mods = _get_service_modules()
+    db = get_db()
     rows = db.execute('SELECT id FROM services WHERE running = 1 AND installed = 1').fetchall()
     db.close()
 
-    mods = {'ollama': ollama, 'kiwix': kiwix, 'cyberchef': cyberchef, 'kolibri': kolibri, 'qdrant': qdrant}
     for row in rows:
         sid = row['id']
         mod = mods.get(sid)
@@ -128,25 +152,25 @@ def auto_start_services():
             try:
                 log.info(f'Auto-starting {sid}...')
                 mod.start()
+                log_activity('service_autostarted', sid)
             except Exception as e:
                 log.error(f'Auto-start failed for {sid}: {e}')
+                log_activity('service_autostart_failed', sid, str(e), 'error')
 
 
 def on_window_closing():
-    """Handle window close — minimize to tray instead of quitting."""
     global _window
     if _window:
         _window.hide()
-    return False  # Prevent actual close
+    return False
 
 
 def health_monitor():
-    """Background thread that detects crashed services and updates DB status."""
-    from services import ollama, kiwix, cyberchef, kolibri, qdrant
-    from services.manager import _processes
+    """Background thread: detects crashed services and auto-restarts them."""
+    from services.manager import _processes, should_restart, record_restart
 
-    time.sleep(10)  # Wait for initial startup
-    mods = {'ollama': ollama, 'kiwix': kiwix, 'cyberchef': cyberchef, 'kolibri': kolibri, 'qdrant': qdrant}
+    time.sleep(10)
+    mods = _get_service_modules()
 
     while True:
         try:
@@ -156,18 +180,33 @@ def health_monitor():
                 sid = row['id']
                 mod = mods.get(sid)
                 if mod and not mod.running():
-                    log.warning(f'Service {sid} crashed — marking as stopped')
-                    db.execute('UPDATE services SET running = 0, pid = NULL WHERE id = ?', (sid,))
-                    db.commit()
-                    _processes.pop(sid, None)
+                    if should_restart(sid):
+                        log.warning(f'Service {sid} crashed — attempting auto-restart')
+                        log_activity('service_crash_detected', sid, 'Attempting auto-restart', 'warning')
+                        record_restart(sid)
+                        _processes.pop(sid, None)
+                        try:
+                            mod.start()
+                            log.info(f'Service {sid} auto-restarted successfully')
+                            log_activity('service_autorestarted', sid)
+                        except Exception as e:
+                            log.error(f'Auto-restart failed for {sid}: {e}')
+                            log_activity('service_autorestart_failed', sid, str(e), 'error')
+                            db.execute('UPDATE services SET running = 0, pid = NULL WHERE id = ?', (sid,))
+                            db.commit()
+                    else:
+                        log.error(f'Service {sid} crashed — restart limit reached ({3} in 5min)')
+                        log_activity('service_restart_limit', sid, 'Max restarts exceeded', 'error')
+                        db.execute('UPDATE services SET running = 0, pid = NULL WHERE id = ?', (sid,))
+                        db.commit()
+                        _processes.pop(sid, None)
             db.close()
         except Exception as e:
             log.error(f'Health monitor error: {e}')
-        time.sleep(15)
+        time.sleep(10)
 
 
 def first_run_check():
-    """Check if this is the first run and mark it."""
     db = get_db()
     row = db.execute("SELECT value FROM settings WHERE key = 'first_run_complete'").fetchone()
     if not row:
@@ -187,13 +226,27 @@ def main():
 
     init_db()
 
+    # DB backup on startup
+    try:
+        backup_db()
+        log.info('Database backed up')
+    except Exception as e:
+        log.warning(f'DB backup failed: {e}')
+
+    log_activity('app_started', detail=f'v{VERSION}')
+
+    # GPU detection at startup
+    from services.manager import detect_gpu
+    gpu = detect_gpu()
+    log_activity('gpu_detected', detail=f'{gpu["type"]}: {gpu["name"]}')
+
     is_first_run = first_run_check()
 
     app = create_app()
 
-    # Start Flask in a background thread
+    # Start Flask — listen on 0.0.0.0 for LAN access
     flask_thread = threading.Thread(
-        target=lambda: app.run(host='127.0.0.1', port=PORT, debug=False, use_reloader=False),
+        target=lambda: app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False),
         daemon=True,
     )
     flask_thread.start()
@@ -210,7 +263,7 @@ def main():
     # Auto-start services from previous session
     threading.Thread(target=auto_start_services, daemon=True).start()
 
-    # Health monitor — detect crashed services
+    # Health monitor — detect and auto-restart crashed services
     threading.Thread(target=health_monitor, daemon=True).start()
 
     # System tray
