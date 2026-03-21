@@ -7,7 +7,7 @@ import logging
 import requests
 from services.manager import (
     get_services_dir, download_file, start_process, stop_process,
-    is_running, check_port, _download_progress
+    is_running, check_port, _download_progress, get_ollama_gpu_env
 )
 from db import get_db
 
@@ -96,7 +96,7 @@ def start():
     if not is_installed():
         raise RuntimeError('Ollama is not installed')
 
-    env = os.environ.copy()
+    env = get_ollama_gpu_env()
     env['OLLAMA_HOST'] = f'0.0.0.0:{OLLAMA_PORT}'
     env['OLLAMA_MODELS'] = os.path.join(get_install_dir(), 'models')
 

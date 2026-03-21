@@ -17,6 +17,42 @@ def get_db():
     return conn
 
 
+def log_activity(event: str, service: str = None, detail: str = None, level: str = 'info'):
+    """Log an activity event to the DB."""
+    try:
+        conn = get_db()
+        conn.execute('INSERT INTO activity_log (event, service, detail, level) VALUES (?, ?, ?, ?)',
+                     (event, service, detail, level))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+def backup_db():
+    """Create a timestamped backup of the database."""
+    import shutil
+    db_path = get_db_path()
+    if not os.path.isfile(db_path):
+        return
+    backup_dir = os.path.join(os.path.dirname(db_path), 'backups')
+    os.makedirs(backup_dir, exist_ok=True)
+    # Keep max 5 backups
+    from datetime import datetime
+    backup_path = os.path.join(backup_dir, f'nomad_{datetime.now().strftime("%Y%m%d_%H%M%S")}.db')
+    shutil.copy2(db_path, backup_path)
+    # Prune old backups
+    backups = sorted(
+        [os.path.join(backup_dir, f) for f in os.listdir(backup_dir) if f.endswith('.db')],
+        key=os.path.getmtime,
+    )
+    for old in backups[:-5]:
+        try:
+            os.remove(old)
+        except Exception:
+            pass
+
+
 def init_db():
     conn = get_db()
     conn.executescript('''
@@ -56,6 +92,15 @@ def init_db():
             messages TEXT DEFAULT '[]',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS activity_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event TEXT NOT NULL,
+            service TEXT,
+            detail TEXT,
+            level TEXT DEFAULT 'info',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS documents (
