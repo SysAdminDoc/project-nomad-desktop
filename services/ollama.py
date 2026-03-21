@@ -21,14 +21,21 @@ DEFAULT_MODEL = 'llama3.2:3b'
 _pull_progress = {'status': 'idle', 'model': '', 'percent': 0, 'detail': ''}
 
 RECOMMENDED_MODELS = [
-    {'name': 'llama3.2:3b', 'size': '2.0 GB', 'desc': 'Fast, capable general-purpose model'},
-    {'name': 'llama3.2:1b', 'size': '1.3 GB', 'desc': 'Lightweight model for low-RAM systems'},
-    {'name': 'gemma2:2b', 'size': '1.6 GB', 'desc': 'Google compact model, great for chat'},
-    {'name': 'mistral:7b', 'size': '4.1 GB', 'desc': 'Strong reasoning and instruction following'},
-    {'name': 'phi3:mini', 'size': '2.3 GB', 'desc': 'Microsoft compact model, good for coding'},
-    {'name': 'llama3.1:8b', 'size': '4.7 GB', 'desc': 'Full-size Llama 3.1, best quality'},
-    {'name': 'qwen2.5:7b', 'size': '4.7 GB', 'desc': 'Alibaba multilingual model'},
-    {'name': 'deepseek-r1:8b', 'size': '4.9 GB', 'desc': 'DeepSeek reasoning model'},
+    # Small (under 4GB) — fast, practical knowledge
+    {'name': 'llama3.2:3b', 'size': '2.0 GB', 'desc': 'Fast general-purpose model, great starting point'},
+    {'name': 'phi4-mini', 'size': '2.5 GB', 'desc': 'Microsoft Phi-4 Mini — excellent reasoning for its size'},
+    {'name': 'gemma3:4b', 'size': '3.3 GB', 'desc': 'Google Gemma 3 — strong at following instructions'},
+    {'name': 'llama3.2:1b', 'size': '1.3 GB', 'desc': 'Ultra-light for low-RAM systems (4GB RAM OK)'},
+    {'name': 'qwen2.5:3b', 'size': '1.9 GB', 'desc': 'Alibaba compact model, good multilingual support'},
+    # Medium (4-8GB) — detailed technical answers
+    {'name': 'llama3.3:8b', 'size': '4.9 GB', 'desc': 'Latest Llama 3.3 — best open-source quality/size ratio'},
+    {'name': 'mistral:7b', 'size': '4.1 GB', 'desc': 'Strong reasoning, great for step-by-step procedures'},
+    {'name': 'gemma3:12b', 'size': '8.1 GB', 'desc': 'Google Gemma 3 12B — excellent medical/technical knowledge'},
+    {'name': 'qwen2.5:7b', 'size': '4.7 GB', 'desc': 'Strong at coding, math, and structured output'},
+    {'name': 'deepseek-r1:8b', 'size': '4.9 GB', 'desc': 'DeepSeek reasoning — shows its thinking step by step'},
+    # Specialized
+    {'name': 'medllama2:7b', 'size': '3.8 GB', 'desc': 'Medical domain fine-tuned — first aid, medications, symptoms'},
+    {'name': 'meditron:7b', 'size': '3.8 GB', 'desc': 'Medical AI by EPFL — clinical knowledge, drug interactions'},
 ]
 
 
