@@ -152,6 +152,31 @@ def create_app():
         uninstall_service(service_id)
         return jsonify({'status': 'uninstalled'})
 
+    @app.route('/api/services/start-all', methods=['POST'])
+    def api_start_all():
+        started = []
+        errors = []
+        for sid, mod in SERVICE_MODULES.items():
+            if mod.is_installed() and not mod.running():
+                try:
+                    mod.start()
+                    started.append(sid)
+                except Exception as e:
+                    errors.append(f'{sid}: {e}')
+        return jsonify({'started': started, 'errors': errors})
+
+    @app.route('/api/services/stop-all', methods=['POST'])
+    def api_stop_all():
+        stopped = []
+        for sid, mod in SERVICE_MODULES.items():
+            if mod.is_installed() and mod.running():
+                try:
+                    mod.stop()
+                    stopped.append(sid)
+                except Exception:
+                    pass
+        return jsonify({'stopped': stopped})
+
     @app.route('/api/services/<service_id>/progress')
     def api_service_progress(service_id):
         return jsonify(get_download_progress(service_id))

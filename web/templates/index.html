@@ -789,8 +789,14 @@ a { color: var(--accent); text-decoration: none; }
     </div>
     <!-- Content Summary -->
     <div class="content-summary" id="content-summary"></div>
-    <!-- Mission Readiness -->
-    <div id="readiness-bar" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;"></div>
+    <!-- Bulk Actions + Mission Readiness -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+      <div id="readiness-bar" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-sm btn-primary" onclick="startAllServices()">Start All</button>
+        <button class="btn btn-sm btn-danger" onclick="stopAllServices()">Stop All</button>
+      </div>
+    </div>
     <div class="welcome-banner" id="welcome-banner" style="display:none;">
       <h3 class="shimmer-text">Welcome to N.O.M.A.D.</h3>
       <p>Your offline-first knowledge and AI command center. Install your first tool to get started.</p>
@@ -839,6 +845,7 @@ a { color: var(--accent); text-decoration: none; }
               <option value="survival">Survival Guide</option>
               <option value="teacher">Teacher/Tutor</option>
               <option value="analyst">Data Analyst</option>
+              <option value="custom">Custom Prompt...</option>
             </select>
             <button class="btn btn-sm" onclick="toggleModelPicker()">+ Get Model</button>
             <button class="btn btn-sm" onclick="exportConversation()" title="Export to Markdown">Export</button>
@@ -857,6 +864,17 @@ a { color: var(--accent); text-decoration: none; }
           <div style="display:flex;gap:6px;margin-top:8px;align-items:center;">
             <input id="custom-model-input" style="flex:1;background:var(--surface);color:var(--text);border:1px solid var(--border);padding:5px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="Or type a model name (e.g. phi3:mini)">
             <button class="btn btn-sm btn-primary" onclick="pullCustomModel()">Download</button>
+          </div>
+        </div>
+        <div id="custom-prompt-panel" style="display:none;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface2);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:12px;font-weight:600;">Custom System Prompt</span>
+            <button class="btn btn-sm btn-ghost" onclick="toggleCustomPrompt()" style="font-size:14px;padding:2px 6px;">x</button>
+          </div>
+          <textarea id="custom-prompt-text" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);padding:8px;border-radius:var(--radius-sm);font-size:12px;font-family:inherit;resize:vertical;min-height:60px;outline:none;" placeholder="e.g. You are a preparedness expert. Always prioritize practical survival advice..."></textarea>
+          <div style="display:flex;gap:6px;margin-top:6px;">
+            <button class="btn btn-sm btn-primary" onclick="saveCustomPrompt()">Save & Apply</button>
+            <button class="btn btn-sm" onclick="clearCustomPrompt()">Clear</button>
           </div>
         </div>
         <div class="kb-panel" id="kb-panel">
@@ -879,6 +897,7 @@ a { color: var(--accent); text-decoration: none; }
             oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
           <button class="btn btn-primary" onclick="sendChat()" id="send-btn">Send</button>
           <button class="btn btn-stop" onclick="stopChat()" id="stop-btn" style="display:none;">Stop</button>
+          <button class="btn btn-sm" onclick="regenerateChat()" id="regen-btn" style="display:none;" title="Regenerate last response">Retry</button>
         </div>
       </div>
     </div>
@@ -886,6 +905,7 @@ a { color: var(--accent); text-decoration: none; }
 
   <!-- Kiwix Library Tab -->
   <div id="tab-kiwix-library" class="tab-content">
+    <div id="library-summary" class="content-summary" style="margin-bottom:16px;"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
       <div class="settings-card">
         <h3 style="display:flex;justify-content:space-between;align-items:center;">My Content Packs<button class="btn btn-sm" onclick="loadZimList();loadZimDownloads()">Refresh</button></h3>
@@ -1478,6 +1498,20 @@ async function uninstallService(id) {
   loadServices();
 }
 
+async function startAllServices() {
+  toast('Starting all services...', 'info');
+  const r = await (await fetch('/api/services/start-all', {method:'POST'})).json();
+  if (r.started.length) toast(`Started ${r.started.length} service${r.started.length>1?'s':''}`, 'success');
+  if (r.errors.length) r.errors.forEach(e => toast(e, 'error'));
+  loadServices();
+}
+async function stopAllServices() {
+  toast('Stopping all services...', 'warning');
+  const r = await (await fetch('/api/services/stop-all', {method:'POST'})).json();
+  toast(`Stopped ${r.stopped.length} service${r.stopped.length>1?'s':''}`, 'warning');
+  loadServices();
+}
+
 let _pollInt = null;
 let _lastServicesData = [];
 function pollServices() {
@@ -1671,7 +1705,22 @@ async function sendChat() {
   _chatAbortCtrl = null;
   document.getElementById('send-btn').disabled = false;
   document.getElementById('stop-btn').style.display = 'none';
+  document.getElementById('regen-btn').style.display = chatMessages.length >= 2 ? '' : 'none';
   saveConversation();
+}
+
+function regenerateChat() {
+  if (isSending || !chatMessages.length) return;
+  // Remove the last assistant message and re-send
+  if (chatMessages[chatMessages.length-1].role === 'assistant') {
+    chatMessages.pop();
+  }
+  if (chatMessages.length && chatMessages[chatMessages.length-1].role === 'user') {
+    const lastUserMsg = chatMessages.pop();
+    document.getElementById('chat-input').value = lastUserMsg.content;
+    renderChat();
+    sendChat();
+  }
 }
 
 function stopChat() {
@@ -1711,6 +1760,18 @@ function renderChat() {
 async function loadZimList() {
   const zims = await (await fetch('/api/kiwix/zims')).json();
   const el = document.getElementById('zim-list');
+
+  // Update library summary
+  const summaryEl = document.getElementById('library-summary');
+  if (summaryEl) {
+    const totalMB = zims.reduce((sum, z) => sum + z.size_mb, 0);
+    const totalStr = totalMB >= 1024 ? (totalMB/1024).toFixed(1) + ' GB' : totalMB.toFixed(0) + ' MB';
+    summaryEl.innerHTML = `
+      <div><div class="cs-total">${zims.length}</div><div class="cs-label">Content Packs Downloaded</div></div>
+      <div class="cs-stat"><div class="cs-val">${totalStr}</div><div class="cs-label">Total Library Size</div></div>
+    `;
+  }
+
   if (!zims.length) { el.innerHTML = '<div style="color:var(--text-dim);font-size:12px;">No content downloaded yet.</div>'; return; }
   el.innerHTML = zims.map(z => `
     <div class="model-item">
@@ -2631,10 +2692,47 @@ const PRESETS = {
   teacher: 'You are a patient, encouraging teacher. Explain concepts clearly with examples. Break complex topics into digestible parts. Ask follow-up questions to check understanding. Adapt your teaching style to the student.',
   analyst: 'You are a data analyst. Help interpret data, create queries, explain statistical concepts, and provide analytical frameworks. Be precise with numbers.',
 };
+// Load saved custom prompt
+(function() { const cp = localStorage.getItem('nomad-custom-prompt'); if (cp) PRESETS.custom = cp; })();
 let activePreset = '';
 
 function applyPreset() {
   activePreset = document.getElementById('system-preset').value;
+  if (activePreset === 'custom') {
+    toggleCustomPrompt(true);
+  } else {
+    toggleCustomPrompt(false);
+  }
+}
+
+function toggleCustomPrompt(show) {
+  const panel = document.getElementById('custom-prompt-panel');
+  if (show === undefined) show = panel.style.display === 'none';
+  panel.style.display = show ? 'block' : 'none';
+  if (show) {
+    // Load saved custom prompt
+    const saved = localStorage.getItem('nomad-custom-prompt') || '';
+    document.getElementById('custom-prompt-text').value = saved;
+  }
+}
+
+function saveCustomPrompt() {
+  const text = document.getElementById('custom-prompt-text').value.trim();
+  localStorage.setItem('nomad-custom-prompt', text);
+  PRESETS.custom = text;
+  activePreset = 'custom';
+  document.getElementById('system-preset').value = 'custom';
+  toggleCustomPrompt(false);
+  toast('Custom prompt saved', 'success');
+}
+
+function clearCustomPrompt() {
+  document.getElementById('custom-prompt-text').value = '';
+  localStorage.removeItem('nomad-custom-prompt');
+  delete PRESETS.custom;
+  activePreset = '';
+  document.getElementById('system-preset').value = '';
+  toggleCustomPrompt(false);
 }
 
 function exportConversation() {
