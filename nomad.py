@@ -1,5 +1,5 @@
 """
-Project N.O.M.A.D. for Windows v0.7.0
+Project N.O.M.A.D. for Windows v0.8.0
 Node for Offline Media, Archives, and Data
 Native Windows edition — no Docker required.
 """
@@ -47,10 +47,10 @@ _bootstrap()
 import webview
 import pystray
 from PIL import Image, ImageDraw
-from web.app import create_app
+from web.app import create_app, set_version
 from db import init_db, get_db, log_activity, backup_db
 
-VERSION = '0.7.0'
+VERSION = '0.8.0'
 PORT = 8080
 
 _tray_icon = None
@@ -244,6 +244,7 @@ def main():
 
     is_first_run = first_run_check()
 
+    set_version(VERSION)
     app = create_app()
 
     # Start Flask — listen on 0.0.0.0 for LAN access
