@@ -15,6 +15,10 @@ Native Windows port of [Project N.O.M.A.D.](https://github.com/Crosstalk-Solutio
 nomad.py              # Entry point — Flask server + WebView2 window + tray + health monitor
 db.py                 # SQLite database init and helpers
 build.spec            # PyInstaller spec for single exe
+icon.ico              # App icon (multi-size, 16-256px)
+installer.iss         # Inno Setup installer script
+.github/workflows/
+  build.yml           # CI/CD — PyInstaller build + auto-release on tag push
 web/
   app.py              # Flask routes (API + dashboard) — services, AI, ZIM, maps, benchmark, system
   templates/
@@ -111,4 +115,4 @@ pyinstaller build.spec
 v0.7.0
 
 ## Status
-Working v0.7.0 — 6 services (Ollama, Kiwix, CyberChef, Kolibri, Qdrant, Stirling PDF). Full feature parity+ with original Project N.O.M.A.D. Phases 1-7 complete + v0.7.0 upgrades: Stirling PDF service (offline merge/split/compress/convert/OCR), SVG service icons, stacking toasts, button loading spinners, no-confirm instant actions, CI/CD GitHub Actions workflow (PyInstaller build on tag push), CyberChef asset selection fix. ~6K lines across 12 files. 7-tab dashboard.
+Working v0.7.0 — 6 services (Ollama, Kiwix, CyberChef, Kolibri, Qdrant, Stirling PDF). Consumer-ready UX: preset-based setup wizard (Essentials/Full/Custom), auto-model-pull after install, guided first-use tour, splash screen, inline model picker (no prompt() dialogs), jargon-free labels, plain English error messages, update checker banner, Windows startup toggle, config export/import, Inno Setup installer script, app icon (multi-size ICO). ~6.5K lines across 14 files. 7-tab dashboard.
