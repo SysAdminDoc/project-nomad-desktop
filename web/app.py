@@ -31,7 +31,7 @@ SERVICE_MODULES = {
     'stirling': stirling,
 }
 
-VERSION = '3.0.0'
+VERSION = '3.1.0'
 
 
 def set_version(v):
@@ -1099,15 +1099,30 @@ def create_app():
         return path
 
     MAP_REGIONS = [
-        {'id': 'us-pacific', 'name': 'Pacific', 'states': 'AK, CA, HI, OR, WA'},
-        {'id': 'us-mountain', 'name': 'Mountain', 'states': 'AZ, CO, ID, MT, NV, NM, UT, WY'},
-        {'id': 'us-west-north-central', 'name': 'West North Central', 'states': 'IA, KS, MN, MO, NE, ND, SD'},
-        {'id': 'us-east-north-central', 'name': 'East North Central', 'states': 'IL, IN, MI, OH, WI'},
-        {'id': 'us-west-south-central', 'name': 'West South Central', 'states': 'AR, LA, OK, TX'},
-        {'id': 'us-east-south-central', 'name': 'East South Central', 'states': 'AL, KY, MS, TN'},
-        {'id': 'us-south-atlantic', 'name': 'South Atlantic', 'states': 'DE, FL, GA, MD, NC, SC, VA, DC, WV'},
-        {'id': 'us-middle-atlantic', 'name': 'Middle Atlantic', 'states': 'NJ, NY, PA'},
-        {'id': 'us-new-england', 'name': 'New England', 'states': 'CT, ME, MA, NH, RI, VT'},
+        # US Regions
+        {'id': 'us-pacific', 'name': 'US Pacific', 'states': 'AK, CA, HI, OR, WA'},
+        {'id': 'us-mountain', 'name': 'US Mountain', 'states': 'AZ, CO, ID, MT, NV, NM, UT, WY'},
+        {'id': 'us-west-north-central', 'name': 'US West North Central', 'states': 'IA, KS, MN, MO, NE, ND, SD'},
+        {'id': 'us-east-north-central', 'name': 'US East North Central', 'states': 'IL, IN, MI, OH, WI'},
+        {'id': 'us-west-south-central', 'name': 'US West South Central', 'states': 'AR, LA, OK, TX'},
+        {'id': 'us-east-south-central', 'name': 'US East South Central', 'states': 'AL, KY, MS, TN'},
+        {'id': 'us-south-atlantic', 'name': 'US South Atlantic', 'states': 'DE, FL, GA, MD, NC, SC, VA, DC, WV'},
+        {'id': 'us-middle-atlantic', 'name': 'US Middle Atlantic', 'states': 'NJ, NY, PA'},
+        {'id': 'us-new-england', 'name': 'US New England', 'states': 'CT, ME, MA, NH, RI, VT'},
+        # International Regions
+        {'id': 'eu-western', 'name': 'Western Europe', 'states': 'UK, France, Germany, Netherlands, Belgium'},
+        {'id': 'eu-eastern', 'name': 'Eastern Europe', 'states': 'Poland, Czech, Romania, Hungary, Ukraine'},
+        {'id': 'eu-southern', 'name': 'Southern Europe', 'states': 'Spain, Italy, Portugal, Greece, Turkey'},
+        {'id': 'eu-northern', 'name': 'Northern Europe', 'states': 'Sweden, Norway, Finland, Denmark, Iceland'},
+        {'id': 'canada', 'name': 'Canada', 'states': 'All provinces and territories'},
+        {'id': 'mexico-central', 'name': 'Mexico & Central America', 'states': 'Mexico, Guatemala, Belize, Honduras'},
+        {'id': 'south-america', 'name': 'South America', 'states': 'Brazil, Argentina, Colombia, Chile, Peru'},
+        {'id': 'east-asia', 'name': 'East Asia', 'states': 'Japan, South Korea, Taiwan'},
+        {'id': 'southeast-asia', 'name': 'Southeast Asia', 'states': 'Philippines, Thailand, Vietnam, Indonesia'},
+        {'id': 'oceania', 'name': 'Australia & New Zealand', 'states': 'Australia, New Zealand, Pacific Islands'},
+        {'id': 'middle-east', 'name': 'Middle East', 'states': 'Israel, Jordan, UAE, Saudi Arabia, Iraq'},
+        {'id': 'africa-north', 'name': 'North Africa', 'states': 'Egypt, Morocco, Tunisia, Libya, Algeria'},
+        {'id': 'africa-sub', 'name': 'Sub-Saharan Africa', 'states': 'South Africa, Kenya, Nigeria, Ethiopia'},
     ]
 
     @app.route('/api/maps/regions')
@@ -2966,6 +2981,141 @@ def create_app():
                     row.append(round(haversine(a['lat'], a['lng'], b['lat'], b['lng']), 2))
             matrix.append(row)
         return jsonify({'points': points, 'matrix': matrix})
+
+    # ─── External Ollama Host ─────────────────────────────────────────
+
+    @app.route('/api/settings/ollama-host')
+    def api_ollama_host_get():
+        db = get_db()
+        row = db.execute("SELECT value FROM settings WHERE key = 'ollama_host'").fetchone()
+        db.close()
+        return jsonify({'host': row['value'] if row else ''})
+
+    @app.route('/api/settings/ollama-host', methods=['PUT'])
+    def api_ollama_host_set():
+        data = request.get_json() or {}
+        host = (data.get('host', '') or '').strip()
+        db = get_db()
+        db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('ollama_host', ?)", (host,))
+        db.commit()
+        db.close()
+        # Update ollama module's port/host
+        if host:
+            log_activity('ollama_host_changed', detail=host)
+        return jsonify({'status': 'saved', 'host': host})
+
+    # ─── Host Power Control ───────────────────────────────────────────
+
+    @app.route('/api/system/shutdown', methods=['POST'])
+    def api_system_shutdown():
+        data = request.get_json() or {}
+        action = data.get('action', 'shutdown')
+        log_activity('system_power', detail=action)
+        def do_power():
+            import time as t
+            t.sleep(2)
+            if action == 'reboot':
+                os.system('shutdown /r /t 5 /c "N.O.M.A.D. initiated reboot"')
+            else:
+                os.system('shutdown /s /t 5 /c "N.O.M.A.D. initiated shutdown"')
+        threading.Thread(target=do_power, daemon=True).start()
+        return jsonify({'status': f'{action} initiated', 'delay': 5})
+
+    # ─── Simple Auth ──────────────────────────────────────────────────
+
+    @app.route('/api/auth/check')
+    def api_auth_check():
+        db = get_db()
+        row = db.execute("SELECT value FROM settings WHERE key = 'auth_password'").fetchone()
+        db.close()
+        return jsonify({'enabled': bool(row and row['value']), 'authenticated': True})  # Auth check handled by middleware if needed
+
+    @app.route('/api/auth/set-password', methods=['POST'])
+    def api_auth_set_password():
+        data = request.get_json() or {}
+        password = data.get('password', '').strip()
+        import hashlib
+        hashed = hashlib.sha256(password.encode()).hexdigest() if password else ''
+        db = get_db()
+        db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('auth_password', ?)", (hashed,))
+        db.commit()
+        db.close()
+        return jsonify({'status': 'saved', 'enabled': bool(password)})
+
+    # ─── PDF Viewer API ───────────────────────────────────────────────
+
+    @app.route('/api/library/upload-pdf', methods=['POST'])
+    def api_library_upload_pdf():
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file'}), 400
+        file = request.files['file']
+        filename = secure_filename(file.filename)
+        if not filename:
+            return jsonify({'error': 'Invalid filename'}), 400
+        pdf_dir = os.path.join(get_data_dir(), 'library')
+        os.makedirs(pdf_dir, exist_ok=True)
+        filepath = os.path.join(pdf_dir, filename)
+        file.save(filepath)
+        return jsonify({'status': 'uploaded', 'filename': filename, 'size': os.path.getsize(filepath)}), 201
+
+    @app.route('/api/library/pdfs')
+    def api_library_pdfs():
+        pdf_dir = os.path.join(get_data_dir(), 'library')
+        if not os.path.isdir(pdf_dir):
+            return jsonify([])
+        files = []
+        for f in os.listdir(pdf_dir):
+            if f.lower().endswith(('.pdf', '.epub', '.txt', '.md')):
+                fp = os.path.join(pdf_dir, f)
+                files.append({'filename': f, 'size': format_size(os.path.getsize(fp)), 'type': f.rsplit('.', 1)[-1].lower()})
+        return jsonify(sorted(files, key=lambda x: x['filename']))
+
+    @app.route('/api/library/serve/<path:filename>')
+    def api_library_serve(filename):
+        pdf_dir = os.path.join(get_data_dir(), 'library')
+        safe = os.path.normpath(os.path.join(pdf_dir, secure_filename(filename)))
+        if not safe.startswith(os.path.normpath(pdf_dir)) or not os.path.isfile(safe):
+            return jsonify({'error': 'Not found'}), 404
+        from flask import send_file
+        return send_file(safe)
+
+    @app.route('/api/library/delete/<path:filename>', methods=['DELETE'])
+    def api_library_delete(filename):
+        pdf_dir = os.path.join(get_data_dir(), 'library')
+        safe = os.path.normpath(os.path.join(pdf_dir, secure_filename(filename)))
+        if not safe.startswith(os.path.normpath(pdf_dir)):
+            return jsonify({'error': 'Invalid'}), 400
+        if os.path.isfile(safe):
+            os.remove(safe)
+        return jsonify({'status': 'deleted'})
+
+    # ─── AI Chat File Upload (drag/drop) ──────────────────────────────
+
+    @app.route('/api/ai/upload-context', methods=['POST'])
+    def api_ai_upload_context():
+        """Upload a file and extract text for AI chat context."""
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file'}), 400
+        file = request.files['file']
+        filename = secure_filename(file.filename)
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+        content = ''
+        if ext == 'pdf':
+            try:
+                import PyPDF2
+                reader = PyPDF2.PdfReader(file)
+                content = '\n'.join(page.extract_text() or '' for page in reader.pages)
+            except Exception as e:
+                return jsonify({'error': f'PDF read failed: {e}'}), 400
+        elif ext in ('txt', 'md', 'csv', 'log', 'json', 'xml', 'html'):
+            content = file.read().decode('utf-8', errors='ignore')
+        else:
+            return jsonify({'error': f'Unsupported file type: {ext}'}), 400
+        # Truncate to ~4000 words to fit in context
+        words = content.split()
+        if len(words) > 4000:
+            content = ' '.join(words[:4000]) + '\n\n[... truncated, file too large for full context ...]'
+        return jsonify({'filename': filename, 'content': content, 'words': len(words)})
 
     # ─── Dashboard Checklists Progress ─────────────────────────────────
 
