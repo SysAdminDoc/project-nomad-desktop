@@ -1282,6 +1282,7 @@ a { color: var(--accent); text-decoration: none; }
       <button class="prep-subtab" data-psub="vault" onclick="switchPrepSub('vault')">Vault</button>
       <button class="prep-subtab" data-psub="weather" onclick="switchPrepSub('weather')">Weather</button>
       <button class="prep-subtab" data-psub="signals" onclick="switchPrepSub('signals')">Signals</button>
+      <button class="prep-subtab" data-psub="ops" onclick="switchPrepSub('ops')">Operations</button>
     </div>
 
     <!-- Sub: Checklists -->
@@ -1553,6 +1554,13 @@ a { color: var(--accent); text-decoration: none; }
             </select>
           </div>
           <div class="calc-result" id="batt-result"></div>
+        </div>
+        <!-- Distance to Horizon -->
+        <div class="calc-card">
+          <h4>Distance to Horizon / Line of Sight</h4>
+          <div class="calc-row"><label>Elevation (ft)</label><input id="horizon-elev" type="number" value="6" min="0" step="1" oninput="calcHorizon()"></div>
+          <div class="calc-row"><label>Target height (ft)</label><input id="horizon-target" type="number" value="0" min="0" step="1" oninput="calcHorizon()"></div>
+          <div class="calc-result" id="horizon-result"></div>
         </div>
         <!-- Calorie Tracker -->
         <div class="calc-card">
@@ -2351,6 +2359,102 @@ a { color: var(--accent); text-decoration: none; }
       </div>
     </div>
     </div><!-- /psub-signals -->
+
+    <!-- Sub: Operations -->
+    <div id="psub-ops" class="prep-sub">
+    <div class="prep-section">
+      <h3>Operations Center</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+        <!-- Infrastructure Status -->
+        <div class="settings-card">
+          <h3 style="font-size:13px;">Infrastructure Status</h3>
+          <div id="infra-status" style="font-size:12px;"></div>
+        </div>
+
+        <!-- Vehicle Readiness -->
+        <div class="settings-card">
+          <h3 style="font-size:13px;">Vehicle Readiness</h3>
+          <div style="display:flex;gap:6px;margin-bottom:8px;">
+            <input id="veh-name" style="flex:1;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;font-size:11px;outline:none;" placeholder="Vehicle name">
+            <input id="veh-fuel" type="number" min="0" max="100" value="100" style="width:60px;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;font-size:11px;outline:none;" placeholder="Fuel%">
+            <button class="btn btn-sm btn-primary" onclick="addVehicle()" style="font-size:10px;">Add</button>
+          </div>
+          <div id="vehicle-list"></div>
+        </div>
+
+        <!-- SITREP Generator -->
+        <div class="settings-card" style="grid-column:1/-1;">
+          <h3 style="font-size:13px;">SITREP Generator (Situation Report)</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:10px;">
+            <div><label style="color:var(--text-dim);display:block;margin-bottom:2px;">Date/Time Group</label><input id="sitrep-dtg" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;font-size:11px;outline:none;" placeholder="Auto-filled"></div>
+            <div><label style="color:var(--text-dim);display:block;margin-bottom:2px;">Location</label><input id="sitrep-loc" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;font-size:11px;outline:none;" placeholder="Grid ref or description"></div>
+            <div><label style="color:var(--text-dim);display:block;margin-bottom:2px;">1. Situation (what happened)</label><textarea id="sitrep-sit" rows="2" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;font-size:11px;outline:none;resize:vertical;"></textarea></div>
+            <div><label style="color:var(--text-dim);display:block;margin-bottom:2px;">2. Casualties/Injuries</label><input id="sitrep-cas" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;font-size:11px;outline:none;" placeholder="None / count / details"></div>
+            <div><label style="color:var(--text-dim);display:block;margin-bottom:2px;">3. Supplies Status</label><input id="sitrep-sup" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;font-size:11px;outline:none;" placeholder="Green/Yellow/Red + details"></div>
+            <div><label style="color:var(--text-dim);display:block;margin-bottom:2px;">4. Comms Status</label><input id="sitrep-comms" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;font-size:11px;outline:none;" placeholder="Equipment operational / degraded / down"></div>
+            <div><label style="color:var(--text-dim);display:block;margin-bottom:2px;">5. Requests/Needs</label><input id="sitrep-req" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;font-size:11px;outline:none;" placeholder="Medical, supplies, evacuation, etc."></div>
+            <div><label style="color:var(--text-dim);display:block;margin-bottom:2px;">6. Plan/Intent</label><input id="sitrep-plan" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;font-size:11px;outline:none;" placeholder="Next actions, timeline"></div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-sm btn-primary" onclick="generateSitrep()">Generate SITREP</button>
+            <button class="btn btn-sm" onclick="copySitrep()">Copy to Clipboard</button>
+            <button class="btn btn-sm" onclick="fillSitrepDTG()">Auto-fill DTG</button>
+          </div>
+          <pre id="sitrep-output" style="margin-top:10px;background:var(--surface2);padding:12px;border-radius:6px;font-size:11px;font-family:'Cascadia Code','Consolas',monospace;white-space:pre-wrap;display:none;line-height:1.6;"></pre>
+        </div>
+
+        <!-- Cipher Tool -->
+        <div class="settings-card">
+          <h3 style="font-size:13px;">Message Cipher (Encryption)</h3>
+          <div style="font-size:12px;">
+            <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">
+              <select id="cipher-type" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:6px;font-size:11px;" onchange="runCipher()">
+                <option value="caesar">Caesar Cipher</option>
+                <option value="reverse">Reverse Text</option>
+                <option value="atbash">Atbash Cipher</option>
+              </select>
+              <label style="font-size:11px;color:var(--text-dim);">Shift:</label>
+              <input id="cipher-shift" type="number" value="13" min="1" max="25" style="width:50px;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:4px 6px;border-radius:6px;font-size:11px;outline:none;" oninput="runCipher()">
+            </div>
+            <textarea id="cipher-input" rows="3" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 8px;border-radius:6px;font-size:11px;font-family:'Cascadia Code','Consolas',monospace;outline:none;resize:vertical;margin-bottom:4px;" placeholder="Type message to encrypt..." oninput="runCipher()"></textarea>
+            <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;">Encrypted:</div>
+            <div id="cipher-output" style="background:var(--surface2);padding:6px 8px;border-radius:6px;font-family:'Cascadia Code','Consolas',monospace;font-size:12px;min-height:24px;word-break:break-all;cursor:pointer;" onclick="navigator.clipboard.writeText(this.textContent);toast('Copied','success')" title="Click to copy"></div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">Pre-agree on cipher type and shift number with your group. ROT13 (shift=13) is self-reversing.</div>
+          </div>
+        </div>
+
+        <!-- Bleach Calculator -->
+        <div class="settings-card">
+          <h3 style="font-size:13px;">Bleach/Disinfection Calculator</h3>
+          <div style="font-size:12px;">
+            <div style="display:flex;gap:8px;margin-bottom:8px;align-items:end;">
+              <div><label style="color:var(--text-dim);display:block;margin-bottom:2px;font-size:11px;">Bleach %</label>
+                <select id="bleach-pct" onchange="calcBleach()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:6px;font-size:11px;">
+                  <option value="6">6% (standard)</option>
+                  <option value="8.25">8.25% (concentrated)</option>
+                </select></div>
+              <div><label style="color:var(--text-dim);display:block;margin-bottom:2px;font-size:11px;">Water (gallons)</label>
+                <input id="bleach-gal" type="number" value="1" min="0.25" step="0.25" style="width:70px;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:6px;font-size:11px;outline:none;" oninput="calcBleach()"></div>
+              <div><label style="color:var(--text-dim);display:block;margin-bottom:2px;font-size:11px;">Water clarity</label>
+                <select id="bleach-clarity" onchange="calcBleach()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:6px;font-size:11px;">
+                  <option value="clear">Clear</option>
+                  <option value="cloudy">Cloudy/turbid</option>
+                </select></div>
+            </div>
+            <div class="calc-result" id="bleach-result"></div>
+            <div style="margin-top:8px;font-weight:600;color:var(--accent);font-size:11px;">Surface Disinfection</div>
+            <div style="font-size:11px;line-height:1.7;margin-top:4px;">
+              <div>General surfaces: 1/3 cup bleach per gallon water. Wipe, let sit 1 min.</div>
+              <div>Norovirus/blood: 1 cup bleach per gallon water. Let sit 10 min.</div>
+              <div>Mold: 1 cup bleach per gallon water. Scrub, let dry completely.</div>
+            </div>
+            <div style="color:var(--orange);font-size:10px;margin-top:4px;">Use ONLY plain unscented sodium hypochlorite bleach. Never mix bleach with ammonia, vinegar, or other cleaners — toxic gas.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div><!-- /psub-ops -->
   </div>
 
   <!-- LAN Chat Widget -->
@@ -4398,11 +4502,12 @@ function switchPrepSub(sub) {
   if (sub === 'incidents') loadIncidents();
   if (sub === 'inventory') { loadInventory(); loadBurnRate(); }
   if (sub === 'contacts') { loadContacts(); loadSkillsMatrix(); }
-  if (sub === 'calculators') { calcWater(); calcFood(); calcPower(); calcWatch(); document.getElementById('solar-date').value=new Date().toISOString().slice(0,10); calcSolar(); document.getElementById('moon-date').value=new Date().toISOString().slice(0,10); calcMoon(); convertCoords(); calcTravel(); calcBattery(); updateCalTracker(); }
+  if (sub === 'calculators') { calcWater(); calcFood(); calcPower(); calcWatch(); document.getElementById('solar-date').value=new Date().toISOString().slice(0,10); calcSolar(); document.getElementById('moon-date').value=new Date().toISOString().slice(0,10); calcMoon(); convertCoords(); calcTravel(); calcBattery(); calcHorizon(); updateCalTracker(); }
   if (sub === 'reference') { convertUnit(); showPlantZone(); }
   if (sub === 'vault' && _vaultKey) loadVaultList();
   if (sub === 'weather') loadWeather();
   if (sub === 'signals') loadSignalSchedule();
+  if (sub === 'ops') { loadInfraStatus(); renderVehicles(); calcBleach(); }
 }
 
 /* ─── Preparedness ─── */
@@ -5270,6 +5375,187 @@ async function deleteWaypoint(id) {
   await fetch(`/api/waypoints/${id}`, {method:'DELETE'});
   toast('Waypoint deleted');
   loadWaypoints();
+}
+
+/* ─── Distance to Horizon ─── */
+function calcHorizon() {
+  const elev = parseFloat(document.getElementById('horizon-elev').value) || 0;
+  const target = parseFloat(document.getElementById('horizon-target').value) || 0;
+  // Distance to horizon in miles = sqrt(1.5 * height_in_feet)
+  const d1 = Math.sqrt(1.5 * elev);
+  const d2 = Math.sqrt(1.5 * target);
+  const total = d1 + d2;
+  const km = total * 1.60934;
+  document.getElementById('horizon-result').innerHTML = `
+    Your horizon: <strong>${d1.toFixed(1)} mi</strong> (${(d1*1.61).toFixed(1)} km)<br>
+    ${target > 0 ? `Target visible at: <strong>${total.toFixed(1)} mi</strong> (${km.toFixed(1)} km)<br>` : ''}
+    <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">
+      Common elevations: Standing (6ft) = ${Math.sqrt(9).toFixed(1)} mi |
+      Roof (25ft) = ${Math.sqrt(37.5).toFixed(1)} mi |
+      Hill (100ft) = ${Math.sqrt(150).toFixed(1)} mi |
+      Tower (200ft) = ${Math.sqrt(300).toFixed(1)} mi
+    </div>
+    <div style="font-size:11px;color:var(--text-dim);">VHF/UHF radio range is approximately line-of-sight. HF radio bounces off ionosphere (unlimited range).</div>`;
+}
+
+/* ─── Infrastructure Status ─── */
+const INFRA_ITEMS = ['Power Grid','Water Supply','Natural Gas','Internet','Cell Service','Landline','Roads (Primary)','Roads (Secondary)','Hospital/ER','Fuel Stations','Grocery/Supply','Schools'];
+const INFRA_LEVELS = ['operational','degraded','down','unknown'];
+const INFRA_COLORS = {operational:'var(--green)',degraded:'var(--orange)',down:'var(--red)',unknown:'var(--text-muted)'};
+const INFRA_LABELS = {operational:'UP',degraded:'DEGRADED',down:'DOWN',unknown:'UNKNOWN'};
+
+function loadInfraStatus() {
+  const saved = JSON.parse(localStorage.getItem('nomad-infra') || '{}');
+  const el = document.getElementById('infra-status');
+  el.innerHTML = INFRA_ITEMS.map(item => {
+    const key = item.replace(/[^a-zA-Z]/g,'').toLowerCase();
+    const level = saved[key] || 'unknown';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="cycleInfra('${key}')">
+      <span>${item}</span>
+      <span style="font-size:10px;font-weight:700;color:${INFRA_COLORS[level]};min-width:70px;text-align:right;">${INFRA_LABELS[level]}</span>
+    </div>`;
+  }).join('');
+}
+
+function cycleInfra(key) {
+  const saved = JSON.parse(localStorage.getItem('nomad-infra') || '{}');
+  const current = saved[key] || 'unknown';
+  const next = INFRA_LEVELS[(INFRA_LEVELS.indexOf(current) + 1) % INFRA_LEVELS.length];
+  saved[key] = next;
+  localStorage.setItem('nomad-infra', JSON.stringify(saved));
+  loadInfraStatus();
+}
+
+/* ─── Vehicle Readiness ─── */
+let _vehicles = JSON.parse(localStorage.getItem('nomad-vehicles') || '[]');
+
+function addVehicle() {
+  const name = document.getElementById('veh-name').value.trim();
+  const fuel = parseInt(document.getElementById('veh-fuel').value) || 0;
+  if (!name) return;
+  _vehicles.push({name, fuel, status: 'ready', id: Date.now()});
+  localStorage.setItem('nomad-vehicles', JSON.stringify(_vehicles));
+  document.getElementById('veh-name').value = '';
+  renderVehicles();
+}
+
+function cycleVehicleStatus(id) {
+  const statuses = ['ready','needs-maintenance','disabled'];
+  const v = _vehicles.find(v => v.id === id);
+  if (v) { v.status = statuses[(statuses.indexOf(v.status) + 1) % statuses.length]; localStorage.setItem('nomad-vehicles', JSON.stringify(_vehicles)); renderVehicles(); }
+}
+
+function updateVehicleFuel(id, fuel) {
+  const v = _vehicles.find(v => v.id === id);
+  if (v) { v.fuel = parseInt(fuel); localStorage.setItem('nomad-vehicles', JSON.stringify(_vehicles)); }
+}
+
+function deleteVehicle(id) {
+  _vehicles = _vehicles.filter(v => v.id !== id);
+  localStorage.setItem('nomad-vehicles', JSON.stringify(_vehicles));
+  renderVehicles();
+}
+
+function renderVehicles() {
+  const el = document.getElementById('vehicle-list');
+  if (!_vehicles.length) { el.innerHTML = '<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:10px;">No vehicles tracked.</div>'; return; }
+  const statusColors = {ready:'var(--green)','needs-maintenance':'var(--orange)',disabled:'var(--red)'};
+  const statusLabels = {ready:'READY','needs-maintenance':'MAINT',disabled:'DOWN'};
+  el.innerHTML = _vehicles.map(v => {
+    const fuelColor = v.fuel > 50 ? 'var(--green)' : v.fuel > 25 ? 'var(--orange)' : 'var(--red)';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;">
+      <div style="font-weight:500;flex:1;">${escapeHtml(v.name)}</div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:10px;color:var(--text-dim);">Fuel:</span>
+        <input type="range" min="0" max="100" value="${v.fuel}" style="width:60px;accent-color:${fuelColor};" oninput="updateVehicleFuel(${v.id},this.value)">
+        <span style="font-size:10px;width:28px;color:${fuelColor};font-weight:600;">${v.fuel}%</span>
+        <span style="font-size:9px;font-weight:700;color:${statusColors[v.status]};cursor:pointer;min-width:40px;text-align:center;" onclick="cycleVehicleStatus(${v.id})" title="Click to change">${statusLabels[v.status]}</span>
+        <span style="cursor:pointer;color:var(--red);font-size:11px;" onclick="deleteVehicle(${v.id})">x</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ─── SITREP Generator ─── */
+function fillSitrepDTG() {
+  const now = new Date();
+  const dtg = `${String(now.getDate()).padStart(2,'0')}${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}L ${now.toLocaleString('default',{month:'short'}).toUpperCase()} ${now.getFullYear()}`;
+  document.getElementById('sitrep-dtg').value = dtg;
+}
+
+function generateSitrep() {
+  fillSitrepDTG();
+  const dtg = document.getElementById('sitrep-dtg').value;
+  const loc = document.getElementById('sitrep-loc').value;
+  const sit = document.getElementById('sitrep-sit').value;
+  const cas = document.getElementById('sitrep-cas').value;
+  const sup = document.getElementById('sitrep-sup').value;
+  const comms = document.getElementById('sitrep-comms').value;
+  const req = document.getElementById('sitrep-req').value;
+  const plan = document.getElementById('sitrep-plan').value;
+  const text = `===== SITREP =====
+DTG: ${dtg || 'N/A'}
+LOC: ${loc || 'N/A'}
+1. SITUATION: ${sit || 'N/A'}
+2. CASUALTIES: ${cas || 'None'}
+3. SUPPLIES: ${sup || 'N/A'}
+4. COMMS: ${comms || 'N/A'}
+5. REQUESTS: ${req || 'None'}
+6. PLAN: ${plan || 'N/A'}
+===== END SITREP =====`;
+  const el = document.getElementById('sitrep-output');
+  el.textContent = text;
+  el.style.display = 'block';
+}
+
+function copySitrep() {
+  const text = document.getElementById('sitrep-output').textContent;
+  if (!text) { generateSitrep(); }
+  navigator.clipboard.writeText(document.getElementById('sitrep-output').textContent).then(() => toast('SITREP copied to clipboard', 'success'));
+}
+
+/* ─── Cipher Tool ─── */
+function runCipher() {
+  const type = document.getElementById('cipher-type').value;
+  const input = document.getElementById('cipher-input').value;
+  const shift = parseInt(document.getElementById('cipher-shift').value) || 13;
+  let output = '';
+  if (type === 'caesar') {
+    output = input.split('').map(c => {
+      if (c >= 'A' && c <= 'Z') return String.fromCharCode(((c.charCodeAt(0) - 65 + shift) % 26) + 65);
+      if (c >= 'a' && c <= 'z') return String.fromCharCode(((c.charCodeAt(0) - 97 + shift) % 26) + 97);
+      return c;
+    }).join('');
+  } else if (type === 'reverse') {
+    output = input.split('').reverse().join('');
+  } else if (type === 'atbash') {
+    output = input.split('').map(c => {
+      if (c >= 'A' && c <= 'Z') return String.fromCharCode(90 - (c.charCodeAt(0) - 65));
+      if (c >= 'a' && c <= 'z') return String.fromCharCode(122 - (c.charCodeAt(0) - 97));
+      return c;
+    }).join('');
+  }
+  document.getElementById('cipher-output').textContent = output;
+}
+
+/* ─── Bleach Calculator ─── */
+function calcBleach() {
+  const pct = parseFloat(document.getElementById('bleach-pct').value);
+  const gal = parseFloat(document.getElementById('bleach-gal').value) || 1;
+  const cloudy = document.getElementById('bleach-clarity').value === 'cloudy';
+  // EPA: 6% bleach = 8 drops/gal clear, 16 drops cloudy; 8.25% = 6 drops clear, 12 cloudy
+  const dropsPerGal = pct <= 6 ? (cloudy ? 16 : 8) : (cloudy ? 12 : 6);
+  const totalDrops = dropsPerGal * gal;
+  const tsp = totalDrops / 76; // ~76 drops per teaspoon
+  const ml = totalDrops * 0.05; // ~0.05 mL per drop
+  document.getElementById('bleach-result').innerHTML = `
+    <strong>${totalDrops} drops</strong> (~${tsp.toFixed(2)} tsp / ${ml.toFixed(1)} mL) of ${pct}% bleach<br>
+    for <strong>${gal} gallon${gal!==1?'s':''}</strong> of ${cloudy?'cloudy':'clear'} water<br>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">
+      Stir and wait <strong>30 minutes</strong>. Should have slight chlorine smell after waiting.
+      If no smell, repeat dose and wait another 15 minutes.
+      ${cloudy ? '<br>Pre-filter cloudy water through cloth/coffee filter first.' : ''}
+    </div>`;
 }
 
 /* ─── Battery Life Calculator ─── */
