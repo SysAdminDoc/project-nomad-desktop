@@ -1,5 +1,5 @@
 """
-Project N.O.M.A.D. for Windows v2.5.1
+Project N.O.M.A.D. for Windows v2.5.2
 Node for Offline Media, Archives, and Data
 Native Windows edition — no Docker required.
 """
@@ -51,7 +51,7 @@ from config import get_data_dir
 from web.app import create_app, set_version
 from db import init_db, get_db, log_activity, backup_db
 
-VERSION = '2.5.1'
+VERSION = '2.5.2'
 PORT = 8080
 
 _tray_icon = None
