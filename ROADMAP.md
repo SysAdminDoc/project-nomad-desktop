@@ -68,13 +68,15 @@
 **Builds on:** MapLibre + PMTiles + waypoints + zones + GPX export
 **Effort:** Large (2-3 sessions)
 
-- [ ] Elevation data integration — download SRTM/ASTER DEM tiles for the user's region, serve via Flask
-- [ ] Elevation profile on routes — click two waypoints, see the elevation change between them
-- [ ] Contour line layer — render terrain contours from DEM data as a MapLibre layer
-- [ ] Route planning — A* pathfinding on road network from PMTiles data with distance/time/elevation estimates
-- [ ] Print layout — dedicated print view with scale bar, legend, north arrow, title block at user-selected zoom/bounds
-- [ ] Property boundary tool — draw a polygon, calculate area (acres), perimeter length, tag as "property"
-- [ ] Offline geocoding — build a local placename index from PMTiles features for search without Nominatim
+- [x] Print layout — captures map as PNG, generates printable page with title, coordinates, compass, scale
+- [x] Property boundary tool — draw polygon, calculates area (sq ft/acres) and perimeter (ft/miles), saved as zone layer
+- [x] Map bookmarks — save/recall map views (center + zoom), bookmark list in management area
+- [x] Bearing & distance calculator — click two points, shows bearing (degrees + cardinal) and distance (km/mi) with line
+- [ ] Elevation data integration — download SRTM/ASTER DEM tiles (enhancement — requires large dataset)
+- [ ] Elevation profile on routes — click two waypoints, see elevation change (enhancement — requires DEM)
+- [ ] Contour line layer — render terrain contours (enhancement — requires DEM processing)
+- [ ] Route planning — A* pathfinding on road network (enhancement — requires graph extraction from PMTiles)
+- [ ] Offline geocoding — local placename index from PMTiles features (enhancement)
 
 ## Phase 7: Multi-Node Federation (Sneakernet++)
 **Builds on:** Existing ZIP export/import, LAN auth
