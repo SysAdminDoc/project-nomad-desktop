@@ -3358,21 +3358,21 @@ def create_app():
     @app.route('/nukemap/<path:filepath>')
     def nukemap_serve(filepath='index.html'):
         import os as _os
-        # Handle both source and PyInstaller frozen paths
+        from flask import send_from_directory
+        # Resolve nukemap directory robustly
         if getattr(sys, 'frozen', False):
-            base = _os.path.join(sys._MEIPASS, 'web', 'nukemap')
+            nukemap_dir = _os.path.join(sys._MEIPASS, 'web', 'nukemap')
         else:
-            base = _os.path.join(_os.path.dirname(__file__), 'nukemap')
-        safe = _os.path.normpath(_os.path.join(base, filepath))
-        if not safe.startswith(_os.path.normpath(base)) or not _os.path.isfile(safe):
-            return jsonify({'error': 'Not found'}), 404
-        # Set correct MIME types
-        mime = None
-        if filepath.endswith('.css'): mime = 'text/css'
-        elif filepath.endswith('.js'): mime = 'application/javascript'
-        elif filepath.endswith('.html'): mime = 'text/html'
-        from flask import send_file
-        return send_file(safe, mimetype=mime)
+            nukemap_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'nukemap')
+        # Security: prevent path traversal
+        if '..' in filepath:
+            return jsonify({'error': 'Forbidden'}), 403
+        full = _os.path.join(nukemap_dir, filepath)
+        if not _os.path.isfile(full):
+            return jsonify({'error': f'Not found: {filepath}'}), 404
+        directory = _os.path.dirname(full)
+        filename = _os.path.basename(full)
+        return send_from_directory(directory, filename)
 
     # ─── Favicon ──────────────────────────────────────────────────────
 
