@@ -16,13 +16,13 @@
 **Builds on:** Scenario AI personas, situation-context injection, existing reference cards
 **Effort:** Medium (1-2 sessions)
 
-- [ ] Decision tree data structure — JSON-defined flowcharts with nodes (question/action/result), edges (yes/no/condition)
-- [ ] Built-in trees for: water purification, wound assessment, shelter construction, fire starting, food preservation, radio setup
-- [ ] Decision tree UI component — card-based step-by-step with back/forward, breadcrumb trail
+- [x] Decision tree data structure — JSON-defined flowcharts with question/result nodes and branching edges
+- [x] 6 built-in trees: water purification, wound assessment, shelter construction, fire starting, food preservation, radio setup + START triage
+- [x] Decision tree UI — card-based step-by-step with back/forward, breadcrumb trail, severity-colored results
 - [ ] Context-aware: tree can reference inventory ("You have [X] water filters") and contacts ("Your medic is [name]")
-- [ ] Works fully offline without Ollama — pure JS decision logic
-- [ ] AI enhancement: at any step, user can click "Ask AI" to get deeper guidance
-- [ ] Print current decision path as a procedure card
+- [x] Works fully offline without Ollama — pure JS decision logic
+- [x] AI enhancement: "Ask AI" button at any step sends context to Ollama for deeper guidance
+- [x] Print current decision path as a printable procedure card
 
 ## Phase 3: Medical Module
 **Builds on:** Dosage calculator, contacts with blood_type/medical_notes, field_medic AI persona
