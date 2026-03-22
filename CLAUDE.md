@@ -63,7 +63,7 @@ pyinstaller build.spec
 - Kolibri: http://localhost:8300
 - Stirling PDF: http://localhost:8443
 
-## Features (v3.4.0)
+## Features (v3.5.0)
 - **6 services**: Ollama (AI), Kiwix (offline content), CyberChef (data tools), Kolibri (education), Qdrant (vector DB), Stirling PDF (PDF toolkit)
 - **Setup wizard** — capability selection (choose which services to install)
 - **Auto-start** — previously running services restart on app launch
@@ -112,10 +112,10 @@ pyinstaller build.spec
 - Benchmark disk test creates/deletes temp files in ProjectNOMAD\benchmark\
 
 ## Version
-v3.4.0
+v3.5.0
 
 ## Status
-Working v3.4.0 — Command Center Edition. All 4 research phases implemented. Map region downloads via Protomaps pmtiles extract, 50+ alternative map sources catalog, URL/file import. Phase 1: START triage, companion planting, calorie DB, livestock ref, WHO medicines. Phase 2: Food storage planner, generator fuel calc, dental/PFA/CERT protocols. Phase 3: Universal edibility test, seed saving, soil/fermentation ref, legal doc templates, cloud weather, COMSEC. Phase 4: Rainwater harvest calc, radio range estimator, medication dosage calc. Plus all prior features.
+Working v3.5.0 — Command Center Edition. 16,364 total lines. Massive content expansion: 10 interactive calculators (food storage, generator fuel, rainwater, radio range, medication dosage, solar power, BOB weight, plus existing 8), 50+ map sources with pmtiles extract, 5 natural disaster protocols (tornado/earthquake/flood/wildfire/hurricane), printable wallet card generator, 35-item home security assessment. Quick Ref: START triage, companion planting (15 crops), calorie DB (20 foods), livestock (9 animals), WHO medicines (25+ meds), essential knots (8), navigation without GPS, water purification decision tree, sanitation guide, improvised tools (12), wild edibles by season (18 plants), EMP/Faraday guide, gray man OPSEC, water finding, supply cache guide, group organization template. 18 AI presets. Plus all prior features.
 
 ## Gotchas (v0.8.0)
 - Stirling PDF requires Java 17+ (downloads .jar, not .exe — no Windows exe in releases)
