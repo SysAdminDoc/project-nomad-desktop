@@ -55,14 +55,14 @@
 **Builds on:** Companion planting table, seed saving reference, homesteader AI persona, inventory system
 **Effort:** Large (2-3 sessions)
 
-- [ ] Garden plots table — name, dimensions (sq ft), sun exposure (full/partial/shade), soil type, GPS coordinates
-- [ ] USDA hardiness zone lookup — offline dataset mapping zip codes/coordinates to zones and frost dates
-- [ ] Planting calendar engine — generates month-by-month tasks based on zone, selected crops, and plot specs
-- [ ] Seed inventory — structured table: species, variety, quantity, year harvested, viability percentage (auto-calculated from age + species data)
-- [ ] Harvest log — date, crop, quantity (weight/count), plot source — auto-creates or updates inventory item
-- [ ] Preservation calendar — when to can/dry/ferment/smoke based on harvest log entries
-- [ ] Livestock records — per-animal: species, name/tag, DOB, weight log, health events, vaccination schedule, feed consumption
-- [ ] Garden map overlay — plot boundaries drawn on the offline map with crop labels
+- [x] Garden plots — name, dimensions (sq ft), sun exposure, soil type, total area calc
+- [x] USDA hardiness zone lookup — offline latitude-based zones 3a-11a+ with frost dates
+- [x] Seed inventory — species, variety, quantity, year harvested, auto-calculated viability (25 species)
+- [x] Harvest log — crop, quantity, unit, plot source — auto-creates/updates inventory items
+- [x] Livestock records — 10 species, per-animal health event logging, grouped display
+- [ ] Planting calendar engine — month-by-month tasks based on zone + crops (enhancement)
+- [ ] Preservation calendar — when to can/dry/ferment based on harvest log (enhancement)
+- [ ] Garden map overlay — plot boundaries on the offline map (enhancement)
 
 ## Phase 6: Advanced Offline Maps
 **Builds on:** MapLibre + PMTiles + waypoints + zones + GPX export
