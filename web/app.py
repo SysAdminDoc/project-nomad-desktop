@@ -47,11 +47,53 @@ CHUNK_OVERLAP = 50
 # Benchmark state
 _benchmark_state = {'status': 'idle', 'progress': 0, 'stage': '', 'results': None}
 
+# Background CPU monitor — avoids blocking Flask threads with psutil.cpu_percent(interval=...)
+_cpu_percent = 0
+
+def _cpu_monitor():
+    global _cpu_percent
+    import psutil as _ps
+    while True:
+        try:
+            _cpu_percent = _ps.cpu_percent(interval=2)
+        except Exception:
+            pass
+
+threading.Thread(target=_cpu_monitor, daemon=True).start()
+
 
 def create_app():
     app = Flask(__name__,
                 template_folder='templates',
                 static_folder='static')
+
+    # ─── LAN Auth Guard ────────────────────────────────────────────────
+    # Protect dangerous endpoints from unauthorized LAN access
+    PROTECTED_ENDPOINTS = {
+        'api_system_shutdown', 'api_sync_export', 'api_export_all',
+        'api_export_config', 'api_uninstall_service',
+    }
+
+    @app.before_request
+    def check_lan_auth():
+        """Block protected endpoints from non-localhost requests when auth is enabled."""
+        if request.endpoint not in PROTECTED_ENDPOINTS:
+            return
+        remote = request.remote_addr or ''
+        if remote in ('127.0.0.1', '::1', 'localhost'):
+            return
+        # LAN request — check if auth is enabled and validate
+        try:
+            db = get_db()
+            row = db.execute("SELECT value FROM settings WHERE key = 'auth_password'").fetchone()
+            db.close()
+            if row and row['value']:
+                import hashlib
+                token = request.headers.get('X-Auth-Token', '')
+                if hashlib.sha256(token.encode()).hexdigest() != row['value']:
+                    return jsonify({'error': 'Authentication required'}), 403
+        except Exception:
+            pass
 
     # ─── Pages ─────────────────────────────────────────────────────────
 
@@ -150,8 +192,12 @@ def create_app():
     def api_uninstall_service(service_id):
         if service_id not in SERVICE_MODULES:
             return jsonify({'error': 'Unknown service'}), 404
-        uninstall_service(service_id)
-        return jsonify({'status': 'uninstalled'})
+        try:
+            uninstall_service(service_id)
+            return jsonify({'status': 'uninstalled'})
+        except Exception as e:
+            log.error(f'Uninstall failed for {service_id}: {e}')
+            return jsonify({'error': str(e)}), 500
 
     @app.route('/api/services/start-all', methods=['POST'])
     def api_start_all():
@@ -169,14 +215,16 @@ def create_app():
     @app.route('/api/services/stop-all', methods=['POST'])
     def api_stop_all():
         stopped = []
+        errors = []
         for sid, mod in SERVICE_MODULES.items():
             if mod.is_installed() and mod.running():
                 try:
                     mod.stop()
                     stopped.append(sid)
-                except Exception:
-                    pass
-        return jsonify({'stopped': stopped})
+                except Exception as e:
+                    errors.append(f'{sid}: {e}')
+                    log.error(f'Stop failed for {sid}: {e}')
+        return jsonify({'stopped': stopped, 'errors': errors})
 
     @app.route('/api/services/<service_id>/progress')
     def api_service_progress(service_id):
@@ -228,7 +276,9 @@ def create_app():
         if not model_name:
             return jsonify({'error': 'No model specified'}), 400
         success = ollama.delete_model(model_name)
-        return jsonify({'status': 'deleted' if success else 'error'})
+        if not success:
+            return jsonify({'error': 'Failed to delete model'}), 500
+        return jsonify({'status': 'deleted'})
 
     @app.route('/api/ai/chat', methods=['POST'])
     def api_ai_chat():
@@ -364,7 +414,9 @@ def create_app():
         if not filename:
             return jsonify({'error': 'No filename'}), 400
         success = kiwix.delete_zim(filename)
-        return jsonify({'status': 'deleted' if success else 'error'})
+        if not success:
+            return jsonify({'error': 'Failed to delete ZIM file'}), 500
+        return jsonify({'status': 'deleted'})
 
     # ─── Notes API ─────────────────────────────────────────────────────
 
@@ -656,7 +708,7 @@ def create_app():
             cpu_count = psutil.cpu_count()
             cpu_count_phys = psutil.cpu_count(logical=False)
             cpu_name = platform.processor()
-            cpu_percent = psutil.cpu_percent(interval=0.5)
+            cpu_percent = _cpu_percent  # non-blocking, from background monitor
         except Exception:
             mem = swap = None
             cpu_count = os.cpu_count()
@@ -743,7 +795,7 @@ def create_app():
         import psutil
         try:
             return jsonify({
-                'cpu_percent': psutil.cpu_percent(interval=0.3),
+                'cpu_percent': _cpu_percent,  # non-blocking, from background monitor
                 'ram_percent': psutil.virtual_memory().percent,
                 'swap_percent': psutil.swap_memory().percent,
             })
@@ -848,31 +900,6 @@ def create_app():
                        headers={'Content-Disposition': f'attachment; filename="{convo["title"]}.md"'})
 
     # ─── Unified Search API ────────────────────────────────────────────
-
-    @app.route('/api/search')
-    def api_unified_search():
-        q = request.args.get('q', '').strip()
-        if not q:
-            return jsonify({'conversations': [], 'notes': [], 'documents': []})
-        db = get_db()
-        convos = db.execute(
-            "SELECT id, title, 'conversation' as type FROM conversations WHERE title LIKE ? OR messages LIKE ? ORDER BY updated_at DESC LIMIT 10",
-            (f'%{q}%', f'%{q}%')
-        ).fetchall()
-        notes = db.execute(
-            "SELECT id, title, 'note' as type FROM notes WHERE title LIKE ? OR content LIKE ? ORDER BY updated_at DESC LIMIT 10",
-            (f'%{q}%', f'%{q}%')
-        ).fetchall()
-        docs = db.execute(
-            "SELECT id, filename as title, 'document' as type FROM documents WHERE filename LIKE ? AND status = 'ready' ORDER BY created_at DESC LIMIT 10",
-            (f'%{q}%',)
-        ).fetchall()
-        db.close()
-        return jsonify({
-            'conversations': [dict(r) for r in convos],
-            'notes': [dict(r) for r in notes],
-            'documents': [dict(r) for r in docs],
-        })
 
     @app.route('/api/content-summary')
     def api_content_summary():
@@ -1560,7 +1587,7 @@ def create_app():
         import socket
         online = False
         try:
-            socket.create_connection(('1.1.1.1', 443), timeout=3).close()
+            socket.create_connection(('1.1.1.1', 443), timeout=1).close()
             online = True
         except Exception:
             pass
@@ -1864,18 +1891,22 @@ def create_app():
     @app.route('/api/export-config')
     def api_export_config():
         """Export settings and database as a ZIP."""
-        import io
-        import zipfile as zf
-        from db import get_db_path
+        try:
+            import io
+            import zipfile as zf
+            from db import get_db_path
 
-        buf = io.BytesIO()
-        with zf.ZipFile(buf, 'w', zf.ZIP_DEFLATED) as z:
-            db_path = get_db_path()
-            if os.path.isfile(db_path):
-                z.write(db_path, 'nomad.db')
-        buf.seek(0)
-        return Response(buf.read(), mimetype='application/zip',
-                       headers={'Content-Disposition': 'attachment; filename="nomad-backup.zip"'})
+            buf = io.BytesIO()
+            with zf.ZipFile(buf, 'w', zf.ZIP_DEFLATED) as z:
+                db_path = get_db_path()
+                if os.path.isfile(db_path):
+                    z.write(db_path, 'nomad.db')
+            buf.seek(0)
+            return Response(buf.read(), mimetype='application/zip',
+                           headers={'Content-Disposition': 'attachment; filename="nomad-backup.zip"'})
+        except Exception as e:
+            log.error(f'Export config failed: {e}')
+            return jsonify({'error': str(e)}), 500
 
     @app.route('/api/import-config', methods=['POST'])
     def api_import_config():
@@ -2715,15 +2746,21 @@ def create_app():
     @app.route('/api/timers', methods=['POST'])
     def api_timers_create():
         data = request.get_json() or {}
-        from datetime import datetime
-        db = get_db()
-        cur = db.execute('INSERT INTO timers (name, duration_sec, started_at) VALUES (?, ?, ?)',
-                         (data.get('name', 'Timer'), int(data.get('duration_sec', 300)),
-                          datetime.now().isoformat()))
-        db.commit()
-        row = db.execute('SELECT * FROM timers WHERE id = ?', (cur.lastrowid,)).fetchone()
-        db.close()
-        return jsonify(dict(row)), 201
+        try:
+            from datetime import datetime
+            duration = int(data.get('duration_sec', 300))
+            db = get_db()
+            cur = db.execute('INSERT INTO timers (name, duration_sec, started_at) VALUES (?, ?, ?)',
+                             (data.get('name', 'Timer'), duration,
+                              datetime.now().isoformat()))
+            db.commit()
+            row = db.execute('SELECT * FROM timers WHERE id = ?', (cur.lastrowid,)).fetchone()
+            db.close()
+            return jsonify(dict(row)), 201
+        except (ValueError, TypeError) as e:
+            return jsonify({'error': f'Invalid duration: {e}'}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
     @app.route('/api/timers/<int:tid>', methods=['DELETE'])
     def api_timers_delete(tid):
@@ -2911,28 +2948,38 @@ def create_app():
             return jsonify({'error': 'No file provided'}), 400
         import csv, io
         file = request.files['file']
-        content = file.read().decode('utf-8-sig')
-        reader = csv.DictReader(io.StringIO(content))
-        db = get_db()
-        imported = 0
-        for row in reader:
-            name = row.get('Name', row.get('name', '')).strip()
-            if not name:
-                continue
-            db.execute(
-                'INSERT INTO inventory (name, category, quantity, unit, min_quantity, daily_usage, location, expiration, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                (name, row.get('Category', row.get('category', 'other')),
-                 float(row.get('Quantity', row.get('quantity', 0)) or 0),
-                 row.get('Unit', row.get('unit', 'ea')),
-                 float(row.get('Min Qty', row.get('min_quantity', 0)) or 0),
-                 float(row.get('Daily Usage', row.get('daily_usage', 0)) or 0),
-                 row.get('Location', row.get('location', '')),
-                 row.get('Expiration', row.get('expiration', '')),
-                 row.get('Notes', row.get('notes', ''))))
-            imported += 1
-        db.commit()
-        db.close()
-        return jsonify({'status': 'imported', 'count': imported})
+        try:
+            raw = file.read()
+            if len(raw) > 10 * 1024 * 1024:
+                return jsonify({'error': 'File too large (max 10 MB)'}), 400
+            try:
+                content = raw.decode('utf-8-sig')
+            except UnicodeDecodeError:
+                content = raw.decode('latin-1')
+            reader = csv.DictReader(io.StringIO(content))
+            db = get_db()
+            imported = 0
+            for row in reader:
+                name = row.get('Name', row.get('name', '')).strip()
+                if not name:
+                    continue
+                db.execute(
+                    'INSERT INTO inventory (name, category, quantity, unit, min_quantity, daily_usage, location, expiration, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    (name, row.get('Category', row.get('category', 'other')),
+                     float(row.get('Quantity', row.get('quantity', 0)) or 0),
+                     row.get('Unit', row.get('unit', 'ea')),
+                     float(row.get('Min Qty', row.get('min_quantity', 0)) or 0),
+                     float(row.get('Daily Usage', row.get('daily_usage', 0)) or 0),
+                     row.get('Location', row.get('location', '')),
+                     row.get('Expiration', row.get('expiration', '')),
+                     row.get('Notes', row.get('notes', ''))))
+                imported += 1
+            db.commit()
+            db.close()
+            return jsonify({'status': 'imported', 'count': imported})
+        except Exception as e:
+            log.error(f'Inventory CSV import failed: {e}')
+            return jsonify({'error': f'Import failed: {e}'}), 500
 
     @app.route('/api/contacts/import-csv', methods=['POST'])
     def api_contacts_import_csv():
@@ -2940,56 +2987,72 @@ def create_app():
             return jsonify({'error': 'No file provided'}), 400
         import csv, io
         file = request.files['file']
-        content = file.read().decode('utf-8-sig')
-        reader = csv.DictReader(io.StringIO(content))
-        db = get_db()
-        imported = 0
-        for row in reader:
-            name = row.get('Name', row.get('name', '')).strip()
-            if not name:
-                continue
-            db.execute(
-                'INSERT INTO contacts (name, callsign, role, skills, phone, freq, email, address, rally_point, blood_type, medical_notes, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                (name, row.get('Callsign', row.get('callsign', '')),
-                 row.get('Role', row.get('role', '')),
-                 row.get('Skills', row.get('skills', '')),
-                 row.get('Phone', row.get('phone', '')),
-                 row.get('Frequency', row.get('freq', '')),
-                 row.get('Email', row.get('email', '')),
-                 row.get('Address', row.get('address', '')),
-                 row.get('Rally Point', row.get('rally_point', '')),
-                 row.get('Blood Type', row.get('blood_type', '')),
-                 row.get('Medical Notes', row.get('medical_notes', '')),
-                 row.get('Notes', row.get('notes', ''))))
-            imported += 1
-        db.commit()
-        db.close()
-        return jsonify({'status': 'imported', 'count': imported})
+        try:
+            raw = file.read()
+            if len(raw) > 10 * 1024 * 1024:
+                return jsonify({'error': 'File too large (max 10 MB)'}), 400
+            try:
+                content = raw.decode('utf-8-sig')
+            except UnicodeDecodeError:
+                content = raw.decode('latin-1')
+            reader = csv.DictReader(io.StringIO(content))
+            db = get_db()
+            imported = 0
+            for row in reader:
+                name = row.get('Name', row.get('name', '')).strip()
+                if not name:
+                    continue
+                db.execute(
+                    'INSERT INTO contacts (name, callsign, role, skills, phone, freq, email, address, rally_point, blood_type, medical_notes, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    (name, row.get('Callsign', row.get('callsign', '')),
+                     row.get('Role', row.get('role', '')),
+                     row.get('Skills', row.get('skills', '')),
+                     row.get('Phone', row.get('phone', '')),
+                     row.get('Frequency', row.get('freq', '')),
+                     row.get('Email', row.get('email', '')),
+                     row.get('Address', row.get('address', '')),
+                     row.get('Rally Point', row.get('rally_point', '')),
+                     row.get('Blood Type', row.get('blood_type', '')),
+                     row.get('Medical Notes', row.get('medical_notes', '')),
+                     row.get('Notes', row.get('notes', ''))))
+                imported += 1
+            db.commit()
+            db.close()
+            return jsonify({'status': 'imported', 'count': imported})
+        except Exception as e:
+            log.error(f'Contacts CSV import failed: {e}')
+            return jsonify({'error': f'Import failed: {e}'}), 500
 
     # ─── Full Data Export ─────────────────────────────────────────────
 
     @app.route('/api/export-all')
     def api_export_all():
         """Export complete database + settings as a single ZIP."""
-        import io
-        import zipfile as zf
-        from db import get_db_path
+        try:
+            import io
+            import zipfile as zf
+            from db import get_db_path
 
-        buf = io.BytesIO()
-        with zf.ZipFile(buf, 'w', zf.ZIP_DEFLATED) as z:
-            db_path = get_db_path()
-            if os.path.isfile(db_path):
-                z.write(db_path, 'nomad.db')
-            # Export config
-            from config import get_config_path
-            cfg_path = get_config_path()
-            if os.path.isfile(cfg_path):
-                z.write(cfg_path, 'config.json')
-        buf.seek(0)
-        from datetime import datetime
-        fname = f'nomad-full-backup-{datetime.now().strftime("%Y%m%d-%H%M%S")}.zip'
-        return Response(buf.read(), mimetype='application/zip',
-                       headers={'Content-Disposition': f'attachment; filename="{fname}"'})
+            buf = io.BytesIO()
+            with zf.ZipFile(buf, 'w', zf.ZIP_DEFLATED) as z:
+                db_path = get_db_path()
+                if os.path.isfile(db_path):
+                    z.write(db_path, 'nomad.db')
+                try:
+                    from config import get_config_path
+                    cfg_path = get_config_path()
+                    if os.path.isfile(cfg_path):
+                        z.write(cfg_path, 'config.json')
+                except Exception:
+                    pass
+            buf.seek(0)
+            from datetime import datetime
+            fname = f'nomad-full-backup-{datetime.now().strftime("%Y%m%d-%H%M%S")}.zip'
+            return Response(buf.read(), mimetype='application/zip',
+                           headers={'Content-Disposition': f'attachment; filename="{fname}"'})
+        except Exception as e:
+            log.error(f'Full export failed: {e}')
+            return jsonify({'error': str(e)}), 500
 
     # ─── Video Library API ─────────────────────────────────────────────
 
@@ -3060,7 +3123,8 @@ def create_app():
     def api_sync_export():
         """Export selected data as a portable content pack ZIP."""
         data = request.get_json() or {}
-        include = data.get('include', ['inventory', 'contacts', 'checklists', 'notes', 'incidents', 'waypoints'])
+        ALLOWED_SYNC_TABLES = {'inventory', 'contacts', 'checklists', 'notes', 'incidents', 'waypoints'}
+        include = [t for t in data.get('include', list(ALLOWED_SYNC_TABLES)) if t in ALLOWED_SYNC_TABLES]
         import io
         import zipfile as zf
         buf = io.BytesIO()
@@ -3129,16 +3193,20 @@ def create_app():
 
     @app.route('/api/checklists/<int:cid>/export-json')
     def api_checklist_export_json(cid):
-        db = get_db()
-        row = db.execute('SELECT * FROM checklists WHERE id = ?', (cid,)).fetchone()
-        db.close()
-        if not row:
-            return jsonify({'error': 'Not found'}), 404
-        export = {'type': 'nomad_checklist', 'version': 1,
-                  'name': row['name'], 'template': row['template'],
-                  'items': json.loads(row['items'] or '[]')}
-        return Response(json.dumps(export, indent=2), mimetype='application/json',
-                       headers={'Content-Disposition': f'attachment; filename="{row["name"]}.json"'})
+        try:
+            db = get_db()
+            row = db.execute('SELECT * FROM checklists WHERE id = ?', (cid,)).fetchone()
+            db.close()
+            if not row:
+                return jsonify({'error': 'Not found'}), 404
+            export = {'type': 'nomad_checklist', 'version': 1,
+                      'name': row['name'], 'template': row['template'],
+                      'items': json.loads(row['items'] or '[]')}
+            safe_name = secure_filename(row['name']) or 'checklist'
+            return Response(json.dumps(export, indent=2), mimetype='application/json',
+                           headers={'Content-Disposition': f'attachment; filename="{safe_name}.json"'})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
     @app.route('/api/checklists/import-json', methods=['POST'])
     def api_checklist_import_json():
@@ -3312,6 +3380,44 @@ def create_app():
         db.close()
         return jsonify({'status': 'ok'})
 
+    @app.route('/api/notes/<int:note_id>/export')
+    def api_notes_export(note_id):
+        """Export a single note as a Markdown file."""
+        db = get_db()
+        note = db.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
+        db.close()
+        if not note:
+            return jsonify({'error': 'Not found'}), 404
+        title = note['title'] or 'Untitled'
+        content = note['content'] or ''
+        md = f"# {title}\n\n{content}"
+        safe_title = secure_filename(title) or 'note'
+        return Response(md, mimetype='text/markdown',
+                       headers={'Content-Disposition': f'attachment; filename="{safe_title}.md"'})
+
+    @app.route('/api/notes/export-all')
+    def api_notes_export_all():
+        """Export all notes as a ZIP of Markdown files."""
+        try:
+            import io
+            import zipfile as zf
+            db = get_db()
+            notes = db.execute('SELECT * FROM notes ORDER BY updated_at DESC').fetchall()
+            db.close()
+            buf = io.BytesIO()
+            with zf.ZipFile(buf, 'w', zf.ZIP_DEFLATED) as z:
+                for n in notes:
+                    title = n['title'] or 'Untitled'
+                    content = n['content'] or ''
+                    safe = secure_filename(title) or f'note-{n["id"]}'
+                    md = f"# {title}\n\n{content}"
+                    z.writestr(f'{safe}.md', md)
+            buf.seek(0)
+            return Response(buf.read(), mimetype='application/zip',
+                           headers={'Content-Disposition': 'attachment; filename="nomad-notes.zip"'})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
     # ─── Waypoint Distance Matrix ─────────────────────────────────────
 
     @app.route('/api/waypoints/distances')
@@ -3385,7 +3491,9 @@ def create_app():
         db = get_db()
         row = db.execute("SELECT value FROM settings WHERE key = 'auth_password'").fetchone()
         db.close()
-        return jsonify({'enabled': bool(row and row['value']), 'authenticated': True})  # Auth check handled by middleware if needed
+        remote = request.remote_addr or ''
+        is_local = remote in ('127.0.0.1', '::1', 'localhost')
+        return jsonify({'enabled': bool(row and row['value']), 'authenticated': is_local or not (row and row['value'])})
 
     @app.route('/api/auth/set-password', methods=['POST'])
     def api_auth_set_password():
@@ -3515,13 +3623,16 @@ def create_app():
     @app.route('/api/drills/history', methods=['POST'])
     def api_drill_history_save():
         data = request.get_json() or {}
-        db = get_db()
-        db.execute('INSERT INTO drill_history (drill_type, title, duration_sec, tasks_total, tasks_completed, notes) VALUES (?, ?, ?, ?, ?, ?)',
-                   (data.get('drill_type', ''), data.get('title', ''), data.get('duration_sec', 0),
-                    data.get('tasks_total', 0), data.get('tasks_completed', 0), data.get('notes', '')))
-        db.commit()
-        db.close()
-        return jsonify({'status': 'saved'}), 201
+        try:
+            db = get_db()
+            db.execute('INSERT INTO drill_history (drill_type, title, duration_sec, tasks_total, tasks_completed, notes) VALUES (?, ?, ?, ?, ?, ?)',
+                       (data.get('drill_type', ''), data.get('title', ''), int(data.get('duration_sec', 0)),
+                        int(data.get('tasks_total', 0)), int(data.get('tasks_completed', 0)), data.get('notes', '')))
+            db.commit()
+            db.close()
+            return jsonify({'status': 'saved'}), 201
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
     # ─── Shopping List Generator ──────────────────────────────────────
 
@@ -3721,14 +3832,18 @@ def create_app():
         _nukemap_dir = _nukemap_candidates[0]  # Use first candidate as fallback
 
     @app.route('/nukemap')
+    def nukemap_redirect():
+        """Redirect /nukemap to /nukemap/ so relative CSS/JS paths resolve correctly."""
+        from flask import redirect
+        return redirect('/nukemap/', code=301)
+
     @app.route('/nukemap/')
     @app.route('/nukemap/<path:filepath>')
     def nukemap_serve(filepath='index.html'):
         from flask import send_from_directory
-        if '..' in filepath:
-            return jsonify({'error': 'Forbidden'}), 403
-        # For nested paths like css/styles.css, resolve the subdirectory
         full_path = os.path.normpath(os.path.join(_nukemap_dir, filepath))
+        if not full_path.startswith(os.path.normpath(_nukemap_dir)):
+            return jsonify({'error': 'Forbidden'}), 403
         if not os.path.isfile(full_path):
             log.warning(f'NukeMap file not found: {full_path}')
             return jsonify({'error': f'Not found: {filepath}'}), 404
