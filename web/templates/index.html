@@ -1084,7 +1084,7 @@ a { color: var(--accent); text-decoration: none; }
 <div id="broadcast-banner" style="display:none;padding:10px 20px;text-align:center;font-weight:700;font-size:14px;z-index:200;position:sticky;top:0;cursor:pointer;animation:pulse 2s ease infinite;" onclick="dismissBroadcast()"></div>
 
 <div class="header">
-  <div class="header-logo"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+  <div class="header-logo"><img src="/static/logo.png" alt="N.O.M.A.D." style="width:28px;height:28px;object-fit:contain;"></div>
   <h1>Project N.O.M.A.D. <span class="version">v{{ version }}</span></h1>
   <div class="header-right">
     <button class="btn btn-sm btn-ghost" onclick="showHelp()" title="Help & Guide" style="font-size:13px;padding:3px 8px;">?</button>
@@ -1118,9 +1118,7 @@ a { color: var(--accent); text-decoration: none; }
 
     <!-- Command Center Header (Original NOMAD Style) -->
     <div style="text-align:center;padding:20px 0 12px;">
-      <div style="width:80px;height:80px;margin:0 auto 12px;background:linear-gradient(135deg,var(--accent),var(--green));border-radius:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px var(--accent-glow);">
-        <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#fff" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-      </div>
+      <img src="/static/logo.png" alt="Project N.O.M.A.D." style="width:120px;height:120px;object-fit:contain;margin:0 auto 12px;display:block;">
       <h2 style="font-size:28px;font-weight:700;letter-spacing:-0.5px;">Command Center</h2>
       <div style="width:60px;height:3px;background:linear-gradient(90deg,var(--accent),var(--green));margin:8px auto 0;border-radius:2px;"></div>
     </div>
@@ -3266,6 +3264,7 @@ a { color: var(--accent); text-decoration: none; }
   <div class="wizard-card" style="max-width:680px;">
     <!-- Page 1: Welcome -->
     <div id="wiz-page-1">
+      <img src="/static/logo.png" alt="N.O.M.A.D." style="width:100px;height:100px;object-fit:contain;margin:0 auto 8px;display:block;">
       <h2 class="shimmer-text">Welcome to N.O.M.A.D.</h2>
       <p class="subtitle">Your offline survival command center. Everything runs locally — no cloud, no subscriptions, no internet required after setup.</p>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:16px 0;text-align:center;font-size:11px;">
