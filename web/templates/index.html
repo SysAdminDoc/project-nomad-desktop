@@ -2980,7 +2980,7 @@ function toast(msg, type='info') {
 }
 
 /* ─── Helpers ─── */
-function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function escapeHtml(s) { if (s == null) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function escapeAttr(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function copyCode(btn) {
   const code = btn.previousElementSibling.textContent;
@@ -5528,9 +5528,13 @@ async function loadTimers() {
         </div>
       </div>`;
     }).join('');
-    // Alert for done timers
+    // Alert for newly done timers
+    if (!window._alertedTimers) window._alertedTimers = new Set();
     timers.filter(t => t.done).forEach(t => {
-      if (!t._alerted) { t._alerted = true; }
+      if (!window._alertedTimers.has(t.id)) {
+        window._alertedTimers.add(t.id);
+        toast(`Timer "${t.name}" is DONE!`, 'warning');
+      }
     });
   } catch(e) {}
 }
@@ -5717,18 +5721,19 @@ async function printFullCard() {
   // Family Plan
   if (fep.meet1 || fep.route1 || fepMembers.length) {
     h += '<h2>FAMILY EMERGENCY PLAN</h2><div class="cols2"><div>';
-    if (fep.meet1) h += `<div><strong>Meet (Home):</strong> ${fep.meet1}</div>`;
-    if (fep.meet2) h += `<div><strong>Meet (Area):</strong> ${fep.meet2}</div>`;
-    if (fep.meet3) h += `<div><strong>Meet (Out):</strong> ${fep.meet3}</div>`;
-    if (fep.ooa) h += `<div><strong>Out-of-Area Contact:</strong> ${fep.ooa}</div>`;
+    if (fep.meet1) h += `<div><strong>Meet (Home):</strong> ${escapeHtml(fep.meet1)}</div>`;
+    if (fep.meet2) h += `<div><strong>Meet (Area):</strong> ${escapeHtml(fep.meet2)}</div>`;
+    if (fep.meet3) h += `<div><strong>Meet (Out):</strong> ${escapeHtml(fep.meet3)}</div>`;
+    if (fep.ooa) h += `<div><strong>Out-of-Area Contact:</strong> ${escapeHtml(fep.ooa)}</div>`;
     h += '</div><div>';
-    if (fep.route1) h += `<div><strong>Route A:</strong> ${fep.route1}</div>`;
-    if (fep.route2) h += `<div><strong>Route B:</strong> ${fep.route2}</div>`;
-    if (fep.dest) h += `<div><strong>Destination:</strong> ${fep.dest}</div>`;
+    if (fep.route1) h += `<div><strong>Route A:</strong> ${escapeHtml(fep.route1)}</div>`;
+    if (fep.route2) h += `<div><strong>Route B:</strong> ${escapeHtml(fep.route2)}</div>`;
+    if (fep.route3) h += `<div><strong>Route C:</strong> ${escapeHtml(fep.route3)}</div>`;
+    if (fep.dest) h += `<div><strong>Destination:</strong> ${escapeHtml(fep.dest)}</div>`;
     h += '</div></div>';
     if (fepMembers.length) {
       h += '<table><tr><th>Name</th><th>Age</th><th>Blood</th><th>Conditions</th><th>Medications</th><th>Allergies</th></tr>';
-      fepMembers.forEach(m => h += `<tr><td>${m.name||''}</td><td>${m.age||''}</td><td>${m.blood||''}</td><td>${m.conditions||''}</td><td>${m.meds||''}</td><td>${m.allergies||''}</td></tr>`);
+      fepMembers.forEach(m => h += `<tr><td>${escapeHtml(m.name)}</td><td>${escapeHtml(m.age)}</td><td>${escapeHtml(m.blood)}</td><td>${escapeHtml(m.conditions)}</td><td>${escapeHtml(m.meds)}</td><td>${escapeHtml(m.allergies)}</td></tr>`);
       h += '</table>';
     }
   }
@@ -5736,7 +5741,7 @@ async function printFullCard() {
   // Contacts
   if (contacts.length) {
     h += '<h2>EMERGENCY CONTACTS</h2><table><tr><th>Name</th><th>Role</th><th>Callsign</th><th>Phone</th><th>Freq</th><th>Blood</th><th>Rally</th></tr>';
-    contacts.forEach(c => h += `<tr><td>${c.name}</td><td>${c.role}</td><td>${c.callsign}</td><td>${c.phone}</td><td>${c.freq}</td><td>${c.blood_type}</td><td>${c.rally_point}</td></tr>`);
+    contacts.forEach(c => h += `<tr><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.role)}</td><td>${escapeHtml(c.callsign)}</td><td>${escapeHtml(c.phone)}</td><td>${escapeHtml(c.freq)}</td><td>${escapeHtml(c.blood_type)}</td><td>${escapeHtml(c.rally_point)}</td></tr>`);
     h += '</table>';
   }
 
@@ -5745,7 +5750,7 @@ async function printFullCard() {
     h += '<h2>PACE COMMUNICATION PLAN</h2><table><tr><th>Level</th><th>Method</th><th>Details</th><th>When</th></tr>';
     [['PRIMARY',pace.p_method,pace.p_detail,pace.p_when],['ALTERNATE',pace.a_method,pace.a_detail,pace.a_when],
      ['CONTINGENCY',pace.c_method,pace.c_detail,pace.c_when],['EMERGENCY',pace.e_method,pace.e_detail,pace.e_when]]
-    .forEach(([l,m,d,w]) => { if(m) h += `<tr><td style="font-weight:bold">${l}</td><td>${m||''}</td><td>${d||''}</td><td>${w||''}</td></tr>`; });
+    .forEach(([l,m,d,w]) => { if(m) h += `<tr><td style="font-weight:bold">${l}</td><td>${escapeHtml(m)}</td><td>${escapeHtml(d)}</td><td>${escapeHtml(w)}</td></tr>`; });
     h += '</table>';
   }
 
@@ -6014,7 +6019,8 @@ function copySitrep() {
 function runCipher() {
   const type = document.getElementById('cipher-type').value;
   const input = document.getElementById('cipher-input').value;
-  const shift = parseInt(document.getElementById('cipher-shift').value) || 13;
+  const rawShift = parseInt(document.getElementById('cipher-shift').value) || 13;
+  const shift = ((rawShift % 26) + 26) % 26; // Normalize to 0-25, handles negatives
   let output = '';
   if (type === 'caesar') {
     output = input.split('').map(c => {
