@@ -1070,8 +1070,12 @@ a { color: var(--accent); text-decoration: none; }
         <button class="btn btn-sm btn-danger" onclick="stopAllServices()">Stop All</button>
       </div>
     </div>
+    <!-- Service Quick Links -->
+    <div id="svc-quicklinks" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;"></div>
     <!-- Command Dashboard Overview -->
-    <div id="cmd-dashboard" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:16px;"></div>
+    <div id="cmd-dashboard" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:8px;"></div>
+    <!-- Checklist Progress -->
+    <div id="cmd-checklists" style="margin-bottom:16px;"></div>
     <div class="welcome-banner" id="welcome-banner" style="display:none;">
       <h3 class="shimmer-text">Welcome to N.O.M.A.D.</h3>
       <p>Your offline-first knowledge and AI command center. Install your first tool to get started.</p>
@@ -1248,6 +1252,12 @@ a { color: var(--accent); text-decoration: none; }
         <div class="settings-card">
           <h3>Downloaded Maps</h3>
           <div id="map-files-list"><span style="color:var(--text-dim);font-size:12px;">No maps downloaded yet.</span></div>
+          <h3 style="margin-top:16px;">Waypoint Distances</h3>
+          <div id="wp-distance-matrix" style="overflow-x:auto;font-size:11px;"><span style="color:var(--text-dim);font-size:12px;">Save waypoints to see distance matrix.</span></div>
+          <div style="display:flex;gap:6px;margin-top:8px;">
+            <button class="btn btn-sm" onclick="loadWPDistances()">Refresh</button>
+            <button class="btn btn-sm" onclick="window.open('/api/waypoints/export-gpx','_blank')">Export GPX</button>
+          </div>
         </div>
       </div>
     </div>
@@ -3010,11 +3020,19 @@ a { color: var(--accent); text-decoration: none; }
         <div id="disk-monitor"></div>
       </div>
       <div class="settings-card" style="grid-column:1/-1;">
-        <h3>About</h3>
-        <div style="font-size:13px;color:var(--text-dim);line-height:1.8;">
-          <p><strong style="color:var(--text);">Project N.O.M.A.D. for Windows</strong> &mdash; Native edition, no Docker required.</p>
+        <h3>About Project N.O.M.A.D. for Windows</h3>
+        <div style="font-size:12px;color:var(--text-dim);line-height:1.7;">
+          <p><strong style="color:var(--text);">The most complete offline survival command center available.</strong> Native Windows edition, no Docker required.</p>
           <p>Based on <a href="https://github.com/Crosstalk-Solutions/project-nomad" target="_blank">Project N.O.M.A.D.</a> by Crosstalk Solutions. Windows port by <a href="https://github.com/SysAdminDoc" target="_blank">SysAdminDoc</a>.</p>
-          <p>Manages services as native processes instead of containers. Offline-first knowledge and AI command center.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:12px 0;font-size:11px;">
+            <div><strong style="color:var(--accent);">9 Main Tabs</strong><br>Services, AI Chat, Library, Maps, Notes, Benchmark, Tools, Preparedness, Settings</div>
+            <div><strong style="color:var(--accent);">13 Prep Sub-Tabs</strong><br>Checklists, Incidents, Inventory, Contacts, Calculators, Radio, Quick Ref, Protocols, Vault, Weather, Signals, Ops, Family</div>
+            <div><strong style="color:var(--accent);">Tools Tab</strong><br>Meshtastic, Barcode Scanner, Video Library, Guided Drills</div>
+          </div>
+          <div style="margin:8px 0;">
+            <strong style="color:var(--accent);">Keyboard Shortcuts:</strong>
+            Alt+1-8 tabs | Alt+T timers | Alt+C chat | Alt+N new note | Ctrl+K search
+          </div>
         </div>
       </div>
     </div>
@@ -3161,7 +3179,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (tab.dataset.tab === 'notes') loadNotes();
     if (tab.dataset.tab === 'settings') { loadSystemInfo(); loadModelManager(); loadSettings(); startLiveGauges(); loadLogViewer(); loadDiskMonitor(); loadStartupState(); }
     if (tab.dataset.tab === 'kiwix-library') { loadZimList(); loadZimCatalog(); loadZimDownloads(); }
-    if (tab.dataset.tab === 'maps') loadMaps();
+    if (tab.dataset.tab === 'maps') { loadMaps(); loadWPDistances(); }
     if (tab.dataset.tab === 'benchmark') { loadBenchHistory(); loadBuilderTag(); }
     if (tab.dataset.tab === 'tools') { loadVideoList(); }
     if (tab.dataset.tab === 'preparedness') { loadPrepTab(); }
@@ -7232,8 +7250,68 @@ function generateQR(text) {
   document.body.appendChild(el);
 }
 
+/* ─── Waypoint Distance Matrix UI ─── */
+async function loadWPDistances() {
+  try {
+    const d = await (await fetch('/api/waypoints/distances')).json();
+    const el = document.getElementById('wp-distance-matrix');
+    if (!d.points.length) { el.innerHTML = '<span style="color:var(--text-dim);font-size:12px;">No waypoints saved.</span>'; return; }
+    let html = '<table class="freq-table"><thead><tr><th></th>';
+    d.points.forEach(p => html += `<th style="font-size:9px;max-width:60px;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(p.name)}">${escapeHtml(p.name.slice(0,8))}</th>`);
+    html += '</tr></thead><tbody>';
+    d.points.forEach((p, i) => {
+      html += `<tr><td style="font-weight:500;font-size:10px;">${escapeHtml(p.name)}</td>`;
+      d.matrix[i].forEach((dist, j) => {
+        const color = i === j ? '' : dist < 1 ? 'color:var(--green)' : dist < 5 ? '' : dist < 20 ? 'color:var(--orange)' : 'color:var(--red)';
+        html += `<td style="text-align:center;font-size:10px;${color}">${i === j ? '-' : dist + 'mi'}</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  } catch(e) {}
+}
+
+/* ─── Service Quick Links ─── */
+async function loadServiceQuickLinks() {
+  try {
+    const services = await (await fetch('/api/services')).json();
+    const running = services.filter(s => s.running && s.port);
+    const el = document.getElementById('svc-quicklinks');
+    if (!running.length) { el.innerHTML = ''; return; }
+    const names = {ollama:'AI Chat',kiwix:'Library',cyberchef:'CyberChef',kolibri:'Kolibri',stirling:'PDF Tools'};
+    el.innerHTML = running.filter(s => s.id !== 'qdrant').map(s =>
+      `<a href="http://localhost:${s.port}" target="_blank" class="btn btn-sm btn-open-svc" style="font-size:10px;padding:3px 10px;">Open ${names[s.id]||s.id}</a>`
+    ).join('');
+  } catch(e) {}
+}
+
+/* ─── Dashboard Checklist Progress ─── */
+async function loadCmdChecklists() {
+  try {
+    const cls = await (await fetch('/api/dashboard/checklists')).json();
+    const el = document.getElementById('cmd-checklists');
+    if (!cls.length) { el.innerHTML = ''; return; }
+    el.innerHTML = '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + cls.map(c => {
+      const color = c.pct === 100 ? 'var(--green)' : c.pct >= 50 ? 'var(--accent)' : 'var(--orange)';
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:11px;min-width:120px;cursor:pointer;" onclick="document.querySelector('[data-tab=\\'preparedness\\']').click();setTimeout(()=>{switchPrepSub('checklists');selectChecklist(${c.id})},200)">
+        <div style="font-weight:500;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">${escapeHtml(c.name)}</div>
+        <div style="height:3px;background:var(--surface3);border-radius:2px;overflow:hidden;"><div style="height:100%;width:${c.pct}%;background:${color};border-radius:2px;"></div></div>
+        <div style="font-size:9px;color:var(--text-muted);margin-top:2px;">${c.checked}/${c.total} (${c.pct}%)</div>
+      </div>`;
+    }).join('') + '</div>';
+  } catch(e) {}
+}
+
 /* ─── Keyboard Shortcuts ─── */
 document.addEventListener('keydown', (e) => {
+  // Ctrl+K = focus search from anywhere
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    document.querySelector('[data-tab="services"]').click();
+    setTimeout(() => document.getElementById('unified-search').focus(), 100);
+    return;
+  }
   // Only if not typing in an input/textarea
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
   if (e.altKey) {
@@ -7249,10 +7327,12 @@ document.addEventListener('keydown', (e) => {
 /* ─── Init ─── */
 loadServices();
 loadCmdDashboard();
+loadServiceQuickLinks();
+loadCmdChecklists();
 loadReadiness();
 loadActivity();
 loadContentSummary();
-setInterval(() => { loadServices(); loadReadiness(); loadCmdDashboard(); }, 8000);
+setInterval(() => { loadServices(); loadReadiness(); loadCmdDashboard(); loadServiceQuickLinks(); }, 8000);
 checkNetwork();
 setInterval(checkNetwork, 30000);
 checkWizard();
