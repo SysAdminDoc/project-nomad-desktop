@@ -1,5 +1,5 @@
 """
-Project N.O.M.A.D. for Windows v3.3.0
+Project N.O.M.A.D. for Windows v3.4.0
 Node for Offline Media, Archives, and Data
 Native Windows edition — no Docker required.
 """
