@@ -82,14 +82,14 @@
 **Builds on:** Existing ZIP export/import, LAN auth
 **Effort:** Medium-Large (2 sessions)
 
-- [ ] Node identity — generate a unique node ID on first run, store in settings (UUID + friendly name)
-- [ ] Sync manifest with vector clocks — each record gets a `node_id` + `updated_at` timestamp for conflict detection
-- [ ] Three-way merge on import — detect conflicts (same record modified on two nodes), present merge UI
-- [ ] Auto-discovery on LAN — mDNS/UDP broadcast to find other N.O.M.A.D. instances on the network
-- [ ] One-click LAN sync — select a discovered node, pull/push changes over HTTP
-- [ ] Sync log — track what was synced, when, from which node
-- [ ] Shared incident log with node attribution — each incident tagged with originating node
-- [ ] Distributed watch schedule — assign watch shifts to nodes, display on a shared calendar
+- [x] Node identity — auto-generated UUID + customizable name, persistent in settings
+- [x] Auto-discovery on LAN — UDP broadcast on port 18080, background listener auto-responds
+- [x] One-click LAN sync — push/receive/pull data between nodes over HTTP (merge mode)
+- [x] Sync log — tracks direction, peer identity, IP, table counts, timestamps
+- [x] Node attribution — synced records tagged with source node ID
+- [ ] Vector clocks for conflict detection (enhancement — current merge is additive)
+- [ ] Three-way merge UI for conflicts (enhancement)
+- [ ] Distributed watch schedule (enhancement)
 
 ## Phase 8: Power Management
 **Builds on:** Solar/battery/generator calculators, solar_expert AI persona
