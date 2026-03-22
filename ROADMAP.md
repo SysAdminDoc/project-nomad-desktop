@@ -118,12 +118,13 @@
 **Builds on:** Full RAG pipeline (Qdrant + nomic-embed-text + chunking)
 **Effort:** Large (2-3 sessions)
 
-- [ ] Document classifier — on upload, AI categorizes document type (medical, property, vehicle, financial, legal, reference)
-- [ ] Entity extraction — AI extracts structured data from documents: names, dates, medications, addresses, coordinates, vehicle specs
-- [ ] Auto-populate — extracted entities written back to structured tables (contacts, inventory, waypoints)
-- [ ] Multi-collection Qdrant — separate collections per document type for more precise retrieval
-- [ ] Document summary — AI generates a 2-3 sentence summary stored with each document for quick browsing
-- [ ] Cross-reference — "This document mentions [contact name] — link it?" prompts when entities match existing records
+- [x] Document classifier — 8 categories (medical/property/vehicle/financial/legal/reference/personal/other), auto-runs after embedding
+- [x] Entity extraction — AI extracts people, dates, medications, addresses, phones, vehicles, amounts, coordinates
+- [x] Document summary — 2-3 sentence AI summary per document, shown as preview + tooltip
+- [x] Cross-reference — extracted person names auto-matched against contacts DB, linked records shown
+- [x] Analyze All button for bulk analysis of existing documents
+- [ ] Auto-populate — extracted entities written back to structured tables (enhancement)
+- [ ] Multi-collection Qdrant — separate collections per document type (enhancement)
 
 ---
 
