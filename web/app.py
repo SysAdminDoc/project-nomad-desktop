@@ -31,7 +31,7 @@ SERVICE_MODULES = {
     'stirling': stirling,
 }
 
-VERSION = '3.4.0'
+VERSION = '3.5.0'
 
 
 def set_version(v):
@@ -1367,7 +1367,7 @@ def create_app():
         import urllib.request, zipfile, io
         url = 'https://github.com/protomaps/go-pmtiles/releases/latest/download/go-pmtiles_Windows_x86_64.zip'
         log.info('Downloading pmtiles CLI from %s', url)
-        req = urllib.request.Request(url, headers={'User-Agent': 'ProjectNOMAD/3.4.0'})
+        req = urllib.request.Request(url, headers={'User-Agent': 'ProjectNOMAD/3.5.0'})
         with urllib.request.urlopen(req, timeout=120) as resp:
             data = resp.read()
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
@@ -1503,7 +1503,7 @@ def create_app():
             try:
                 maps_dir = get_maps_dir()
                 dest = os.path.join(maps_dir, filename)
-                req = urllib.request.Request(url, headers={'User-Agent': 'ProjectNOMAD/3.4.0'})
+                req = urllib.request.Request(url, headers={'User-Agent': 'ProjectNOMAD/3.5.0'})
                 with urllib.request.urlopen(req, timeout=60) as resp:
                     total = int(resp.headers.get('Content-Length', 0))
                     downloaded = 0
