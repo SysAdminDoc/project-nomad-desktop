@@ -4,16 +4,13 @@
 **Builds on:** Existing burn rates, dashboard_critical, weather trend, situation-context AI injection
 **Effort:** Medium (1-2 sessions)
 
-- [ ] Background alert scheduler thread in `nomad.py` — runs every 5 minutes, checks:
-  - Inventory items with <7 days burn rate remaining
-  - Items expiring within 14 days
-  - Barometric pressure drop >4mb in 6 hours
-  - 3+ incidents in same category within 48 hours
-- [ ] Server-Sent Events (SSE) endpoint `/api/alerts/stream` for real-time push to frontend
-- [ ] Alert banner in dashboard header — auto-shows critical alerts without user polling
-- [ ] AI-generated natural language alert summaries — feed alert data into Ollama with a terse prompt, return "Water supply critical: 4 days remaining at current usage. Reduce consumption or locate new source."
-- [ ] Alert history table in DB with dismissal tracking
-- [ ] Browser notification for critical alerts (reuse existing `sendNotification()`)
+- [x] Background alert scheduler thread — runs every 5 minutes, checks 5 conditions (burn rate, expiration, pressure drop, incident clusters, low stock)
+- [x] Alert API endpoints — /api/alerts, /api/alerts/<id>/dismiss, /api/alerts/dismiss-all, /api/alerts/generate-summary
+- [x] Alert bar in dashboard header — auto-shows critical alerts, bell icon with badge count
+- [x] AI-generated natural language situation summaries via Ollama
+- [x] Alert history table in DB with dismissal tracking + 24h dedup + 7-day auto-prune
+- [x] Browser notification + alert sound on new critical alerts
+- [ ] SSE endpoint for instant push (currently polls every 60s — good enough for now)
 
 ## Phase 2: Interactive Decision Engine
 **Builds on:** Scenario AI personas, situation-context injection, existing reference cards
