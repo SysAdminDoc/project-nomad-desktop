@@ -1155,7 +1155,7 @@ a { color: var(--accent); text-decoration: none; }
         <div class="cc-icon"><svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a7 7 0 0 0-7 7c0 3.5 2.5 6.5 7 13 4.5-6.5 7-9.5 7-13a7 7 0 0 0-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg></div>
         <div class="cc-title">AI Assistant</div>
         <div class="cc-sub">Powered by Ollama</div>
-        <div class="cc-desc">Local AI chat — situation-aware, 16 presets, file analysis. Runs entirely on your hardware.</div>
+        <div class="cc-desc">Local AI chat — situation-aware, 19 presets, file analysis. Runs entirely on your hardware.</div>
       </div>
       <div class="cc-card" onclick="document.querySelector('[data-tab=\'kiwix-library\']').click()">
         <div class="cc-icon"><svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8M8 11h5"/></svg></div>
@@ -1166,7 +1166,7 @@ a { color: var(--accent); text-decoration: none; }
       <div class="cc-card" onclick="document.querySelector('[data-tab=\'maps\']').click()">
         <div class="cc-icon"><svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg></div>
         <div class="cc-title">Maps</div>
-        <div class="cc-desc">Offline maps with waypoints, zones, measurement tools. 23 regions worldwide. GPX export.</div>
+        <div class="cc-desc">Offline maps with waypoints, zones, measurement tools. 22 regions worldwide. GPX export.</div>
       </div>
       <div class="cc-card" onclick="document.querySelector('[data-tab=\'preparedness\']').click()">
         <div class="cc-icon"><svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
@@ -4410,6 +4410,7 @@ a { color: var(--accent); text-decoration: none; }
         <h3>About Project N.O.M.A.D. for Windows</h3>
         <div style="font-size:12px;color:var(--text-dim);line-height:1.7;">
           <p><strong style="color:var(--text);">The most complete offline survival command center available.</strong> Native Windows edition, no Docker required.</p>
+          <p style="margin:4px 0;"><span style="font-size:13px;font-weight:700;color:var(--accent);">v${VERSION}</span></p>
           <p>Based on <a href="https://github.com/Crosstalk-Solutions/project-nomad">Project N.O.M.A.D.</a> by Crosstalk Solutions. Windows port by <a href="https://github.com/SysAdminDoc">SysAdminDoc</a>.</p>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:12px 0;font-size:11px;">
             <div><strong style="color:var(--accent);">9 Main Tabs</strong><br>Services, AI Chat, Library, Maps, Notes, Benchmark, Tools, Preparedness, Settings</div>
@@ -4437,7 +4438,7 @@ a { color: var(--accent); text-decoration: none; }
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:16px 0;text-align:center;font-size:11px;">
         <div style="padding:10px;background:var(--surface2);border-radius:var(--radius-sm);"><div style="font-size:18px;margin-bottom:4px;">&#129504;</div><strong>AI Chat</strong><br>Local AI that knows your situation</div>
         <div style="padding:10px;background:var(--surface2);border-radius:var(--radius-sm);"><div style="font-size:18px;margin-bottom:4px;">&#128218;</div><strong>Offline Library</strong><br>Wikipedia, medical, survival guides</div>
-        <div style="padding:10px;background:var(--surface2);border-radius:var(--radius-sm);"><div style="font-size:18px;margin-bottom:4px;">&#127759;</div><strong>Offline Maps</strong><br>23 regions worldwide + waypoints</div>
+        <div style="padding:10px;background:var(--surface2);border-radius:var(--radius-sm);"><div style="font-size:18px;margin-bottom:4px;">&#127759;</div><strong>Offline Maps</strong><br>22 regions worldwide + waypoints</div>
         <div style="padding:10px;background:var(--surface2);border-radius:var(--radius-sm);"><div style="font-size:18px;margin-bottom:4px;">&#128203;</div><strong>Preparedness</strong><br>Checklists, inventory, protocols</div>
         <div style="padding:10px;background:var(--surface2);border-radius:var(--radius-sm);"><div style="font-size:18px;margin-bottom:4px;">&#128225;</div><strong>Communications</strong><br>Radio ref, LAN chat, mesh network</div>
         <div style="padding:10px;background:var(--surface2);border-radius:var(--radius-sm);"><div style="font-size:18px;margin-bottom:4px;">&#128274;</div><strong>Encrypted Vault</strong><br>Secure document storage</div>
@@ -4825,7 +4826,7 @@ async function loadServices() {
     const welcomeEl = document.getElementById('welcome-banner');
     if (welcomeEl) welcomeEl.style.display = anyInstalled ? 'none' : 'block';
   } catch(e) {
-    console.error('loadServices', e);
+    // error logged silently
     if (!_servicesLoaded) {
       const grid = document.getElementById('services-grid');
       grid.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px;grid-column:1/-1;">Failed to load services. <button class="btn btn-sm" onclick="loadServices()">Retry</button></div>';
@@ -9591,7 +9592,7 @@ function showHelp() {
   <h3>Services</h3><p>Install, start, and manage the 6 core services. The command dashboard shows situation status, active timers, low stock alerts, and recent incidents.</p>
   <h3>AI Chat</h3><p>Chat with a local AI model. Toggle <strong>"My Situation"</strong> to make the AI aware of your inventory, incidents, and threat levels. Drag-drop files for context.</p>
   <h3>Library</h3><p>Browse and download offline content (Wikipedia, medical references, survival guides). Upload and view PDFs.</p>
-  <h3>Maps</h3><p>Offline maps with persistent waypoints (7 categories), zone drawing, measurement, and GPX export. 23 regions worldwide.</p>
+  <h3>Maps</h3><p>Offline maps with persistent waypoints (7 categories), zone drawing, measurement, and GPX export. 22 regions worldwide.</p>
   <h3>Tools</h3><p>NukeMap simulator, Meshtastic radio, barcode scanner, video library, and guided emergency drills.</p>
   <h3>Preparedness</h3><p>13 sub-tabs: Checklists, Incident Log, Inventory, Contacts, Calculators, Radio Ref, Quick Ref, Protocols, Vault, Weather, Signals, Operations, Family Plan.</p>
 

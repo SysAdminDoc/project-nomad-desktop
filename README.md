@@ -1,5 +1,5 @@
 <div align="center">
-<img src="https://raw.githubusercontent.com/Crosstalk-Solutions/project-nomad/refs/heads/main/admin/public/project_nomad_logo.png" width="200" height="200"/>
+<img src="project_nomad_logo.png" width="200" height="200"/>
 
 # Project N.O.M.A.D. for Windows v3.5.0
 ### The Most Complete Offline Survival Command Center Available
@@ -16,7 +16,7 @@ Native Windows port — no Docker, no WSL, no VMs. 6 managed services, 100+ down
 
 ---
 
-> Competitors charge $280+ for a USB stick with curated content (Prepper Disk, Prep Drive). N.O.M.A.D. for Windows does everything they do and 10x more — for free. 16,000+ lines of code, 50+ map sources, 10 interactive calculators, 20+ reference cards, 17 emergency protocols, and the most comprehensive offline prepper knowledge base ever built into a single application.
+> Competitors charge $280+ for a USB stick with curated content (Prepper Disk, Prep Drive). N.O.M.A.D. for Windows does everything they do and 10x more — for free. 24,000+ lines of code, 50+ map sources, 10 interactive calculators, 25+ reference cards, 17 emergency protocols, NukeMap v3.2.0 nuclear simulator, and the most comprehensive offline prepper knowledge base ever built into a single application.
 
 Download **[ProjectNOMAD.exe](https://github.com/SysAdminDoc/nomad-windows/releases/latest)** — single file, double-click to run.
 
@@ -77,7 +77,7 @@ Download **[ProjectNOMAD.exe](https://github.com/SysAdminDoc/nomad-windows/relea
 
 ## AI Features
 
-- **18 system prompt presets**: General, Medical, Coding, Survival, Teacher, Analyst, Field Medic, HAM Radio, Homesteader, Water/Sanitation, Security/OPSEC, Foraging, Solar Power Expert, Land Navigation, Medicinal Herbalist, plus 3 scenario planners (Grid Down, Medical Emergency, Evacuation)
+- **19 system prompt presets**: General, Medical, Coding, Survival, Teacher, Analyst, Field Medic, HAM Radio, Homesteader, Water/Sanitation, Security/OPSEC, Foraging, Nuclear Preparedness, Solar Power Expert, Land Navigation, Medicinal Herbalist, plus 3 scenario planners (Grid Down, Medical Emergency, Evacuation)
 - **Situation-aware context**: Toggle "My Situation" to auto-inject your inventory, burn rates, incidents, contacts, and threat levels into the conversation
 - **Drag-drop file context**: Attach PDFs, text files, CSVs to your chat messages
 - **12 recommended models** including medical-specific (MedGemma, Meditron)
@@ -99,7 +99,7 @@ Download **[ProjectNOMAD.exe](https://github.com/SysAdminDoc/nomad-windows/relea
 - **Barcode Scanner**: Camera-based barcode scanning via BarcodeDetector API, auto-add to inventory
 - **Offline Video Library**: Upload, categorize (9 categories), and play instructional videos
 - **Guided Emergency Drills**: 6 timed drill scenarios with step checklists, live timer, completion tracking, and persistent drill history
-- **Nuclear Effects Simulator**: Bundled NukeMap v3.1.0 with blast radius, thermal radiation, fallout, and casualty modeling
+- **Nuclear Effects Simulator**: Bundled NukeMap v3.2.0 with blast radius, thermal radiation, fallout, casualty modeling, WW3 simulation, weapon encyclopedia, HEMP burst mode, and 418 verified targets
 
 ## Content Library
 
