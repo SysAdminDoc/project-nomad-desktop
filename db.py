@@ -259,6 +259,26 @@ def init_db():
     ''')
     conn.commit()
 
+    # Performance indexes
+    for idx in [
+        'CREATE INDEX IF NOT EXISTS idx_activity_log_timestamp ON activity_log(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_activity_log_level ON activity_log(level)',
+        'CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations(updated_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_inventory_category ON inventory(category)',
+        'CREATE INDEX IF NOT EXISTS idx_inventory_expiration ON inventory(expiration)',
+        'CREATE INDEX IF NOT EXISTS idx_incidents_created ON incidents(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_incidents_category ON incidents(category)',
+        'CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_notes_pinned ON notes(pinned DESC, updated_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_weather_log_created ON weather_log(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_waypoints_category ON waypoints(category)',
+    ]:
+        try:
+            conn.execute(idx)
+        except Exception:
+            pass
+    conn.commit()
+
     # Schema migrations for existing databases
     for migration in [
         'ALTER TABLE inventory ADD COLUMN daily_usage REAL DEFAULT 0',
