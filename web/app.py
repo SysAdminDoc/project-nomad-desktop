@@ -31,7 +31,7 @@ SERVICE_MODULES = {
     'stirling': stirling,
 }
 
-VERSION = '2.9.0'
+VERSION = '3.0.0'
 
 
 def set_version(v):
@@ -2966,6 +2966,22 @@ def create_app():
                     row.append(round(haversine(a['lat'], a['lng'], b['lat'], b['lng']), 2))
             matrix.append(row)
         return jsonify({'points': points, 'matrix': matrix})
+
+    # ─── Dashboard Checklists Progress ─────────────────────────────────
+
+    @app.route('/api/dashboard/checklists')
+    def api_dashboard_checklists():
+        db = get_db()
+        rows = db.execute('SELECT id, name, items FROM checklists ORDER BY updated_at DESC LIMIT 5').fetchall()
+        db.close()
+        result = []
+        for r in rows:
+            items = json.loads(r['items'] or '[]')
+            total = len(items)
+            checked = sum(1 for i in items if i.get('checked'))
+            result.append({'id': r['id'], 'name': r['name'], 'total': total, 'checked': checked,
+                          'pct': round(checked / total * 100) if total > 0 else 0})
+        return jsonify(result)
 
     # ─── Expanded Unified Search ──────────────────────────────────────
 
