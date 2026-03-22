@@ -1,7 +1,7 @@
 <div align="center">
 <img src="project_nomad_logo.png" width="200" height="200"/>
 
-# Project N.O.M.A.D. for Windows v3.5.0
+# Project N.O.M.A.D. for Windows v3.6.0
 ### The Most Complete Offline Survival Command Center Available
 
 **Free. Open Source. No Internet Required After Setup.**
