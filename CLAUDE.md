@@ -115,7 +115,7 @@ pyinstaller build.spec
 v3.5.0
 
 ## Status
-Working v3.5.0 — Command Center Edition. 16,364 total lines. Massive content expansion: 10 interactive calculators (food storage, generator fuel, rainwater, radio range, medication dosage, solar power, BOB weight, plus existing 8), 50+ map sources with pmtiles extract, 5 natural disaster protocols (tornado/earthquake/flood/wildfire/hurricane), printable wallet card generator, 35-item home security assessment. Quick Ref: START triage, companion planting (15 crops), calorie DB (20 foods), livestock (9 animals), WHO medicines (25+ meds), essential knots (8), navigation without GPS, water purification decision tree, sanitation guide, improvised tools (12), wild edibles by season (18 plants), EMP/Faraday guide, gray man OPSEC, water finding, supply cache guide, group organization template. 18 AI presets. Plus all prior features.
+Working v3.5.0 — Command Center Edition + comprehensive UX audit (6 rounds, 95+ fixes). ~14,300 total lines. Round 6: Go-to coordinates (offline map navigation via lat,lng input), inventory expiration notifications on startup, benchmark trend deltas (green/red indicators vs previous run), chat message/token counter, last backup timestamp indicator with age coloring, Escape key closes app frame overlay, double-click to rename conversations, Ollama quick link redirects to AI Chat, loadInventory/loadContacts/loadActivity error states, readiness bar error fallback. Plus all prior features.
 
 ## Gotchas
 - Stirling PDF requires Java 17+ (downloads .jar, not .exe — no Windows exe in releases)
