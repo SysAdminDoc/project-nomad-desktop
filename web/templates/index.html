@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Project N.O.M.A.D. - Command Center v{{ version }}</title>
-<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="https://unpkg.com/pmtiles@4.0.0/dist/pmtiles.js"></script>
+<link rel="stylesheet" href="/static/maplibre-gl.css">
+<script src="/static/maplibre-gl.js"></script>
+<script src="/static/pmtiles.js"></script>
 <style>
 /* ─── NOMAD Theme (Default — Desert/Tactical) ─── */
 :root, [data-theme="nomad"] {
@@ -178,7 +178,11 @@ a { color: var(--accent); text-decoration: none; }
 .header-tabs {
   display: flex; gap: 2px; align-items: center; -webkit-app-region: no-drag;
   overflow-x: auto; flex: 1; margin: 0 12px;
+  scrollbar-width: none; -ms-overflow-style: none;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 8px, #000 calc(100% - 20px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 8px, #000 calc(100% - 20px), transparent 100%);
 }
+.header-tabs::-webkit-scrollbar { display: none; }
 .header-right { display: flex; gap: 8px; align-items: center; -webkit-app-region: no-drag; flex-shrink: 0; }
 
 /* ─── Layout ─── */
@@ -1080,7 +1084,7 @@ a { color: var(--accent); text-decoration: none; }
 <body>
 
 <!-- In-App Frame Modal -->
-<div id="app-frame-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:20000;display:none;flex-direction:column;">
+<div id="app-frame-overlay" role="dialog" aria-modal="true" aria-label="Application viewer" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:20000;flex-direction:column;">
   <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--surface-solid);border-bottom:1px solid var(--border);">
     <span id="app-frame-title" style="font-weight:600;font-size:14px;"></span>
     <div style="display:flex;gap:6px;">
@@ -1113,9 +1117,9 @@ a { color: var(--accent); text-decoration: none; }
     <span id="net-status" style="font-size:11px;display:flex;align-items:center;gap:5px;color:var(--text-muted);"></span>
     <div class="theme-switcher" title="Switch theme">
       <div class="theme-btn active" data-t="nomad" onclick="setTheme('nomad')" title="NOMAD (Desert)"></div>
-      <div class="theme-btn" data-t="nightops" onclick="setTheme('nightops')" title="Night Ops (Dark)"></div>
-      <div class="theme-btn" data-t="cyber" onclick="setTheme('cyber')" title="Cyber (Blue Dark)"></div>
-      <div class="theme-btn" data-t="redlight" onclick="setTheme('redlight')" title="Red Light (Night Vision)"></div>
+      <div class="theme-btn" data-t="nightops" onclick="setTheme('nightops')" title="Night Ops (Dark)" role="button" tabindex="0" aria-label="Night Ops dark theme"></div>
+      <div class="theme-btn" data-t="cyber" onclick="setTheme('cyber')" title="Cyber (Blue Dark)" role="button" tabindex="0" aria-label="Cyber blue dark theme"></div>
+      <div class="theme-btn" data-t="redlight" onclick="setTheme('redlight')" title="Red Light (Night Vision)" role="button" tabindex="0" aria-label="Red Light night vision theme"></div>
     </div>
   </div>
 </div>
@@ -1222,7 +1226,7 @@ a { color: var(--accent); text-decoration: none; }
         Activity Feed
         <button class="btn btn-sm" onclick="loadActivity()">Refresh</button>
       </h3>
-      <div id="activity-feed" style="max-height:200px;overflow-y:auto;margin-top:8px;font-size:11px;"></div>
+      <div id="activity-feed" style="max-height:200px;overflow-y:auto;margin-top:8px;font-size:11px;"><div style="color:var(--text-muted);font-size:11px;">Loading activity...</div></div>
     </div>
   </div>
 
@@ -1325,7 +1329,7 @@ a { color: var(--accent); text-decoration: none; }
             </div>
           </div>
         </div>
-        <div id="chat-file-context" style="display:none;padding:4px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--accent);display:none;">
+        <div id="chat-file-context" style="display:none;padding:4px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--accent);">
           <span id="chat-file-name"></span>
           <span style="cursor:pointer;color:var(--red);margin-left:6px;" onclick="clearChatFile()">x</span>
         </div>
@@ -1338,6 +1342,7 @@ a { color: var(--accent); text-decoration: none; }
           <button class="btn btn-primary" onclick="sendChat()" id="send-btn">Send</button>
           <button class="btn btn-stop" onclick="stopChat()" id="stop-btn" style="display:none;">Stop</button>
           <button class="btn btn-sm" onclick="regenerateChat()" id="regen-btn" style="display:none;" title="Regenerate last response">Retry</button>
+          <span id="chat-stats" style="font-size:9px;color:var(--text-muted);margin-left:auto;white-space:nowrap;"></span>
         </div>
       </div>
     </div>
@@ -1394,7 +1399,7 @@ a { color: var(--accent); text-decoration: none; }
     </div>
     <div id="map-viewer" style="display:none;position:relative;">
       <div class="map-search">
-        <input id="map-search-input" placeholder="Search location..." onkeydown="if(event.key==='Enter')searchMap()">
+        <input id="map-search-input" placeholder="Search location or enter lat,lng..." onkeydown="if(event.key==='Enter')searchMap()">
         <button onclick="searchMap()">Go</button>
       </div>
       <div id="map-container" class="map-wrap"></div>
@@ -1455,7 +1460,10 @@ a { color: var(--accent); text-decoration: none; }
       <div class="notes-sidebar">
         <div class="notes-sidebar-header">
           <span style="font-weight:600;font-size:13px;">Notes</span>
-          <button class="btn btn-sm btn-primary" onclick="createNote()">+ New</button>
+          <div style="display:flex;gap:4px;">
+            <button class="btn btn-sm" onclick="window.location='/api/notes/export-all'" title="Export all as ZIP">Export All</button>
+            <button class="btn btn-sm btn-primary" onclick="createNote()">+ New</button>
+          </div>
         </div>
         <div class="notes-search"><input id="notes-search" placeholder="Search notes..." oninput="filterNotes()"></div>
         <div class="notes-list" id="notes-list"></div>
@@ -1466,6 +1474,7 @@ a { color: var(--accent); text-decoration: none; }
           <input id="note-tags" placeholder="Tags (comma-separated)" style="width:140px;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:6px;font-size:10px;outline:none;" oninput="autoSaveNoteTags()">
           <button class="btn btn-sm" onclick="toggleNotePin()" id="note-pin-btn" title="Pin/unpin note">Pin</button>
           <button class="btn btn-sm" onclick="toggleNotePreview()" id="note-preview-btn">Preview</button>
+          <button class="btn btn-sm" onclick="exportCurrentNote()" title="Download as .md">Export</button>
           <button class="btn btn-sm btn-danger" onclick="deleteNote()">Delete</button>
         </div>
         <div class="notes-editor-split">
@@ -3387,6 +3396,11 @@ a { color: var(--accent); text-decoration: none; }
     <div id="psub-protocols" class="prep-sub">
     <div class="prep-section">
       <h3>Emergency Protocols Quick Reference</h3>
+      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+        <input id="proto-search" placeholder="Filter protocols..." oninput="filterProtocols()" style="flex:1;max-width:300px;background:var(--surface);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:var(--radius-sm);font-size:12px;outline:none;">
+        <button class="btn btn-sm" onclick="toggleAllProtocols(true)">Expand All</button>
+        <button class="btn btn-sm" onclick="toggleAllProtocols(false)">Collapse All</button>
+      </div>
 
       <div class="protocol-card">
         <div class="protocol-header" onclick="toggleProtocol(this)">
@@ -3933,7 +3947,7 @@ a { color: var(--accent); text-decoration: none; }
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;">
         <div style="display:flex;gap:8px;margin-bottom:10px;align-items:end;flex-wrap:wrap;">
           <div><label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:3px;">Vault Password</label>
-            <input id="vault-pw" type="password" style="width:200px;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="Enter password to unlock"></div>
+            <div style="position:relative;display:inline-block;"><input id="vault-pw" type="password" style="width:200px;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 30px 6px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="Enter password to unlock" onkeydown="if(event.key==='Enter')unlockVault()"><span onclick="const i=document.getElementById('vault-pw');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'Show':'Hide'" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:10px;cursor:pointer;color:var(--text-muted);">Show</span></div></div>
           <button class="btn btn-sm btn-primary" onclick="unlockVault()">Unlock</button>
           <button class="btn btn-sm" onclick="lockVault()">Lock</button>
         </div>
@@ -4228,7 +4242,7 @@ a { color: var(--accent); text-decoration: none; }
 
   <!-- Quick Actions -->
   <div id="quick-actions-btn" onclick="toggleQuickActions()" style="position:fixed;bottom:20px;right:20px;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--green));color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:9990;font-size:22px;transition:transform 0.2s;" title="Quick Actions">+</div>
-  <div id="quick-actions-menu" style="display:none;position:fixed;bottom:78px;right:20px;z-index:9990;display:none;flex-direction:column;gap:6px;">
+  <div id="quick-actions-menu" style="display:none;position:fixed;bottom:78px;right:20px;z-index:9990;flex-direction:column;gap:6px;">
     <button class="btn btn-sm btn-primary" onclick="quickLogIncident()" style="box-shadow:var(--shadow-sm);">Log Incident</button>
     <button class="btn btn-sm btn-primary" onclick="toggleTimerPanel();toggleQuickActions()" style="box-shadow:var(--shadow-sm);">Start Timer</button>
     <button class="btn btn-sm btn-primary" onclick="quickAddInventory()" style="box-shadow:var(--shadow-sm);">Add Supply</button>
@@ -4289,9 +4303,15 @@ a { color: var(--accent); text-decoration: none; }
         <div>
           <div class="setting-row">
             <span class="setting-label">Theme</span>
-            <span class="setting-value" style="display:flex;align-items:center;gap:6px;font-weight:600;">
+            <span class="setting-value" style="display:flex;align-items:center;gap:8px;font-weight:600;">
               <span id="active-theme-dot" style="width:10px;height:10px;border-radius:50%;background:linear-gradient(135deg,#f7eedc,#424420);"></span>
               <span id="active-theme-label">NOMAD</span>
+              <div class="theme-switcher" style="margin-left:8px;">
+                <div class="theme-btn" data-t="nomad" onclick="setTheme('nomad')" title="NOMAD (Desert)" role="button" tabindex="0" aria-label="NOMAD Desert theme"></div>
+                <div class="theme-btn" data-t="nightops" onclick="setTheme('nightops')" title="Night Ops (Dark)" role="button" tabindex="0" aria-label="Night Ops dark theme"></div>
+                <div class="theme-btn" data-t="cyber" onclick="setTheme('cyber')" title="Cyber (Blue Dark)" role="button" tabindex="0" aria-label="Cyber blue dark theme"></div>
+                <div class="theme-btn" data-t="redlight" onclick="setTheme('redlight')" title="Red Light (Night Vision)" role="button" tabindex="0" aria-label="Red Light night vision theme"></div>
+              </div>
             </span>
           </div>
           <div class="setting-row">
@@ -4329,8 +4349,8 @@ a { color: var(--accent); text-decoration: none; }
           <div class="setting-row">
             <span class="setting-label">Host Power</span>
             <div style="display:flex;gap:4px;">
-              <button class="btn btn-sm btn-danger" onclick="if(confirm('Reboot this computer?'))hostPower('reboot')">Reboot</button>
-              <button class="btn btn-sm btn-danger" onclick="if(confirm('Shutdown this computer?'))hostPower('shutdown')">Shutdown</button>
+              <button class="btn btn-sm btn-danger" onclick="confirmPower(this,'reboot')">Reboot</button>
+              <button class="btn btn-sm btn-danger" onclick="confirmPower(this,'shutdown')">Shutdown</button>
             </div>
           </div>
           <div class="setting-row">
@@ -4346,10 +4366,10 @@ a { color: var(--accent); text-decoration: none; }
             <span class="setting-value" id="data-dir" style="font-size:11px;word-break:break-all;"></span>
           </div>
           <div class="setting-row">
-            <span class="setting-label">Backup & Restore</span>
-            <span style="display:flex;gap:6px;">
-              <button class="btn btn-sm btn-primary" onclick="window.location='/api/export-all'" title="Download complete backup">Full Backup</button>
-              <button class="btn btn-sm" onclick="exportConfig()">Export DB</button>
+            <span class="setting-label">Backup & Restore<br><span id="last-backup-time" style="font-size:9px;color:var(--text-muted);"></span></span>
+            <span style="display:flex;gap:6px;align-items:center;">
+              <button class="btn btn-sm btn-primary" onclick="doFullBackup()" title="Download complete backup">Full Backup</button>
+              <button class="btn btn-sm" onclick="doExportConfig()">Export DB</button>
               <input type="file" id="import-file" style="display:none;" accept=".zip" onchange="importConfig()">
               <button class="btn btn-sm" onclick="document.getElementById('import-file').click()">Import</button>
             </span>
@@ -4384,7 +4404,7 @@ a { color: var(--accent); text-decoration: none; }
       </div>
       <div class="settings-card" style="grid-column:1/-1;">
         <h3>Disk Space Monitor</h3>
-        <div id="disk-monitor"></div>
+        <div id="disk-monitor"><div style="color:var(--text-muted);font-size:12px;">Loading disk info...</div></div>
       </div>
       <div class="settings-card" style="grid-column:1/-1;">
         <h3>About Project N.O.M.A.D. for Windows</h3>
@@ -4398,7 +4418,7 @@ a { color: var(--accent); text-decoration: none; }
           </div>
           <div style="margin:8px 0;">
             <strong style="color:var(--accent);">Keyboard Shortcuts:</strong>
-            Alt+1-8 tabs | Alt+T timers | Alt+C chat | Alt+N new note | Ctrl+K search
+            Alt+1-9 tabs | Alt+T timers | Alt+C chat | Alt+N new note | Ctrl+K search
           </div>
         </div>
       </div>
@@ -4546,6 +4566,12 @@ function updateThemeIndicator(theme) {
   if (dot) dot.style.background = THEME_COLORS[theme] || '';
   if (label) label.textContent = THEME_NAMES[theme] || theme;
 }
+// Keyboard support for theme buttons
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('theme-btn')) {
+    e.preventDefault(); e.target.click();
+  }
+});
 (function initTheme() {
   const saved = localStorage.getItem('nomad-theme') || 'nomad';
   if (saved !== 'nomad') document.documentElement.setAttribute('data-theme', saved);
@@ -4572,7 +4598,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'ai-chat') { loadModels(); loadConversations(); pollPullProgress(); }
     if (tab.dataset.tab === 'notes') loadNotes();
-    if (tab.dataset.tab === 'settings') { loadSystemInfo(); loadModelManager(); loadSettings(); startLiveGauges(); loadLogViewer(); loadDiskMonitor(); loadStartupState(); loadOllamaHost(); }
+    if (tab.dataset.tab === 'settings') { loadSystemInfo(); loadModelManager(); loadSettings(); startLiveGauges(); loadLogViewer(); loadDiskMonitor(); loadStartupState(); loadOllamaHost(); updateLastBackup(); }
     if (tab.dataset.tab === 'kiwix-library') { loadZimList(); loadZimCatalog(); loadZimDownloads(); loadPDFList(); }
     if (tab.dataset.tab === 'maps') { loadMaps(); loadWPDistances(); loadMapSources(); }
     if (tab.dataset.tab === 'benchmark') { loadBenchHistory(); loadBuilderTag(); }
@@ -4679,7 +4705,10 @@ function renderMarkdown(text) {
     return '<ol>' + items + '</ol>';
   });
   // Links
-  h = h.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>');
+  h = h.replace(/\[(.+?)\]\((.+?)\)/g, (m, text, url) => {
+    if (/^javascript:/i.test(url.trim()) || /^data:/i.test(url.trim()) || /^vbscript:/i.test(url.trim())) return text;
+    return `<a href="${url}">${text}</a>`;
+  });
   // Paragraphs
   h = h.replace(/\n\n/g, '</p><p>');
   h = h.replace(/\n/g, '<br>');
@@ -4714,7 +4743,6 @@ async function loadServices() {
     const services = await (await fetch('/api/services')).json();
     _lastServicesData = services;
     _servicesLoaded = true;
-    const grid = document.getElementById('services-grid');
     grid.innerHTML = services.map(s => {
       const info = SVC[s.id] || { name:s.id, desc:'' };
       const prog = s.progress || {};
@@ -4734,7 +4762,7 @@ async function loadServices() {
         actions = `<button class="btn btn-sm btn-primary" onclick="installService('${s.id}')">Install</button>`;
       } else if (s.running) {
         actions = `
-          ${s.port ? `<button class="btn btn-sm btn-open-svc" onclick="openAppFrame('${escapeAttr(info.name)}','http://localhost:${s.port}')">Open</button>` : ''}
+          ${s.port ? (s.id === 'ollama' ? `<button class="btn btn-sm btn-open-svc" onclick="document.querySelector('[data-tab=\\'ai-chat\\']').click()">Open AI Chat</button>` : `<button class="btn btn-sm btn-open-svc" onclick="openAppFrame('${escapeAttr(info.name)}','http://localhost:${s.port}')">Open</button>`) : ''}
           <button class="btn btn-sm btn-danger" onclick="stopService('${s.id}')">Stop</button>
           <button class="btn btn-sm" onclick="restartService('${s.id}')">Restart</button>
           <button class="btn btn-sm btn-ghost btn-danger" onclick="uninstallService('${s.id}')">Uninstall</button>
@@ -4756,7 +4784,7 @@ async function loadServices() {
 
       let errorHtml = '';
       if (prog.status === 'error' && prog.error) {
-        errorHtml = `<div class="svc-error">${escapeHtml(prog.error)} <a onclick="installService('${s.id}')">Retry</a></div>`;
+        errorHtml = `<div class="svc-error">${escapeHtml(prog.error)} <button class="btn btn-sm" onclick="installService('${s.id}')" style="margin-left:6px;">Retry</button></div>`;
       }
 
       let prereqHtml = '';
@@ -4795,7 +4823,13 @@ async function loadServices() {
     const anyInstalled = services.some(s => s.installed);
     const welcomeEl = document.getElementById('welcome-banner');
     if (welcomeEl) welcomeEl.style.display = anyInstalled ? 'none' : 'block';
-  } catch(e) { console.error('loadServices', e); }
+  } catch(e) {
+    console.error('loadServices', e);
+    if (!_servicesLoaded) {
+      const grid = document.getElementById('services-grid');
+      grid.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px;grid-column:1/-1;">Failed to load services. <button class="btn btn-sm" onclick="loadServices()">Retry</button></div>';
+    }
+  }
 }
 
 let _busyServices = new Set();
@@ -4805,10 +4839,13 @@ async function installService(id) {
   try {
     const p = await (await fetch(`/api/services/${id}/prereqs`)).json();
     if (!p.met) { toast(p.message || `Prerequisites not met for ${SVC[id]?.name||id}`, 'error'); return; }
-  } catch(e) {}
-  await fetch(`/api/services/${id}/install`, {method:'POST'});
-  toast(`Installing ${SVC[id]?.name||id}...`, 'info');
-  pollServices();
+    if (p.message) toast(p.message, 'info');
+  } catch(e) { toast('Failed to check prerequisites', 'warning'); }
+  try {
+    await fetch(`/api/services/${id}/install`, {method:'POST'});
+    toast(`Installing ${SVC[id]?.name||id}...`, 'info');
+    pollServices();
+  } catch(e) { toast(`Failed to install ${SVC[id]?.name||id}`, 'error'); }
 }
 async function startService(id) {
   _busyServices.add(id); loadServices();
@@ -4875,7 +4912,9 @@ async function loadModels() {
     } else {
       sel.innerHTML = models.map(m => `<option value="${m.name}">${m.name} (${(m.size/1e9).toFixed(1)}GB)</option>`).join('');
     }
-  } catch(e) {}
+  } catch(e) {
+    document.getElementById('model-select').innerHTML = '<option value="">Failed to load models</option>';
+  }
 }
 
 /* managePullModel replaced by inline model picker */
@@ -4912,7 +4951,7 @@ function renderConvoList() {
     return;
   }
   el.innerHTML = allConvos.map(c => `
-    <div class="convo-item ${c.id===currentConvoId?'active':''}" onclick="selectConvo(${c.id})">
+    <div class="convo-item ${c.id===currentConvoId?'active':''}" data-convo-id="${c.id}" onclick="selectConvo(${c.id})" ondblclick="event.stopPropagation();renameConvo(${c.id})">
       <span class="convo-title">${escapeHtml(c.title)}</span>
       <span class="convo-actions">
         <span onclick="event.stopPropagation();renameConvo(${c.id})" title="Rename">r</span>
@@ -4944,6 +4983,16 @@ async function deleteConvo(id) {
   await loadConversations();
 }
 async function deleteAllConvos() {
+  if (!allConvos.length) return;
+  // Two-click safety: first click shows warning, second confirms
+  const btn = document.querySelector('.convo-sidebar-footer .btn-danger');
+  if (btn && !btn.dataset.confirm) {
+    btn.dataset.confirm = '1';
+    btn.textContent = 'Click again to confirm';
+    btn.style.background = 'var(--red)'; btn.style.color = '#fff';
+    setTimeout(() => { btn.textContent = 'Delete All'; btn.style.background = ''; btn.style.color = ''; delete btn.dataset.confirm; }, 3000);
+    return;
+  }
   await fetch('/api/conversations/all', {method:'DELETE'});
   currentConvoId = null; chatMessages = []; allConvos = [];
   renderChat(); renderConvoList();
@@ -4951,7 +5000,7 @@ async function deleteAllConvos() {
 }
 function renameConvo(id) {
   const c = allConvos.find(x => x.id === id);
-  const item = document.querySelector(`.convo-item[onclick*="selectConvo(${id})"]`);
+  const item = document.querySelector(`.convo-item[data-convo-id="${id}"]`);
   if (!item) return;
   const titleEl = item.querySelector('.convo-title');
   const oldTitle = c?.title || 'Chat';
@@ -4963,7 +5012,9 @@ function renameConvo(id) {
 async function finishRename(id, inp) {
   const name = inp.value.trim();
   if (name) {
-    await fetch(`/api/conversations/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title: name})});
+    try {
+      await fetch(`/api/conversations/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title: name})});
+    } catch(e) { toast('Rename failed', 'error'); }
   }
   await loadConversations();
 }
@@ -5016,12 +5067,16 @@ async function sendChat() {
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
     let full = '';
+    let streamBuf = '';
     const msgs = document.getElementById('chat-messages');
     let lastMsgEl = null;
     while (true) {
       const {done, value} = await reader.read();
       if (done) break;
-      for (const line of dec.decode(value).split('\n')) {
+      streamBuf += dec.decode(value, {stream: true});
+      const lines = streamBuf.split('\n');
+      streamBuf = lines.pop(); // keep incomplete last line in buffer
+      for (const line of lines) {
         if (!line.trim()) continue;
         try {
           const d = JSON.parse(line);
@@ -5102,6 +5157,13 @@ function renderChat() {
   }
   c.innerHTML = `<div class="empty-state" id="chat-empty" style="display:none"><div class="icon">${aiName}</div><p>Start a conversation</p></div>` + html;
   c.scrollTop = c.scrollHeight;
+  // Update chat stats
+  const stats = document.getElementById('chat-stats');
+  if (stats && chatMessages.length) {
+    const totalChars = chatMessages.reduce((s, m) => s + (m.content?.length || 0), 0);
+    const approxTokens = Math.round(totalChars / 4);
+    stats.textContent = `${chatMessages.length} msgs | ~${approxTokens.toLocaleString()} tokens`;
+  } else if (stats) { stats.textContent = ''; }
 }
 
 /* ─── Kiwix Library (Tiered Catalog) ─── */
@@ -5162,18 +5224,25 @@ function renderTierItems(items) {
   `).join('');
 }
 
+let _cachedCatalog = null;
 function switchTier(ci, tier, btn) {
   btn.parentElement.querySelectorAll('.tier-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  fetch('/api/kiwix/catalog').then(r=>r.json()).then(catalog => {
+  const render = catalog => {
+    _cachedCatalog = catalog;
     const items = catalog[ci]?.tiers?.[tier] || [];
     document.getElementById(`cat-items-${ci}`).innerHTML = renderTierItems(items);
-  });
+  };
+  if (_cachedCatalog) { render(_cachedCatalog); return; }
+  fetch('/api/kiwix/catalog').then(r=>r.json()).then(render);
 }
 
 async function downloadZim(url, filename) {
-  await fetch('/api/kiwix/download-zim', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url, filename}) });
-  toast(`Downloading ${filename}...`, 'info');
+  try {
+    const r = await fetch('/api/kiwix/download-zim', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url, filename}) });
+    if (!r.ok) { const d = await r.json().catch(()=>({})); toast(d.error || 'Download failed', 'error'); return; }
+    toast(`Downloading ${filename}...`, 'info');
+  } catch(e) { toast('Failed to start download', 'error'); return; }
   startZimQueuePoll();
 }
 
@@ -5253,10 +5322,18 @@ async function loadMaps() {
   }
 }
 
-async function deleteMap(filename) {
-  await fetch('/api/maps/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({filename})});
-  toast('Deleted');
-  loadMaps();
+function deleteMap(filename, btn) {
+  if (!btn) btn = event.target;
+  if (!btn.dataset.confirm) {
+    btn.dataset.confirm = '1';
+    const orig = btn.textContent;
+    btn.textContent = 'Confirm delete?';
+    btn.style.background = 'var(--red)'; btn.style.color = '#fff';
+    setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.style.color = ''; delete btn.dataset.confirm; }, 3000);
+    return;
+  }
+  fetch('/api/maps/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({filename})})
+    .then(() => { toast('Map deleted', 'warning'); loadMaps(); });
 }
 
 async function downloadMapRegion(regionId) {
@@ -5429,6 +5506,11 @@ async function createNote() {
   await loadNotes();
   selectNote(n.id);
 }
+function exportCurrentNote() {
+  if (!currentNoteId) { toast('No note selected', 'warning'); return; }
+  window.location = `/api/notes/${currentNoteId}/export`;
+}
+
 async function deleteNote() {
   if (!currentNoteId) return;
   await fetch(`/api/notes/${currentNoteId}`, {method:'DELETE'});
@@ -5505,17 +5587,35 @@ function showBenchResults(r) {
 }
 
 async function loadBenchHistory() {
-  const history = await (await fetch('/api/benchmark/history')).json();
-  const el = document.getElementById('bench-history');
-  if (!history.length) { el.innerHTML = '<span style="color:var(--text-dim);font-size:12px;">No benchmarks run yet.</span>'; return; }
-  el.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse;">
-    <tr style="color:var(--text-dim);text-align:left;"><th style="padding:4px 8px;">Date</th><th>Score</th><th>CPU</th><th>Mem</th><th>Disk R</th><th>Disk W</th><th>AI tok/s</th></tr>
-    ${history.map(h => `<tr style="border-top:1px solid var(--border);">
-      <td style="padding:4px 8px;">${new Date(h.created_at).toLocaleDateString()}</td>
-      <td><strong style="color:var(--accent);">${h.nomad_score}</strong></td>
-      <td>${h.cpu_score}</td><td>${h.memory_score}</td><td>${h.disk_read_score}</td><td>${h.disk_write_score}</td><td>${h.ai_tps}</td>
-    </tr>`).join('')}
-  </table>`;
+  try {
+    const history = await (await fetch('/api/benchmark/history')).json();
+    const el = document.getElementById('bench-history');
+    if (!history.length) { el.innerHTML = '<span style="color:var(--text-dim);font-size:12px;">No benchmarks run yet.</span>'; return; }
+    function delta(curr, prev) {
+      if (!prev || curr == null || prev == null) return '';
+      const d = curr - prev;
+      if (d === 0) return '';
+      const color = d > 0 ? 'var(--green)' : 'var(--red)';
+      return ` <span style="font-size:9px;color:${color};">${d > 0 ? '+' : ''}${d.toFixed ? d.toFixed(1) : d}</span>`;
+    }
+    el.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse;">
+      <tr style="color:var(--text-dim);text-align:left;"><th style="padding:4px 8px;">Date</th><th>Score</th><th>CPU</th><th>Mem</th><th>Disk R</th><th>Disk W</th><th>AI tok/s</th></tr>
+      ${history.map((h, i) => {
+        const prev = history[i + 1]; // previous run (older)
+        return `<tr style="border-top:1px solid var(--border);">
+          <td style="padding:4px 8px;">${new Date(h.created_at).toLocaleDateString()}</td>
+          <td><strong style="color:var(--accent);">${h.nomad_score}</strong>${delta(h.nomad_score, prev?.nomad_score)}</td>
+          <td>${h.cpu_score}${delta(h.cpu_score, prev?.cpu_score)}</td>
+          <td>${h.memory_score}${delta(h.memory_score, prev?.memory_score)}</td>
+          <td>${h.disk_read_score}${delta(h.disk_read_score, prev?.disk_read_score)}</td>
+          <td>${h.disk_write_score}${delta(h.disk_write_score, prev?.disk_write_score)}</td>
+          <td>${h.ai_tps}${delta(h.ai_tps, prev?.ai_tps)}</td>
+        </tr>`;
+      }).join('')}
+    </table>`;
+  } catch(e) {
+    document.getElementById('bench-history').innerHTML = '<span style="color:var(--text-dim);font-size:12px;">Failed to load history</span>';
+  }
 }
 
 /* ─── Settings ─── */
@@ -5623,7 +5723,10 @@ function startLiveGauges() {
         updateGauge(gauges[1], l.ram_percent);
         updateGauge(gauges[2], l.swap_percent);
       }
-    } catch(e) {}
+    } catch(e) {
+      const vals = document.querySelectorAll('#system-gauges .gauge-card .gauge-value');
+      vals.forEach(g => { if (!g.textContent.endsWith('?')) g.textContent += ' ?'; });
+    }
   }, 3000);
 }
 
@@ -5656,11 +5759,21 @@ async function loadModelManager() {
   `).join('');
 }
 
-async function deleteModel(name) {
-  await fetch('/api/ai/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({model:name})});
-  toast(`Deleted ${name}`);
-  loadModelManager();
-  loadModels();
+function deleteModel(name, btn) {
+  if (!btn) btn = event.target;
+  if (!btn.dataset.confirm) {
+    btn.dataset.confirm = '1';
+    btn.textContent = 'Confirm?';
+    btn.style.background = 'var(--red)'; btn.style.color = '#fff';
+    setTimeout(() => { btn.textContent = 'Delete'; btn.style.background = ''; btn.style.color = ''; delete btn.dataset.confirm; }, 3000);
+    return;
+  }
+  fetch('/api/ai/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({model:name})})
+    .then(r => r.json()).then(d => {
+      if (d.error) { toast(`Failed to delete: ${d.error}`, 'error'); return; }
+      toast(`Deleted ${name}`, 'warning');
+      loadModelManager(); loadModels();
+    }).catch(() => toast('Delete failed', 'error'));
 }
 
 async function pullFromSettings(name) {
@@ -6029,7 +6142,7 @@ function pollKBEmbed() {
 
 async function deleteKBDoc(id) {
   await fetch(`/api/kb/documents/${id}`, {method:'DELETE'});
-  toast('Document deleted');
+  toast('Document deleted', 'warning');
   loadKBDocs();
 }
 
@@ -6062,13 +6175,28 @@ function initMap() {
     maplibregl.addProtocol('pmtiles', protocol.tile);
   }
 
+  // Offline-first dark basemap — no CDN dependency
+  const offlineStyle = {
+    version: 8,
+    name: 'NOMAD Dark',
+    sources: {},
+    layers: [{id:'background', type:'background', paint:{'background-color':'#1a1a2e'}}],
+    glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
+  };
+
   _map = new maplibregl.Map({
     container: 'map-container',
-    style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+    style: offlineStyle,
     center: [-98.5, 39.8],
     zoom: 4,
     attributionControl: true,
   });
+
+  // Try to load CARTO style for online richer basemap, fall back silently
+  fetch('https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json', {signal: AbortSignal.timeout(3000)})
+    .then(r => r.json())
+    .then(style => { if (_map) _map.setStyle(style); })
+    .catch(() => {}); // offline — keep the dark background
 
   _map.addControl(new maplibregl.NavigationControl(), 'top-right');
   _map.addControl(new maplibregl.FullscreenControl(), 'top-right');
@@ -6159,6 +6287,21 @@ function haversineKm(a, b) {
 async function searchMap() {
   const q = document.getElementById('map-search-input').value.trim();
   if (!q || !_map) return;
+  // Check if input is coordinates (lat,lng or lat lng)
+  const coordMatch = q.match(/^(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)$/);
+  if (coordMatch) {
+    const lat = parseFloat(coordMatch[1]);
+    const lng = parseFloat(coordMatch[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      _map.flyTo({center: [lng, lat], zoom: 14});
+      new maplibregl.Marker({color: 'var(--accent)'}).setLngLat([lng, lat])
+        .setPopup(new maplibregl.Popup().setText(`${lat.toFixed(5)}, ${lng.toFixed(5)}`))
+        .addTo(_map).togglePopup();
+      toast(`Navigated to ${lat.toFixed(5)}, ${lng.toFixed(5)}`, 'success');
+      return;
+    }
+  }
+  // Online geocoding search
   try {
     const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`);
     const results = await r.json();
@@ -6169,7 +6312,7 @@ async function searchMap() {
         .setPopup(new maplibregl.Popup().setText(display_name))
         .addTo(_map).togglePopup();
     } else { toast('Location not found', 'warning'); }
-  } catch(e) { toast('Location search requires internet. Pan the map manually or enter coordinates.', 'warning'); }
+  } catch(e) { toast('Location search requires internet. Enter coordinates (lat,lng) for offline navigation.', 'warning'); }
 }
 
 /* ─── Notes Preview ─── */
@@ -6283,7 +6426,7 @@ function filterConvos() {
   const el = document.getElementById('convo-list');
   if (!filtered.length) { el.innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:11px;text-align:center;">No matches</div>'; return; }
   el.innerHTML = filtered.map(c => `
-    <div class="convo-item ${c.id===currentConvoId?'active':''}" onclick="selectConvo(${c.id})">
+    <div class="convo-item ${c.id===currentConvoId?'active':''}" data-convo-id="${c.id}" onclick="selectConvo(${c.id})" ondblclick="event.stopPropagation();renameConvo(${c.id})">
       <span class="convo-title">${escapeHtml(c.title)}</span>
       <span class="convo-actions">
         <span onclick="event.stopPropagation();renameConvo(${c.id})" title="Rename">r</span>
@@ -6318,7 +6461,7 @@ async function doUnifiedSearch() {
       el.innerHTML = '<div style="padding:12px;text-align:center;color:var(--text-muted);font-size:12px;">No results</div>';
     } else {
       el.innerHTML = items.map(i => `
-        <div class="search-result-item" onclick="openSearchResult('${i.type}',${i.id})">
+        <div class="search-result-item" onmousedown="event.preventDefault()" onclick="openSearchResult('${i.type}',${i.id})">
           <span>${escapeHtml(i.title)}</span>
           <span class="search-result-type ${i.type}">${i.type}</span>
         </div>
@@ -6344,8 +6487,8 @@ function openSearchResult(type, id) {
     document.querySelector('[data-tab="notes"]').click();
     setTimeout(() => { loadNotes().then(() => selectNote(id)); }, 200);
   } else if (type === 'document') {
-    document.querySelector('[data-tab="ai-chat"]').click();
-    setTimeout(() => { document.getElementById('kb-toggle').checked = true; toggleKB(); }, 200);
+    document.querySelector('[data-tab="kiwix-library"]').click();
+    setTimeout(() => { loadPDFList(); toast('Document found in library', 'info'); }, 200);
   } else if (type === 'inventory') {
     document.querySelector('[data-tab="preparedness"]').click();
     setTimeout(() => switchPrepSub('inventory'), 200);
@@ -6373,7 +6516,9 @@ async function loadContentSummary() {
       <div class="cs-stat"><div class="cs-val">${s.conversations}</div><div class="cs-label">Conversations</div></div>
       <div class="cs-stat"><div class="cs-val">${s.notes}</div><div class="cs-label">Notes</div></div>
     `;
-  } catch(e) {}
+  } catch(e) {
+    document.getElementById('content-summary').innerHTML = '<div class="cs-label" style="padding:4px;">Content summary unavailable</div>';
+  }
 }
 
 /* ─── Log Viewer ─── */
@@ -6455,7 +6600,9 @@ async function loadReadiness() {
       const label = allRunning ? 'Ready' : allInstalled ? 'Stopped' : 'Not Installed';
       return `<div class="readiness-pill ${cls}"><span class="rdot"></span>${c.label}: ${label}</div>`;
     }).join('');
-  } catch(e) {}
+  } catch(e) {
+    document.getElementById('readiness-bar').innerHTML = '';
+  }
 }
 
 /* ─── Activity Feed ─── */
@@ -6477,7 +6624,9 @@ async function loadActivity() {
         ${a.detail ? `<span class="activity-detail">${escapeHtml(a.detail)}</span>` : ''}
       </div>`;
     }).join('');
-  } catch(e) {}
+  } catch(e) {
+    document.getElementById('activity-feed').innerHTML = '<span style="color:var(--text-muted);">Activity unavailable</span>';
+  }
 }
 
 /* ─── Update Checker ─── */
@@ -6511,6 +6660,30 @@ async function toggleStartup() {
 function exportConfig() {
   window.location='/api/export-config';
   toast('Config exported');
+}
+function doFullBackup() {
+  window.location='/api/export-all';
+  localStorage.setItem('nomad-last-backup', new Date().toISOString());
+  updateLastBackup();
+  toast('Backup downloaded', 'success');
+}
+function doExportConfig() {
+  exportConfig();
+  localStorage.setItem('nomad-last-backup', new Date().toISOString());
+  updateLastBackup();
+}
+function updateLastBackup() {
+  const el = document.getElementById('last-backup-time');
+  if (!el) return;
+  const ts = localStorage.getItem('nomad-last-backup');
+  if (ts) {
+    const d = new Date(ts);
+    const ago = Math.round((Date.now() - d.getTime()) / (1000*60*60*24));
+    const color = ago > 30 ? 'var(--red)' : ago > 7 ? 'var(--orange)' : 'var(--green)';
+    el.innerHTML = `Last: ${d.toLocaleDateString()} <span style="color:${color};">(${ago === 0 ? 'today' : ago + 'd ago'})</span>`;
+  } else {
+    el.innerHTML = '<span style="color:var(--orange);">Never backed up</span>';
+  }
 }
 
 async function importConfig() {
@@ -6546,9 +6719,18 @@ function closeAppFrame() {
   document.getElementById('app-frame-overlay').style.display = 'none';
   document.getElementById('app-frame-iframe').src = 'about:blank';
 }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('app-frame-overlay').style.display === 'flex') {
+    closeAppFrame();
+  }
+});
 
 function printAppFrame() {
-  document.getElementById('app-frame-iframe').contentWindow.print();
+  try {
+    document.getElementById('app-frame-iframe').contentWindow.print();
+  } catch(e) {
+    toast('Cannot print this content — try opening it in a new browser tab instead', 'warning');
+  }
 }
 
 /* ─── Prep Sub-Tab Navigation ─── */
@@ -6603,13 +6785,15 @@ async function loadChecklists() {
     }
     el.innerHTML = lists.map(c => {
       const pct = c.item_count > 0 ? Math.round(c.checked_count / c.item_count * 100) : 0;
-      return `<div class="prep-item ${c.id === _currentChecklistId ? 'active' : ''}" onclick="selectChecklist(${c.id})">
+      return `<div class="prep-item ${c.id === _currentChecklistId ? 'active' : ''}" data-cl-id="${c.id}" onclick="selectChecklist(${c.id})">
         <span class="prep-item-name">${escapeHtml(c.name)}</span>
         <span class="prep-progress">${pct}%</span>
         <span class="prep-del" onclick="event.stopPropagation();deleteChecklist(${c.id})" title="Delete">x</span>
       </div>`;
     }).join('');
-  } catch(e) {}
+  } catch(e) {
+    document.getElementById('prep-list').innerHTML = '<div style="padding:10px;color:var(--red);font-size:11px;text-align:center;">Failed to load checklists</div>';
+  }
 }
 
 async function createChecklist(template) {
@@ -6634,7 +6818,7 @@ async function selectChecklist(id) {
     renderChecklist();
     // Update sidebar active state
     document.querySelectorAll('.prep-item').forEach(el => {
-      el.classList.toggle('active', el.onclick.toString().includes(id));
+      el.classList.toggle('active', el.dataset.clId == id);
     });
     await loadChecklists();
   } catch(e) { toast('Failed to load checklist', 'error'); }
@@ -6683,7 +6867,7 @@ async function toggleCheckItem(idx) {
 
 async function deleteChecklist(id) {
   await fetch(`/api/checklists/${id}`, {method: 'DELETE'});
-  toast('Checklist deleted');
+  toast('Checklist deleted', 'warning');
   if (_currentChecklistId === id) {
     _currentChecklistId = null;
     _currentChecklistItems = [];
@@ -6742,6 +6926,7 @@ function calcPower() {
 }
 
 /* ─── Inventory ─── */
+let _cachedInvItems = [];
 async function loadInventory() {
   const cat = document.getElementById('inv-cat-filter').value;
   const q = document.getElementById('inv-search').value.trim();
@@ -6750,6 +6935,7 @@ async function loadInventory() {
   if (q) url += `q=${encodeURIComponent(q)}&`;
   try {
     const items = await (await fetch(url)).json();
+    _cachedInvItems = items;
     const tbody = document.getElementById('inv-tbody');
     if (!items.length) {
       tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:20px;">No items found.</td></tr>';
@@ -6792,7 +6978,9 @@ async function loadInventory() {
       const cats = await (await fetch('/api/inventory/categories')).json();
       cats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
     }
-  } catch(e) {}
+  } catch(e) {
+    document.getElementById('inv-tbody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red);padding:20px;">Failed to load inventory</td></tr>';
+  }
 }
 
 function showInvForm(item) {
@@ -6853,15 +7041,14 @@ async function saveInvItem() {
   loadInventory();
 }
 
-async function editInvItem(id) {
-  const items = await (await fetch('/api/inventory')).json();
-  const item = items.find(i => i.id === id);
+function editInvItem(id) {
+  const item = _cachedInvItems.find(i => i.id === id);
   if (item) showInvForm(item);
 }
 
 async function deleteInvItem(id) {
   await fetch(`/api/inventory/${id}`, {method:'DELETE'});
-  toast('Item deleted');
+  toast('Item deleted', 'warning');
   loadInventory();
 }
 
@@ -6898,7 +7085,9 @@ async function loadContacts() {
         </div>
       </div>`;
     }).join('');
-  } catch(e) {}
+  } catch(e) {
+    document.getElementById('contacts-grid').innerHTML = '<div style="text-align:center;color:var(--red);padding:20px;font-size:12px;grid-column:1/-1;">Failed to load contacts</div>';
+  }
 }
 
 function showContactForm(contact) {
@@ -6950,7 +7139,7 @@ async function editContact(id) {
 
 async function deleteContact(id) {
   await fetch(`/api/contacts/${id}`, {method:'DELETE'});
-  toast('Contact deleted');
+  toast('Contact deleted', 'warning');
   loadContacts();
 }
 
@@ -7211,10 +7400,12 @@ function cycleSitLevel(cell) {
   saveSitBoard();
 }
 
-function saveSitBoard() {
+async function saveSitBoard() {
   const levels = {};
   document.querySelectorAll('.sit-cell').forEach(c => levels[c.dataset.domain] = c.dataset.level);
-  fetch('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sit_board: JSON.stringify(levels)})});
+  try {
+    await fetch('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sit_board: JSON.stringify(levels)})});
+  } catch(e) { toast('Failed to save situation board', 'error'); }
 }
 
 async function loadSitBoard() {
@@ -7254,7 +7445,9 @@ async function loadIncidents() {
         <span class="incident-del" onclick="deleteIncident(${i.id})">x</span>
       </div>`;
     }).join('');
-  } catch(e) {}
+  } catch(e) {
+    document.getElementById('incidents-list').innerHTML = '<div style="text-align:center;color:var(--red);padding:20px;font-size:12px;">Failed to load incidents</div>';
+  }
 }
 
 async function logIncident() {
@@ -7322,6 +7515,20 @@ function toggleProtocol(header) {
   header.classList.toggle('open');
   const body = header.nextElementSibling;
   body.classList.toggle('open');
+}
+function toggleAllProtocols(expand) {
+  document.querySelectorAll('#psub-protocols .protocol-header').forEach(h => {
+    const body = h.nextElementSibling;
+    if (expand) { h.classList.add('open'); body.classList.add('open'); }
+    else { h.classList.remove('open'); body.classList.remove('open'); }
+  });
+}
+function filterProtocols() {
+  const q = document.getElementById('proto-search').value.toLowerCase();
+  document.querySelectorAll('#psub-protocols .protocol-card').forEach(card => {
+    const text = card.textContent.toLowerCase();
+    card.style.display = !q || text.includes(q) ? '' : 'none';
+  });
 }
 
 function printWalletCard() {
@@ -7457,7 +7664,7 @@ async function loadWaypoints() {
            <span style="text-transform:uppercase;font-size:10px;color:#888;">${w.category}</span>
            ${w.notes ? '<br>' + escapeHtml(w.notes) : ''}
            <br><span style="font-size:10px;color:#999;">${w.lat.toFixed(5)}, ${w.lng.toFixed(5)}</span>
-           <br><a href="#" onclick="deleteWaypoint(${w.id});return false;" style="color:red;font-size:10px;">Delete</a></div>`
+           <br><button onclick="deleteWaypoint(${w.id})" style="color:var(--red);font-size:10px;background:none;border:none;cursor:pointer;padding:0;">Delete</button></div>`
         ))
         .addTo(_map);
       window._waypointMarkers.push(marker);
@@ -7465,23 +7672,46 @@ async function loadWaypoints() {
   } catch(e) {}
 }
 
-async function saveWaypoint() {
+function saveWaypoint() {
   if (!_map) return;
+  // Show inline waypoint form
+  let panel = document.getElementById('waypoint-form-panel');
+  if (panel) { panel.remove(); return; }
   const center = _map.getCenter();
-  const name = prompt('Waypoint name:');
-  if (!name) return;
-  const cats = ['rally','water','cache','shelter','hazard','medical','comms','general'];
-  const cat = prompt('Category (' + cats.join(', ') + '):', 'general') || 'general';
-  const notes = prompt('Notes (optional):') || '';
+  panel = document.createElement('div');
+  panel.id = 'waypoint-form-panel';
+  panel.style.cssText = 'position:absolute;top:10px;right:10px;z-index:5;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);width:260px;';
+  panel.innerHTML = `
+    <div style="font-size:12px;font-weight:600;margin-bottom:8px;">Save Waypoint at ${center.lat.toFixed(5)}, ${center.lng.toFixed(5)}</div>
+    <input id="wp-name" placeholder="Waypoint name..." style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;margin-bottom:6px;">
+    <select id="wp-cat" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;margin-bottom:6px;">
+      <option value="general">General</option><option value="rally">Rally</option><option value="water">Water</option>
+      <option value="cache">Cache</option><option value="shelter">Shelter</option><option value="hazard">Hazard</option>
+      <option value="medical">Medical</option><option value="comms">Comms</option>
+    </select>
+    <input id="wp-notes" placeholder="Notes (optional)" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;margin-bottom:8px;">
+    <div style="display:flex;gap:6px;">
+      <button class="btn btn-sm btn-primary" onclick="submitWaypoint(${center.lat},${center.lng})">Save</button>
+      <button class="btn btn-sm" onclick="document.getElementById('waypoint-form-panel').remove()">Cancel</button>
+    </div>`;
+  document.getElementById('map-viewer').appendChild(panel);
+  document.getElementById('wp-name').focus();
+}
+async function submitWaypoint(lat, lng) {
+  const name = document.getElementById('wp-name').value.trim();
+  if (!name) { toast('Enter a waypoint name', 'warning'); return; }
+  const cat = document.getElementById('wp-cat').value;
+  const notes = document.getElementById('wp-notes').value.trim();
   await fetch('/api/waypoints', {method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({name, lat: center.lat, lng: center.lng, category: cat, notes})});
+    body:JSON.stringify({name, lat, lng, category: cat, notes})});
   toast(`Waypoint "${name}" saved`, 'success');
+  document.getElementById('waypoint-form-panel').remove();
   loadWaypoints();
 }
 
 async function deleteWaypoint(id) {
   await fetch(`/api/waypoints/${id}`, {method:'DELETE'});
-  toast('Waypoint deleted');
+  toast('Waypoint deleted', 'warning');
   loadWaypoints();
 }
 
@@ -7519,6 +7749,7 @@ function cycleThreat(idx, type) {
   const current = saved[key] || 'low';
   saved[key] = THREAT_LEVELS[(THREAT_LEVELS.indexOf(current) + 1) % THREAT_LEVELS.length];
   localStorage.setItem('nomad-threats', JSON.stringify(saved));
+  fetch('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({threat_matrix: JSON.stringify(saved)})});
   loadThreatMatrix();
 }
 
@@ -7555,12 +7786,14 @@ function copyAAR() {
 
 /* ─── Full Print Card (client-side with localStorage data) ─── */
 async function printFullCard() {
-  // Fetch server data
-  const [contacts, summary, trend] = await Promise.all([
-    fetch('/api/contacts').then(r=>r.json()),
-    fetch('/api/inventory/summary').then(r=>r.json()),
-    fetch('/api/weather/trend').then(r=>r.json()).catch(()=>({})),
-  ]);
+  let contacts = [], summary = {categories:[]}, trend = {};
+  try {
+    [contacts, summary, trend] = await Promise.all([
+      fetch('/api/contacts').then(r=>r.json()).catch(()=>[]),
+      fetch('/api/inventory/summary').then(r=>r.json()).catch(()=>({categories:[]})),
+      fetch('/api/weather/trend').then(r=>r.json()).catch(()=>({})),
+    ]);
+  } catch(e) { toast('Failed to load data for print card', 'error'); return; }
   // Get localStorage data
   const pace = JSON.parse(localStorage.getItem('nomad-pace-plan') || '{}');
   const fep = JSON.parse(localStorage.getItem('nomad-fep') || '{}');
@@ -7844,13 +8077,17 @@ function cycleInfra(key) {
 
 /* ─── Vehicle Readiness ─── */
 let _vehicles = JSON.parse(localStorage.getItem('nomad-vehicles') || '[]');
+function _syncVehicles() {
+  localStorage.setItem('nomad-vehicles', JSON.stringify(_vehicles));
+  fetch('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({vehicles: JSON.stringify(_vehicles)})});
+}
 
 function addVehicle() {
   const name = document.getElementById('veh-name').value.trim();
   const fuel = parseInt(document.getElementById('veh-fuel').value) || 0;
-  if (!name) return;
+  if (!name) { toast('Enter a vehicle name', 'warning'); return; }
   _vehicles.push({name, fuel, status: 'ready', id: Date.now()});
-  localStorage.setItem('nomad-vehicles', JSON.stringify(_vehicles));
+  _syncVehicles();
   document.getElementById('veh-name').value = '';
   renderVehicles();
 }
@@ -7858,17 +8095,17 @@ function addVehicle() {
 function cycleVehicleStatus(id) {
   const statuses = ['ready','needs-maintenance','disabled'];
   const v = _vehicles.find(v => v.id === id);
-  if (v) { v.status = statuses[(statuses.indexOf(v.status) + 1) % statuses.length]; localStorage.setItem('nomad-vehicles', JSON.stringify(_vehicles)); renderVehicles(); }
+  if (v) { v.status = statuses[(statuses.indexOf(v.status) + 1) % statuses.length]; _syncVehicles(); renderVehicles(); }
 }
 
 function updateVehicleFuel(id, fuel) {
   const v = _vehicles.find(v => v.id === id);
-  if (v) { v.fuel = parseInt(fuel); localStorage.setItem('nomad-vehicles', JSON.stringify(_vehicles)); }
+  if (v) { v.fuel = parseInt(fuel); _syncVehicles(); }
 }
 
 function deleteVehicle(id) {
   _vehicles = _vehicles.filter(v => v.id !== id);
-  localStorage.setItem('nomad-vehicles', JSON.stringify(_vehicles));
+  _syncVehicles();
   renderVehicles();
 }
 
@@ -8077,7 +8314,8 @@ let _calLogDate = new Date().toISOString().slice(0,10);
 function addCalEntry() {
   const item = document.getElementById('cal-item').value.trim();
   const amount = parseInt(document.getElementById('cal-amount').value) || 0;
-  if (!item || !amount) return;
+  if (!item) { toast('Enter a food item', 'warning'); return; }
+  if (!amount) { toast('Enter calorie amount', 'warning'); return; }
   const today = new Date().toISOString().slice(0,10);
   if (today !== _calLogDate) { _calLog = []; _calLogDate = today; }
   _calLog.push({item, cal: amount, time: new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})});
@@ -8146,6 +8384,7 @@ async function loadSkillsMatrix() {
 }
 
 /* ─── PACE Plan ─── */
+let _paceSaveTimer;
 function savePace() {
   const pace = {};
   ['p','a','c','e'].forEach(l => {
@@ -8154,11 +8393,26 @@ function savePace() {
     });
   });
   localStorage.setItem('nomad-pace-plan', JSON.stringify(pace));
+  // Debounced server-side persist for backup
+  clearTimeout(_paceSaveTimer);
+  _paceSaveTimer = setTimeout(() => {
+    fetch('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pace_plan: JSON.stringify(pace)})});
+  }, 1000);
 }
 
-function loadPace() {
+async function loadPace() {
   try {
-    const pace = JSON.parse(localStorage.getItem('nomad-pace-plan') || '{}');
+    // Try localStorage first (fast), then server (backup source)
+    let pace = JSON.parse(localStorage.getItem('nomad-pace-plan') || '{}');
+    if (!Object.keys(pace).length) {
+      try {
+        const settings = await (await fetch('/api/settings')).json();
+        if (settings.pace_plan) {
+          pace = JSON.parse(settings.pace_plan);
+          localStorage.setItem('nomad-pace-plan', JSON.stringify(pace));
+        }
+      } catch(e) {}
+    }
     ['p','a','c','e'].forEach(l => {
       ['method','detail','when'].forEach(f => {
         const el = document.getElementById(`pace-${l}-${f}`);
@@ -8171,9 +8425,12 @@ function loadPace() {
 /* ─── Command Dashboard ─── */
 async function loadCmdDashboard() {
   try {
-    const d = await (await fetch('/api/dashboard/overview')).json();
+    const [d, crit] = await Promise.all([
+      fetch('/api/dashboard/overview').then(r => r.json()),
+      fetch('/api/dashboard/critical').then(r => r.json()).catch(() => ({critical_burn:[], expiring_items:[]}))
+    ]);
     const el = document.getElementById('cmd-dashboard');
-    const sitLabels = {green:'GOOD',yellow:'CAUTION',orange:'CONCERN',red:'CRITICAL'};
+    const sitLabels = {green:'ALL CLEAR',yellow:'CAUTION',orange:'CONCERN',red:'CRITICAL'};
     const sitColors = {green:'var(--green)',yellow:'#c8a800',orange:'var(--orange)',red:'var(--red)'};
     // Find worst situation
     let worstSit = 'green';
@@ -8181,12 +8438,11 @@ async function loadCmdDashboard() {
     for (const [domain, level] of Object.entries(d.situation || {})) {
       if (sitOrder.indexOf(level) > sitOrder.indexOf(worstSit)) worstSit = level;
     }
-    const hasSit = Object.keys(d.situation || {}).length > 0;
     el.innerHTML = `
-      ${hasSit ? `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;text-align:center;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;text-align:center;">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim);font-weight:600;">Status</div>
         <div style="font-size:16px;font-weight:700;color:${sitColors[worstSit]};margin:2px 0;">${sitLabels[worstSit]}</div>
-      </div>` : ''}
+      </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;text-align:center;">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim);font-weight:600;">Timers</div>
         <div style="font-size:16px;font-weight:700;color:${d.timers > 0 ? 'var(--accent)' : 'var(--text-muted)'};margin:2px 0;">${d.timers}</div>
@@ -8208,14 +8464,11 @@ async function loadCmdDashboard() {
         <div style="font-size:16px;font-weight:700;color:var(--text);margin:2px 0;">${d.pressure_current}</div>
       </div>` : ''}
     `;
-    // Load critical details
-    try {
-      const crit = await (await fetch('/api/dashboard/critical')).json();
-      let critHtml = '';
-      if (crit.critical_burn.length) critHtml += `<div style="font-size:11px;color:var(--red);margin-top:4px;">Running low: ${crit.critical_burn.map(i => `${i.name} (${i.days_left}d)`).join(', ')}</div>`;
-      if (crit.expiring_items.length) critHtml += `<div style="font-size:11px;color:var(--orange);margin-top:2px;">Expiring: ${crit.expiring_items.map(i => `${i.name} (${i.expiration})`).join(', ')}</div>`;
-      if (critHtml) el.innerHTML += `<div style="grid-column:1/-1;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);">${critHtml}</div>`;
-    } catch(e2) {}
+    // Append critical alerts from parallel fetch
+    let critHtml = '';
+    if (crit.critical_burn.length) critHtml += `<div style="font-size:11px;color:var(--red);margin-top:4px;">Running low: ${crit.critical_burn.map(i => `${i.name} (${i.days_left}d)`).join(', ')}</div>`;
+    if (crit.expiring_items.length) critHtml += `<div style="font-size:11px;color:var(--orange);margin-top:2px;">Expiring: ${crit.expiring_items.map(i => `${i.name} (${i.expiration})`).join(', ')}</div>`;
+    if (critHtml) el.innerHTML += `<div style="grid-column:1/-1;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);">${critHtml}</div>`;
   } catch(e) {}
 }
 
@@ -8232,13 +8485,34 @@ async function unlockVault() {
   const pw = document.getElementById('vault-pw').value;
   if (!pw) { toast('Enter a password', 'warning'); return; }
   try {
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    _vaultKey = {key: await deriveVaultKey(pw, salt), password: pw};
+    // Verify password by trying to decrypt the verification entry if one exists
+    const entries = await (await fetch('/api/vault')).json();
+    const verifyEntry = entries.find(e => e.title === '__vault_verify__');
+    if (verifyEntry) {
+      try {
+        const e = await (await fetch(`/api/vault/${verifyEntry.id}`)).json();
+        const salt = Uint8Array.from(atob(e.salt), c => c.charCodeAt(0));
+        const iv = Uint8Array.from(atob(e.iv), c => c.charCodeAt(0));
+        const data = Uint8Array.from(atob(e.encrypted_data), c => c.charCodeAt(0));
+        const key = await deriveVaultKey(pw, salt);
+        await crypto.subtle.decrypt({name: 'AES-GCM', iv}, key, data);
+      } catch(decErr) {
+        toast('Wrong password', 'error');
+        return;
+      }
+    }
+    _vaultKey = {password: pw};
+    // Create verification entry on first unlock
+    if (!verifyEntry) {
+      const encrypted = await encryptVaultData('nomad-vault-v1');
+      await fetch('/api/vault', {method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({title: '__vault_verify__', ...encrypted})});
+    }
     document.getElementById('vault-locked').style.display = 'none';
     document.getElementById('vault-unlocked').style.display = 'block';
     loadVaultList();
     toast('Vault unlocked', 'success');
-  } catch(e) { toast('Failed to unlock', 'error'); }
+  } catch(e) { toast('Failed to unlock: ' + e.message, 'error'); }
 }
 
 function lockVault() {
@@ -8274,7 +8548,8 @@ async function decryptVaultData(encrypted_data, iv_b64, salt_b64) {
 
 async function loadVaultList() {
   try {
-    const entries = await (await fetch('/api/vault')).json();
+    const allEntries = await (await fetch('/api/vault')).json();
+    const entries = allEntries.filter(e => e.title !== '__vault_verify__');
     const el = document.getElementById('vault-list');
     if (!entries.length) { el.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px;font-size:12px;">No entries yet. Click "+ New Entry" to add encrypted documents.</div>'; return; }
     el.innerHTML = entries.map(e => `
@@ -8334,10 +8609,19 @@ async function viewVaultEntry(id) {
 
 async function editVaultEntry(id) { await viewVaultEntry(id); }
 
-async function deleteVaultEntry(id) {
-  await fetch(`/api/vault/${id}`, {method:'DELETE'});
-  toast('Entry deleted');
-  loadVaultList();
+function deleteVaultEntry(id, btn) {
+  if (!btn) { btn = event.target; }
+  if (!btn.dataset.confirm) {
+    btn.dataset.confirm = '1';
+    btn.textContent = 'Confirm?';
+    btn.style.background = 'var(--red)'; btn.style.color = '#fff';
+    setTimeout(() => { btn.textContent = 'Delete'; btn.style.background = ''; btn.style.color = ''; delete btn.dataset.confirm; }, 3000);
+    return;
+  }
+  fetch(`/api/vault/${id}`, {method:'DELETE'}).then(() => {
+    toast('Entry deleted', 'warning');
+    loadVaultList();
+  });
 }
 
 /* ─── Weather Journal ─── */
@@ -8351,6 +8635,7 @@ async function logWeather() {
     precip: document.getElementById('wx-precip').value,
     notes: document.getElementById('wx-notes').value.trim(),
   };
+  if (!data.pressure_hpa && !data.temp_f && !data.notes) { toast('Enter at least temperature, pressure, or notes', 'warning'); return; }
   await fetch('/api/weather', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
   toast('Weather observation logged', 'success');
   document.getElementById('wx-notes').value = '';
@@ -8596,7 +8881,7 @@ function playVideo(filename) {
 
 async function deleteVideo(id) {
   await fetch(`/api/videos/${id}`, {method:'DELETE'});
-  toast('Video deleted');
+  toast('Video deleted', 'warning');
   loadVideoList();
   document.getElementById('video-player').style.display = 'none';
 }
@@ -8673,28 +8958,57 @@ function startDrawZone() {
 
 function saveDrawnZone() {
   if (_zonePoints.length < 3) return;
-  const name = prompt('Zone name:') || 'Zone';
-  const color = prompt('Color (danger=red, safe=green, caution=yellow):', 'red');
+  let panel = document.getElementById('zone-form-panel');
+  if (panel) panel.remove();
+  panel = document.createElement('div');
+  panel.id = 'zone-form-panel';
+  panel.style.cssText = 'position:absolute;top:10px;right:10px;z-index:5;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);width:240px;';
+  panel.innerHTML = `
+    <div style="font-size:12px;font-weight:600;margin-bottom:8px;">Save Zone (${_zonePoints.length} points)</div>
+    <input id="zone-name" placeholder="Zone name..." value="Zone" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;margin-bottom:6px;">
+    <select id="zone-color" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;margin-bottom:8px;">
+      <option value="red">Danger (Red)</option><option value="green">Safe (Green)</option>
+      <option value="yellow">Caution (Yellow)</option><option value="blue">Info (Blue)</option>
+      <option value="orange">Warning (Orange)</option>
+    </select>
+    <div style="display:flex;gap:6px;">
+      <button class="btn btn-sm btn-primary" onclick="submitDrawnZone()">Save</button>
+      <button class="btn btn-sm" onclick="document.getElementById('zone-form-panel').remove();_zonePoints=[];">Cancel</button>
+    </div>`;
+  document.getElementById('map-viewer').appendChild(panel);
+  document.getElementById('zone-name').focus();
+}
+function submitDrawnZone() {
+  const name = document.getElementById('zone-name').value.trim() || 'Zone';
+  const colorKey = document.getElementById('zone-color').value;
   const colorMap = {red:'#f44336', green:'#4caf50', yellow:'#ffeb3b', blue:'#2196f3', orange:'#ff9800'};
-  const fillColor = colorMap[color] || color || '#f44336';
-  const coords = [..._zonePoints, _zonePoints[0]]; // Close polygon
+  const fillColor = colorMap[colorKey] || '#f44336';
+  const coords = [..._zonePoints, _zonePoints[0]];
   const geojson = {type:'Feature', geometry:{type:'Polygon', coordinates:[coords]}, properties:{name, color:fillColor}};
   const zones = JSON.parse(localStorage.getItem('nomad-map-zones') || '[]');
   zones.push(geojson);
   localStorage.setItem('nomad-map-zones', JSON.stringify(zones));
   renderMapZones();
   _zonePoints = [];
+  document.getElementById('zone-form-panel').remove();
   toast(`Zone "${name}" saved`, 'success');
 }
 
 function renderMapZones() {
   if (!_map) return;
+  // Remove ALL existing zone layers first (prevents ghost layers on deletion)
+  const style = _map.getStyle();
+  if (style && style.layers) {
+    style.layers.forEach(l => {
+      if (l.id.startsWith('zone-')) {
+        _map.removeLayer(l.id);
+        if (_map.getSource(l.id)) _map.removeSource(l.id);
+      }
+    });
+  }
   const zones = JSON.parse(localStorage.getItem('nomad-map-zones') || '[]');
-  // Remove existing zone layers
   zones.forEach((z, i) => {
     const id = `zone-${i}`;
-    if (_map.getLayer(id)) _map.removeLayer(id);
-    if (_map.getSource(id)) _map.removeSource(id);
     _map.addSource(id, {type:'geojson', data:z});
     _map.addLayer({id, type:'fill', source:id, paint:{'fill-color':z.properties.color || '#f44336','fill-opacity':0.2}});
   });
@@ -8809,6 +9123,16 @@ async function clearAuthPassword() {
 }
 
 /* ─── Host Power ─── */
+function confirmPower(btn, action) {
+  if (!btn.dataset.confirm) {
+    btn.dataset.confirm = '1';
+    btn.textContent = `Confirm ${action}?`;
+    btn.style.background = 'var(--red)'; btn.style.color = '#fff';
+    setTimeout(() => { btn.textContent = action.charAt(0).toUpperCase() + action.slice(1); btn.style.background = ''; btn.style.color = ''; delete btn.dataset.confirm; }, 3000);
+    return;
+  }
+  hostPower(action);
+}
 async function hostPower(action) {
   await fetch('/api/system/shutdown', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action})});
   toast(`${action} initiated — computer will ${action} in 5 seconds`, 'warning');
@@ -8845,7 +9169,7 @@ function viewPDF(filename) {
 function closePDFViewer() { document.getElementById('pdf-viewer').style.display = 'none'; document.getElementById('pdf-iframe').src = ''; }
 async function deletePDF(filename) {
   await fetch(`/api/library/delete/${filename}`, {method:'DELETE'});
-  toast('Document deleted');
+  toast('Document deleted', 'warning');
   loadPDFList();
   closePDFViewer();
 }
@@ -8989,6 +9313,7 @@ function checkNightMode() {
     setTheme(prev);
   }
 }
+checkNightMode();
 setInterval(checkNightMode, 60000);
 
 /* ─── Inventory Visualization ─── */
@@ -9047,31 +9372,67 @@ async function quickAddInvItem(item) {
 }
 
 /* ─── Custom Checklist Creator ─── */
-async function createCustomChecklist() {
-  const name = prompt('Checklist name:');
-  if (!name) return;
+function createCustomChecklist() {
+  // Show inline name input instead of prompt()
+  const sidebar = document.querySelector('.prep-sidebar');
+  let nameForm = document.getElementById('custom-cl-name-form');
+  if (nameForm) { document.getElementById('custom-cl-name-input').focus(); return; }
+  nameForm = document.createElement('div');
+  nameForm.id = 'custom-cl-name-form';
+  nameForm.style.cssText = 'padding:6px 8px;border-bottom:1px solid var(--border);display:flex;gap:4px;';
+  nameForm.innerHTML = `<input id="custom-cl-name-input" placeholder="Checklist name..." style="flex:1;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:6px;font-size:11px;outline:none;">
+    <button class="btn btn-sm btn-primary" onclick="submitCustomChecklist()">Create</button>`;
+  sidebar.querySelector('.prep-list').before(nameForm);
+  const inp = document.getElementById('custom-cl-name-input');
+  inp.focus();
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') submitCustomChecklist(); if (e.key === 'Escape') nameForm.remove(); });
+}
+async function submitCustomChecklist() {
+  const inp = document.getElementById('custom-cl-name-input');
+  const name = inp.value.trim();
+  if (!name) { toast('Enter a name', 'warning'); return; }
   const r = await (await fetch('/api/checklists', {method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({name, items:[]})})).json();
+  document.getElementById('custom-cl-name-form').remove();
   toast(`Created: ${name}`, 'success');
   _currentChecklistId = r.id;
   await loadChecklists();
   await selectChecklist(r.id);
-  // Show add-item prompt
   addChecklistItem();
 }
 
 function addChecklistItem() {
   if (!_currentChecklistId) return;
-  const text = prompt('Add item (or cancel when done):');
+  const checklist = document.getElementById('prep-checklist');
+  // Don't add multiple forms
+  if (document.getElementById('add-item-form')) { document.getElementById('add-item-text').focus(); return; }
+  const form = document.createElement('div');
+  form.id = 'add-item-form';
+  form.style.cssText = 'padding:8px 16px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:center;';
+  form.innerHTML = `
+    <input id="add-item-text" placeholder="Item name..." style="flex:1;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;">
+    <select id="add-item-cat" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 8px;border-radius:6px;font-size:11px;outline:none;">
+      <option value="general">general</option><option value="gear">gear</option><option value="food">food</option>
+      <option value="medical">medical</option><option value="tools">tools</option><option value="water">water</option>
+      <option value="comms">comms</option><option value="shelter">shelter</option>
+    </select>
+    <button class="btn btn-sm btn-primary" onclick="submitChecklistItem()">Add</button>
+    <button class="btn btn-sm" onclick="document.getElementById('add-item-form').remove()">Done</button>`;
+  checklist.parentElement.appendChild(form);
+  const inp = document.getElementById('add-item-text');
+  inp.focus();
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') submitChecklistItem(); if (e.key === 'Escape') form.remove(); });
+}
+function submitChecklistItem() {
+  const text = document.getElementById('add-item-text').value.trim();
   if (!text) return;
-  const cat = prompt('Category (e.g. gear, food, medical, tools):', 'general') || 'general';
+  const cat = document.getElementById('add-item-cat').value;
   _currentChecklistItems.push({text, checked: false, cat});
   renderChecklist();
-  // Save
   fetch(`/api/checklists/${_currentChecklistId}`, {method:'PUT', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({items: _currentChecklistItems})});
-  // Ask for more
-  addChecklistItem();
+  document.getElementById('add-item-text').value = '';
+  document.getElementById('add-item-text').focus();
 }
 
 /* ─── Emergency Alert Sounds ─── */
@@ -9122,7 +9483,7 @@ function showHelp() {
 
   <h2>Keyboard Shortcuts</h2>
   <table><tr><th>Shortcut</th><th>Action</th></tr>
-  <tr><td><kbd>Alt+1</kbd> - <kbd>Alt+8</kbd></td><td>Switch main tabs</td></tr>
+  <tr><td><kbd>Alt+1</kbd> - <kbd>Alt+9</kbd></td><td>Switch main tabs</td></tr>
   <tr><td><kbd>Alt+T</kbd></td><td>Toggle timer widget</td></tr>
   <tr><td><kbd>Alt+C</kbd></td><td>Toggle LAN chat</td></tr>
   <tr><td><kbd>Alt+N</kbd></td><td>New note</td></tr>
@@ -9158,8 +9519,12 @@ function saveAutoBackup() {
 function setupAutoBackup(interval) {
   if (_autoBackupTimer) { clearInterval(_autoBackupTimer); _autoBackupTimer = null; }
   if (interval > 0) {
-    _autoBackupTimer = setInterval(() => {
-      fetch('/api/export-config').then(() => {}); // Triggers server-side backup
+    _autoBackupTimer = setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const resp = await fetch('/api/export-config');
+        if (resp.ok) toast('Auto backup completed', 'info');
+      } catch(e) {}
     }, interval * 1000);
   }
 }
@@ -9218,7 +9583,9 @@ async function clearBroadcast() {
   document.getElementById('broadcast-banner').style.display = 'none';
 }
 
+let _dismissedBroadcastTs = null;
 function dismissBroadcast() {
+  _dismissedBroadcastTs = window._lastBroadcastTs;
   document.getElementById('broadcast-banner').style.display = 'none';
 }
 
@@ -9227,6 +9594,8 @@ async function pollBroadcast() {
     const b = await (await fetch('/api/broadcast')).json();
     const banner = document.getElementById('broadcast-banner');
     if (b.active && b.message) {
+      // Don't re-show a dismissed broadcast
+      if (_dismissedBroadcastTs === b.timestamp) return;
       const colors = {info:'var(--accent)',warning:'var(--orange)',critical:'var(--red)'};
       const bgs = {info:'var(--accent-dim)',warning:'var(--orange-dim)',critical:'var(--red-dim)'};
       banner.style.display = 'block';
@@ -9240,6 +9609,9 @@ async function pollBroadcast() {
         playAlertSound('broadcast');
         sendNotification('Emergency Broadcast', b.message);
       }
+    } else {
+      banner.style.display = 'none';
+      _dismissedBroadcastTs = null;
     }
   } catch(e) {}
 }
@@ -9591,19 +9963,18 @@ function generatePassword() {
   }
 }
 
-/* ─── QR Code Generator (using canvas) ─── */
+/* ─── Shareable Data Display ─── */
 function generateQR(text) {
-  // Simple QR-like data display — for actual QR, would need a library
-  // Instead, display as a compact, scannable text format with copy button
   const el = document.createElement('div');
   el.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:24px;z-index:10001;box-shadow:var(--shadow);max-width:400px;';
   el.innerHTML = `<h3 style="font-size:14px;margin-bottom:8px;">Shareable Data</h3>
-    <div style="background:#fff;color:#000;padding:16px;border-radius:8px;font-family:'Cascadia Code','Consolas',monospace;font-size:11px;word-break:break-all;margin-bottom:8px;">${escapeHtml(text)}</div>
+    <div style="background:#fff;color:#000;padding:16px;border-radius:8px;font-family:'Cascadia Code','Consolas',monospace;font-size:11px;word-break:break-all;margin-bottom:8px;user-select:all;">${escapeHtml(text)}</div>
     <div style="display:flex;gap:6px;">
-      <button class="btn btn-sm btn-primary" onclick="navigator.clipboard.writeText(${JSON.stringify(text)});toast('Copied','success')">Copy</button>
+      <button class="btn btn-sm btn-primary" id="qr-copy-btn">Copy</button>
       <button class="btn btn-sm" onclick="this.parentElement.parentElement.remove()">Close</button>
     </div>`;
   document.body.appendChild(el);
+  document.getElementById('qr-copy-btn').addEventListener('click', () => { navigator.clipboard.writeText(text).then(() => toast('Copied', 'success')); });
 }
 
 /* ─── Waypoint Distance Matrix UI ─── */
@@ -9636,9 +10007,10 @@ async function loadServiceQuickLinks() {
     const el = document.getElementById('svc-quicklinks');
     if (!running.length) { el.innerHTML = ''; return; }
     const names = {ollama:'AI Chat',kiwix:'Library',cyberchef:'CyberChef',kolibri:'Kolibri',stirling:'PDF Tools'};
-    el.innerHTML = running.filter(s => s.id !== 'qdrant').map(s =>
-      `<button class="btn btn-sm btn-open-svc" onclick="openAppFrame('${names[s.id]||s.id}','http://localhost:${s.port}')" style="font-size:10px;padding:3px 10px;">Open ${names[s.id]||s.id}</button>`
-    ).join('');
+    el.innerHTML = running.filter(s => s.id !== 'qdrant').map(s => {
+      if (s.id === 'ollama') return `<button class="btn btn-sm btn-open-svc" onclick="document.querySelector('[data-tab=\\'ai-chat\\']').click()" style="font-size:10px;padding:3px 10px;">Open AI Chat</button>`;
+      return `<button class="btn btn-sm btn-open-svc" onclick="openAppFrame('${names[s.id]||s.id}','http://localhost:${s.port}')" style="font-size:10px;padding:3px 10px;">Open ${names[s.id]||s.id}</button>`;
+    }).join('');
   } catch(e) {}
 }
 
@@ -9671,7 +10043,7 @@ document.addEventListener('keydown', (e) => {
   // Only if not typing in an input/textarea
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
   if (e.altKey) {
-    const shortcuts = {'1':'services','2':'ai-chat','3':'kiwix-library','4':'maps','5':'notes','6':'benchmark','7':'preparedness','8':'settings'};
+    const shortcuts = {'1':'services','2':'ai-chat','3':'kiwix-library','4':'maps','5':'notes','6':'tools','7':'preparedness','8':'benchmark','9':'settings'};
     const tab = shortcuts[e.key];
     if (tab) { e.preventDefault(); document.querySelector(`[data-tab="${tab}"]`).click(); }
     if (e.key === 't') { e.preventDefault(); toggleTimerPanel(); }
@@ -9688,14 +10060,36 @@ loadCmdChecklists();
 loadReadiness();
 loadActivity();
 loadContentSummary();
-setInterval(() => { loadServices(); loadReadiness(); loadCmdDashboard(); loadServiceQuickLinks(); }, 8000);
+let _svcPollTimer = setInterval(() => {
+  if (document.hidden) return;
+  const activeTab = document.querySelector('.tab.active');
+  if (activeTab && activeTab.dataset.tab === 'services') {
+    loadServices(); loadReadiness(); loadCmdDashboard(); loadServiceQuickLinks();
+  } else {
+    loadServices(); // lightweight status update for readiness indicators
+  }
+}, 8000);
 checkNetwork();
-setInterval(checkNetwork, 30000);
+setInterval(() => { if (!document.hidden) checkNetwork(); }, 30000);
 checkWizard();
 checkForUpdate();
 loadStartupState();
 pollBroadcast();
-setInterval(pollBroadcast, 5000);
+setInterval(() => { if (!document.hidden) pollBroadcast(); }, 5000);
+
+// Startup inventory alerts — notify about expired/low stock items
+setTimeout(async () => {
+  try {
+    const summary = await (await fetch('/api/inventory/summary')).json();
+    if (summary.expired > 0) {
+      toast(`${summary.expired} inventory item(s) have expired!`, 'error');
+      sendNotification('Inventory Alert', `${summary.expired} item(s) expired`);
+    }
+    if (summary.low_stock > 0) {
+      toast(`${summary.low_stock} inventory item(s) are low stock`, 'warning');
+    }
+  } catch(e) {}
+}, 3000);
 </script>
 </body>
 </html>
