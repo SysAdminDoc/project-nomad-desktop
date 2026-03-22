@@ -31,7 +31,7 @@ SERVICE_MODULES = {
     'stirling': stirling,
 }
 
-VERSION = '3.3.0'
+VERSION = '3.4.0'
 
 
 def set_version(v):
@@ -1108,31 +1108,172 @@ def create_app():
         return path
 
     MAP_REGIONS = [
-        # US Regions
-        {'id': 'us-pacific', 'name': 'US Pacific', 'states': 'AK, CA, HI, OR, WA'},
-        {'id': 'us-mountain', 'name': 'US Mountain', 'states': 'AZ, CO, ID, MT, NV, NM, UT, WY'},
-        {'id': 'us-west-north-central', 'name': 'US West North Central', 'states': 'IA, KS, MN, MO, NE, ND, SD'},
-        {'id': 'us-east-north-central', 'name': 'US East North Central', 'states': 'IL, IN, MI, OH, WI'},
-        {'id': 'us-west-south-central', 'name': 'US West South Central', 'states': 'AR, LA, OK, TX'},
-        {'id': 'us-east-south-central', 'name': 'US East South Central', 'states': 'AL, KY, MS, TN'},
-        {'id': 'us-south-atlantic', 'name': 'US South Atlantic', 'states': 'DE, FL, GA, MD, NC, SC, VA, DC, WV'},
-        {'id': 'us-middle-atlantic', 'name': 'US Middle Atlantic', 'states': 'NJ, NY, PA'},
-        {'id': 'us-new-england', 'name': 'US New England', 'states': 'CT, ME, MA, NH, RI, VT'},
+        # US Regions — bbox = [west, south, east, north]
+        {'id': 'us-pacific', 'name': 'US Pacific', 'states': 'AK, CA, HI, OR, WA', 'bbox': [-180, 18, -100, 72]},
+        {'id': 'us-mountain', 'name': 'US Mountain', 'states': 'AZ, CO, ID, MT, NV, NM, UT, WY', 'bbox': [-117, 31, -102, 49]},
+        {'id': 'us-west-north-central', 'name': 'US West North Central', 'states': 'IA, KS, MN, MO, NE, ND, SD', 'bbox': [-104.1, 36, -89.1, 49]},
+        {'id': 'us-east-north-central', 'name': 'US East North Central', 'states': 'IL, IN, MI, OH, WI', 'bbox': [-91.5, 36.9, -80.5, 48.3]},
+        {'id': 'us-west-south-central', 'name': 'US West South Central', 'states': 'AR, LA, OK, TX', 'bbox': [-106.7, 25.8, -88.8, 37]},
+        {'id': 'us-east-south-central', 'name': 'US East South Central', 'states': 'AL, KY, MS, TN', 'bbox': [-91.7, 30, -81.9, 39.2]},
+        {'id': 'us-south-atlantic', 'name': 'US South Atlantic', 'states': 'DE, FL, GA, MD, NC, SC, VA, DC, WV', 'bbox': [-84.4, 24.4, -75, 39.8]},
+        {'id': 'us-middle-atlantic', 'name': 'US Middle Atlantic', 'states': 'NJ, NY, PA', 'bbox': [-80.6, 38.8, -71.8, 45.1]},
+        {'id': 'us-new-england', 'name': 'US New England', 'states': 'CT, ME, MA, NH, RI, VT', 'bbox': [-73.8, 40.9, -66.9, 47.5]},
         # International Regions
-        {'id': 'eu-western', 'name': 'Western Europe', 'states': 'UK, France, Germany, Netherlands, Belgium'},
-        {'id': 'eu-eastern', 'name': 'Eastern Europe', 'states': 'Poland, Czech, Romania, Hungary, Ukraine'},
-        {'id': 'eu-southern', 'name': 'Southern Europe', 'states': 'Spain, Italy, Portugal, Greece, Turkey'},
-        {'id': 'eu-northern', 'name': 'Northern Europe', 'states': 'Sweden, Norway, Finland, Denmark, Iceland'},
-        {'id': 'canada', 'name': 'Canada', 'states': 'All provinces and territories'},
-        {'id': 'mexico-central', 'name': 'Mexico & Central America', 'states': 'Mexico, Guatemala, Belize, Honduras'},
-        {'id': 'south-america', 'name': 'South America', 'states': 'Brazil, Argentina, Colombia, Chile, Peru'},
-        {'id': 'east-asia', 'name': 'East Asia', 'states': 'Japan, South Korea, Taiwan'},
-        {'id': 'southeast-asia', 'name': 'Southeast Asia', 'states': 'Philippines, Thailand, Vietnam, Indonesia'},
-        {'id': 'oceania', 'name': 'Australia & New Zealand', 'states': 'Australia, New Zealand, Pacific Islands'},
-        {'id': 'middle-east', 'name': 'Middle East', 'states': 'Israel, Jordan, UAE, Saudi Arabia, Iraq'},
-        {'id': 'africa-north', 'name': 'North Africa', 'states': 'Egypt, Morocco, Tunisia, Libya, Algeria'},
-        {'id': 'africa-sub', 'name': 'Sub-Saharan Africa', 'states': 'South Africa, Kenya, Nigeria, Ethiopia'},
+        {'id': 'eu-western', 'name': 'Western Europe', 'states': 'UK, France, Germany, Netherlands, Belgium', 'bbox': [-11, 42, 15, 61]},
+        {'id': 'eu-eastern', 'name': 'Eastern Europe', 'states': 'Poland, Czech, Romania, Hungary, Ukraine', 'bbox': [14, 43, 41, 55]},
+        {'id': 'eu-southern', 'name': 'Southern Europe', 'states': 'Spain, Italy, Portugal, Greece, Turkey', 'bbox': [-10, 34, 45, 48]},
+        {'id': 'eu-northern', 'name': 'Northern Europe', 'states': 'Sweden, Norway, Finland, Denmark, Iceland', 'bbox': [-25, 54, 32, 72]},
+        {'id': 'canada', 'name': 'Canada', 'states': 'All provinces and territories', 'bbox': [-141, 41.7, -52, 84]},
+        {'id': 'mexico-central', 'name': 'Mexico & Central America', 'states': 'Mexico, Guatemala, Belize, Honduras', 'bbox': [-118, 13, -82, 33]},
+        {'id': 'south-america', 'name': 'South America', 'states': 'Brazil, Argentina, Colombia, Chile, Peru', 'bbox': [-82, -56, -34, 13]},
+        {'id': 'east-asia', 'name': 'East Asia', 'states': 'Japan, South Korea, Taiwan', 'bbox': [120, 20, 154, 46]},
+        {'id': 'southeast-asia', 'name': 'Southeast Asia', 'states': 'Philippines, Thailand, Vietnam, Indonesia', 'bbox': [92, -11, 141, 29]},
+        {'id': 'oceania', 'name': 'Australia & New Zealand', 'states': 'Australia, New Zealand, Pacific Islands', 'bbox': [110, -48, 180, -9]},
+        {'id': 'middle-east', 'name': 'Middle East', 'states': 'Israel, Jordan, UAE, Saudi Arabia, Iraq', 'bbox': [25, 12, 60, 42]},
+        {'id': 'africa-north', 'name': 'North Africa', 'states': 'Egypt, Morocco, Tunisia, Libya, Algeria', 'bbox': [-18, 15, 37, 38]},
+        {'id': 'africa-sub', 'name': 'Sub-Saharan Africa', 'states': 'South Africa, Kenya, Nigeria, Ethiopia', 'bbox': [-18, -35, 52, 15]},
     ]
+
+    # ─── Alternative Map Sources ─────────────────────────────────────
+    # Sources that can be downloaded for offline map usage
+    MAP_SOURCES = [
+        # === PMTiles (native format — works directly with MapLibre viewer) ===
+        {'id': 'protomaps-planet', 'name': 'Protomaps World Basemap', 'category': 'PMTiles',
+         'url': 'https://build.protomaps.com/', 'format': 'pmtiles', 'est_size': '~80 GB',
+         'desc': 'Full planet vector tiles. Daily builds. The definitive offline map source.'},
+        {'id': 'openfreemap-planet', 'name': 'OpenFreeMap Planet', 'category': 'PMTiles',
+         'url': 'https://openfreemap.com/', 'format': 'pmtiles', 'est_size': '~80 GB',
+         'desc': 'Free, open-source planet tiles. Self-hostable.'},
+        {'id': 'overture-maps', 'name': 'Overture Maps', 'category': 'PMTiles',
+         'url': 'https://overturemaps.org/download/', 'format': 'pmtiles', 'est_size': 'Varies',
+         'desc': 'Open map data from Meta, Microsoft, AWS, TomTom. Buildings, places, roads.'},
+        {'id': 'source-coop', 'name': 'Source Cooperative Maps', 'category': 'PMTiles',
+         'url': 'https://source.coop/', 'format': 'pmtiles', 'est_size': 'Varies',
+         'desc': 'Community-hosted geospatial datasets in PMTiles and other formats.'},
+        {'id': 'protomaps-basemap-demo', 'name': 'Protomaps Basemap (Demo Tile)', 'category': 'PMTiles',
+         'url': 'https://build.protomaps.com/20230408.pmtiles', 'format': 'pmtiles', 'est_size': '~70 GB',
+         'desc': 'Archived daily build — stable URL for testing/downloading.', 'direct': True},
+
+        # === OSM Extracts (PBF — need conversion to PMTiles via tilemaker or planetiler) ===
+        {'id': 'geofabrik-na', 'name': 'Geofabrik: North America', 'category': 'OSM Extracts',
+         'url': 'https://download.geofabrik.de/north-america-latest.osm.pbf', 'format': 'pbf', 'est_size': '~13 GB',
+         'desc': 'Full North America OSM data. Requires conversion to PMTiles.', 'direct': True},
+        {'id': 'geofabrik-us', 'name': 'Geofabrik: United States', 'category': 'OSM Extracts',
+         'url': 'https://download.geofabrik.de/north-america/us-latest.osm.pbf', 'format': 'pbf', 'est_size': '~9 GB',
+         'desc': 'Complete US OSM data. Updated daily.', 'direct': True},
+        {'id': 'geofabrik-europe', 'name': 'Geofabrik: Europe', 'category': 'OSM Extracts',
+         'url': 'https://download.geofabrik.de/europe-latest.osm.pbf', 'format': 'pbf', 'est_size': '~28 GB',
+         'desc': 'Full Europe OSM data. Very detailed.', 'direct': True},
+        {'id': 'geofabrik-asia', 'name': 'Geofabrik: Asia', 'category': 'OSM Extracts',
+         'url': 'https://download.geofabrik.de/asia-latest.osm.pbf', 'format': 'pbf', 'est_size': '~12 GB',
+         'desc': 'Full Asia OSM data.', 'direct': True},
+        {'id': 'geofabrik-africa', 'name': 'Geofabrik: Africa', 'category': 'OSM Extracts',
+         'url': 'https://download.geofabrik.de/africa-latest.osm.pbf', 'format': 'pbf', 'est_size': '~6 GB',
+         'desc': 'Full Africa OSM data.', 'direct': True},
+        {'id': 'geofabrik-sa', 'name': 'Geofabrik: South America', 'category': 'OSM Extracts',
+         'url': 'https://download.geofabrik.de/south-america-latest.osm.pbf', 'format': 'pbf', 'est_size': '~3 GB',
+         'desc': 'Full South America OSM data.', 'direct': True},
+        {'id': 'geofabrik-oceania', 'name': 'Geofabrik: Australia & Oceania', 'category': 'OSM Extracts',
+         'url': 'https://download.geofabrik.de/australia-oceania-latest.osm.pbf', 'format': 'pbf', 'est_size': '~1 GB',
+         'desc': 'Australia, NZ, Pacific Islands OSM data.', 'direct': True},
+        {'id': 'geofabrik-ca', 'name': 'Geofabrik: Central America', 'category': 'OSM Extracts',
+         'url': 'https://download.geofabrik.de/central-america-latest.osm.pbf', 'format': 'pbf', 'est_size': '~600 MB',
+         'desc': 'Central America and Caribbean OSM data.', 'direct': True},
+        {'id': 'geofabrik-russia', 'name': 'Geofabrik: Russia', 'category': 'OSM Extracts',
+         'url': 'https://download.geofabrik.de/russia-latest.osm.pbf', 'format': 'pbf', 'est_size': '~3 GB',
+         'desc': 'Full Russia OSM data.', 'direct': True},
+        {'id': 'geofabrik-canada', 'name': 'Geofabrik: Canada', 'category': 'OSM Extracts',
+         'url': 'https://download.geofabrik.de/north-america/canada-latest.osm.pbf', 'format': 'pbf', 'est_size': '~3 GB',
+         'desc': 'Complete Canada OSM data.', 'direct': True},
+        {'id': 'geofabrik-planet', 'name': 'Geofabrik: Full Planet', 'category': 'OSM Extracts',
+         'url': 'https://planet.openstreetmap.org/pbf/planet-latest.osm.pbf', 'format': 'pbf', 'est_size': '~70 GB',
+         'desc': 'Complete OpenStreetMap planet data. Official source.', 'direct': True},
+
+        # === Geofabrik US States ===
+        {'id': 'geofabrik-us-california', 'name': 'Geofabrik: California', 'category': 'US States (OSM)',
+         'url': 'https://download.geofabrik.de/north-america/us/california-latest.osm.pbf', 'format': 'pbf', 'est_size': '~1 GB',
+         'desc': 'California OSM data.', 'direct': True},
+        {'id': 'geofabrik-us-texas', 'name': 'Geofabrik: Texas', 'category': 'US States (OSM)',
+         'url': 'https://download.geofabrik.de/north-america/us/texas-latest.osm.pbf', 'format': 'pbf', 'est_size': '~700 MB',
+         'desc': 'Texas OSM data.', 'direct': True},
+        {'id': 'geofabrik-us-florida', 'name': 'Geofabrik: Florida', 'category': 'US States (OSM)',
+         'url': 'https://download.geofabrik.de/north-america/us/florida-latest.osm.pbf', 'format': 'pbf', 'est_size': '~400 MB',
+         'desc': 'Florida OSM data.', 'direct': True},
+        {'id': 'geofabrik-us-newyork', 'name': 'Geofabrik: New York', 'category': 'US States (OSM)',
+         'url': 'https://download.geofabrik.de/north-america/us/new-york-latest.osm.pbf', 'format': 'pbf', 'est_size': '~400 MB',
+         'desc': 'New York OSM data.', 'direct': True},
+        {'id': 'geofabrik-us-pennsylvania', 'name': 'Geofabrik: Pennsylvania', 'category': 'US States (OSM)',
+         'url': 'https://download.geofabrik.de/north-america/us/pennsylvania-latest.osm.pbf', 'format': 'pbf', 'est_size': '~350 MB',
+         'desc': 'Pennsylvania OSM data.', 'direct': True},
+
+        # === Topographic / Elevation Data ===
+        {'id': 'usgs-national-map', 'name': 'USGS National Map', 'category': 'Topographic',
+         'url': 'https://apps.nationalmap.gov/downloader/', 'format': 'various',
+         'est_size': 'Varies', 'desc': 'US topographic maps, elevation, hydrography, boundaries.'},
+        {'id': 'opentopo', 'name': 'OpenTopography', 'category': 'Topographic',
+         'url': 'https://opentopography.org/', 'format': 'various',
+         'est_size': 'Varies', 'desc': 'High-res topography data. LiDAR, DEMs, point clouds.'},
+        {'id': 'viewfinderpanoramas', 'name': 'Viewfinder Panoramas DEMs', 'category': 'Topographic',
+         'url': 'http://viewfinderpanoramas.org/dem3.html', 'format': 'hgt',
+         'est_size': 'Varies', 'desc': '3 arc-second DEMs for the entire world. Great for terrain.'},
+        {'id': 'srtm', 'name': 'SRTM Elevation (NASA)', 'category': 'Topographic',
+         'url': 'https://dwtkns.com/srtm30m/', 'format': 'hgt',
+         'est_size': 'Varies', 'desc': '30m resolution elevation data. Free with EarthData login.'},
+
+        # === Natural Earth (small, low-detail reference maps) ===
+        {'id': 'natural-earth-110m', 'name': 'Natural Earth 1:110m', 'category': 'Reference Maps',
+         'url': 'https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries.zip', 'format': 'shp', 'est_size': '~800 KB',
+         'desc': 'World country boundaries. Very small, great for overview maps.', 'direct': True},
+        {'id': 'natural-earth-50m', 'name': 'Natural Earth 1:50m', 'category': 'Reference Maps',
+         'url': 'https://naciscdn.org/naturalearth/50m/cultural/ne_50m_admin_0_countries.zip', 'format': 'shp', 'est_size': '~5 MB',
+         'desc': 'Medium-detail world boundaries and features.', 'direct': True},
+        {'id': 'natural-earth-10m', 'name': 'Natural Earth 1:10m (Full)', 'category': 'Reference Maps',
+         'url': 'https://naciscdn.org/naturalearth/packages/natural_earth_vector.gpkg.zip', 'format': 'gpkg', 'est_size': '~240 MB',
+         'desc': 'Highest detail Natural Earth data in single GeoPackage.', 'direct': True},
+
+        # === Humanitarian / Emergency Maps ===
+        {'id': 'hot-export', 'name': 'HOT Export Tool', 'category': 'Humanitarian',
+         'url': 'https://export.hotosm.org/', 'format': 'various',
+         'est_size': 'Varies', 'desc': 'Humanitarian OpenStreetMap Team. Custom area exports for disaster response.'},
+        {'id': 'hdx', 'name': 'Humanitarian Data Exchange', 'category': 'Humanitarian',
+         'url': 'https://data.humdata.org/', 'format': 'various',
+         'est_size': 'Varies', 'desc': 'UN OCHA humanitarian datasets. Population, infrastructure, health facilities.'},
+        {'id': 'fieldpapers', 'name': 'Field Papers', 'category': 'Humanitarian',
+         'url': 'http://fieldpapers.org/', 'format': 'pdf',
+         'est_size': 'Varies', 'desc': 'Printable map atlases for field surveys. Works completely offline.'},
+
+        # === BBBike City Extracts ===
+        {'id': 'bbbike', 'name': 'BBBike Extracts (200+ Cities)', 'category': 'City Extracts',
+         'url': 'https://extract.bbbike.org/', 'format': 'various',
+         'est_size': 'Varies', 'desc': 'Custom city/area extracts in PBF, GeoJSON, Shapefile, etc.'},
+        {'id': 'bbbike-download', 'name': 'BBBike Pre-built Cities', 'category': 'City Extracts',
+         'url': 'https://download.bbbike.org/osm/bbbike/', 'format': 'pbf',
+         'est_size': 'Varies', 'desc': 'Pre-built extracts for 200+ world cities. Updated weekly.'},
+
+        # === Nautical / Aviation ===
+        {'id': 'noaa-charts', 'name': 'NOAA Nautical Charts', 'category': 'Specialty',
+         'url': 'https://charts.noaa.gov/ChartCatalog/MapSelect.html', 'format': 'pdf/bsb',
+         'est_size': 'Varies', 'desc': 'US coastal and inland waterway navigation charts.'},
+        {'id': 'faa-sectionals', 'name': 'FAA Sectional Charts', 'category': 'Specialty',
+         'url': 'https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/vfr/', 'format': 'pdf/tiff',
+         'est_size': 'Varies', 'desc': 'US VFR sectional aeronautical charts.'},
+
+        # === Weather / Climate ===
+        {'id': 'worldclim', 'name': 'WorldClim Climate Data', 'category': 'Climate',
+         'url': 'https://www.worldclim.org/data/worldclim21.html', 'format': 'tiff',
+         'est_size': 'Varies', 'desc': 'Global climate data: temperature, precipitation, bioclimatic variables.'},
+
+        # === Satellite Imagery ===
+        {'id': 'sentinel2', 'name': 'Sentinel-2 Satellite (ESA)', 'category': 'Satellite',
+         'url': 'https://browser.dataspace.copernicus.eu/', 'format': 'jp2/tiff',
+         'est_size': 'Varies', 'desc': 'Free 10m resolution satellite imagery. Updated every 5 days.'},
+        {'id': 'landsat', 'name': 'Landsat (USGS)', 'category': 'Satellite',
+         'url': 'https://earthexplorer.usgs.gov/', 'format': 'tiff',
+         'est_size': 'Varies', 'desc': 'Free 30m satellite imagery with 50+ year archive.'},
+    ]
+
+    # Map download state tracking
+    _map_downloads = {}  # {region_id: {'progress': 0-100, 'status': str, 'error': str|None}}
 
     @app.route('/api/maps/regions')
     def api_maps_regions():
@@ -1150,9 +1291,10 @@ def create_app():
     @app.route('/api/maps/files')
     def api_maps_files():
         maps_dir = get_maps_dir()
+        MAP_EXTENSIONS = ('.pmtiles', '.pbf', '.osm', '.geojson', '.gpkg', '.mbtiles', '.shp', '.tiff', '.hgt')
         files = []
         for f in os.listdir(maps_dir):
-            if f.endswith('.pmtiles'):
+            if any(f.endswith(ext) for ext in MAP_EXTENSIONS):
                 fp = os.path.join(maps_dir, f)
                 files.append({'filename': f, 'size': format_size(os.path.getsize(fp))})
         return jsonify(files)
@@ -1204,6 +1346,201 @@ def create_app():
         with open(safe_path, 'rb') as f:
             data = f.read()
         return Response(data, mimetype='application/octet-stream')
+
+    @app.route('/api/maps/sources')
+    def api_maps_sources():
+        return jsonify(MAP_SOURCES)
+
+    @app.route('/api/maps/download-progress')
+    def api_maps_download_progress():
+        return jsonify(_map_downloads)
+
+    def _get_pmtiles_cli():
+        """Get path to pmtiles CLI, auto-downloading if needed."""
+        services_dir = get_services_dir()
+        pmtiles_dir = os.path.join(services_dir, 'pmtiles')
+        os.makedirs(pmtiles_dir, exist_ok=True)
+        exe = os.path.join(pmtiles_dir, 'pmtiles.exe')
+        if os.path.isfile(exe):
+            return exe
+        # Download from GitHub releases
+        import urllib.request, zipfile, io
+        url = 'https://github.com/protomaps/go-pmtiles/releases/latest/download/go-pmtiles_Windows_x86_64.zip'
+        log.info('Downloading pmtiles CLI from %s', url)
+        req = urllib.request.Request(url, headers={'User-Agent': 'ProjectNOMAD/3.4.0'})
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = resp.read()
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            for name in zf.namelist():
+                if name.endswith('pmtiles.exe') or name.endswith('pmtiles'):
+                    extracted = zf.extract(name, pmtiles_dir)
+                    # Move to expected location if in subdirectory
+                    if extracted != exe:
+                        shutil.move(extracted, exe)
+                    break
+        if os.path.isfile(exe):
+            log.info('pmtiles CLI installed at %s', exe)
+            return exe
+        return None
+
+    def _download_map_region_thread(region_id, bbox, maps_dir):
+        """Background thread: extract a region from Protomaps planet using pmtiles CLI."""
+        _map_downloads[region_id] = {'progress': 0, 'status': 'Preparing...', 'error': None}
+        try:
+            # Get or install pmtiles CLI
+            _map_downloads[region_id]['status'] = 'Installing pmtiles tool...'
+            _map_downloads[region_id]['progress'] = 5
+            pmtiles_exe = _get_pmtiles_cli()
+            if not pmtiles_exe:
+                _map_downloads[region_id] = {'progress': 0, 'status': 'Error', 'error': 'Failed to download pmtiles CLI'}
+                return
+
+            output_file = os.path.join(maps_dir, f'{region_id}.pmtiles')
+            temp_file = output_file + '.tmp'
+
+            # Use latest Protomaps daily build
+            import datetime
+            today = datetime.date.today().strftime('%Y%m%d')
+            source_url = f'https://build.protomaps.com/{today}.pmtiles'
+
+            bbox_str = f'{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}'
+
+            _map_downloads[region_id]['status'] = f'Extracting region (bbox: {bbox_str})...'
+            _map_downloads[region_id]['progress'] = 10
+
+            # Run pmtiles extract with bbox
+            CREATE_NO_WINDOW = 0x08000000
+            cmd = [pmtiles_exe, 'extract', source_url, temp_file, f'--bbox={bbox_str}', '--maxzoom=12']
+            log.info('Running: %s', ' '.join(cmd))
+
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    creationflags=CREATE_NO_WINDOW, text=True)
+
+            # Monitor progress from output
+            lines = []
+            for line in proc.stdout:
+                lines.append(line.strip())
+                # pmtiles extract outputs progress info
+                if '%' in line:
+                    try:
+                        pct = int(float(line.split('%')[0].split()[-1]))
+                        _map_downloads[region_id]['progress'] = min(10 + int(pct * 0.85), 95)
+                    except (ValueError, IndexError):
+                        pass
+                _map_downloads[region_id]['status'] = f'Downloading tiles... {line.strip()}'
+
+            proc.wait()
+
+            if proc.returncode != 0:
+                err = '\n'.join(lines[-5:]) if lines else 'Unknown error'
+                _map_downloads[region_id] = {'progress': 0, 'status': 'Error', 'error': f'pmtiles extract failed: {err}'}
+                if os.path.isfile(temp_file):
+                    os.remove(temp_file)
+                return
+
+            # Rename temp to final
+            if os.path.isfile(temp_file):
+                if os.path.isfile(output_file):
+                    os.remove(output_file)
+                os.rename(temp_file, output_file)
+                size = format_size(os.path.getsize(output_file))
+                _map_downloads[region_id] = {'progress': 100, 'status': f'Complete ({size})', 'error': None}
+                log.info('Map region %s downloaded: %s', region_id, size)
+            else:
+                _map_downloads[region_id] = {'progress': 0, 'status': 'Error', 'error': 'No output file produced'}
+
+        except Exception as e:
+            log.exception('Map download error for %s', region_id)
+            _map_downloads[region_id] = {'progress': 0, 'status': 'Error', 'error': str(e)}
+
+    @app.route('/api/maps/download-region', methods=['POST'])
+    def api_maps_download_region():
+        data = request.get_json() or {}
+        region_id = data.get('region_id')
+        if not region_id:
+            return jsonify({'error': 'Missing region_id'}), 400
+
+        # Check if already downloading
+        if region_id in _map_downloads and _map_downloads[region_id].get('progress', 0) > 0 \
+                and _map_downloads[region_id].get('progress', 0) < 100:
+            return jsonify({'error': 'Already downloading'}), 409
+
+        # Find region
+        region = next((r for r in MAP_REGIONS if r['id'] == region_id), None)
+        if not region:
+            return jsonify({'error': 'Unknown region'}), 404
+
+        maps_dir = get_maps_dir()
+        bbox = region.get('bbox')
+        if not bbox:
+            return jsonify({'error': 'Region has no bounding box defined'}), 400
+
+        t = threading.Thread(target=_download_map_region_thread, args=(region_id, bbox, maps_dir), daemon=True)
+        t.start()
+        return jsonify({'status': 'started', 'region_id': region_id})
+
+    @app.route('/api/maps/download-url', methods=['POST'])
+    def api_maps_download_url():
+        """Download a map file from a direct URL."""
+        data = request.get_json() or {}
+        url = data.get('url', '').strip()
+        filename = data.get('filename', '').strip()
+        if not url:
+            return jsonify({'error': 'Missing url'}), 400
+        if not filename:
+            filename = url.rstrip('/').split('/')[-1]
+        if '..' in filename or '/' in filename or '\\' in filename:
+            return jsonify({'error': 'Invalid filename'}), 400
+
+        dl_id = f'url-{filename}'
+        if dl_id in _map_downloads and _map_downloads[dl_id].get('progress', 0) > 0 \
+                and _map_downloads[dl_id].get('progress', 0) < 100:
+            return jsonify({'error': 'Already downloading'}), 409
+
+        def _dl_thread():
+            import urllib.request
+            _map_downloads[dl_id] = {'progress': 0, 'status': 'Connecting...', 'error': None}
+            try:
+                maps_dir = get_maps_dir()
+                dest = os.path.join(maps_dir, filename)
+                req = urllib.request.Request(url, headers={'User-Agent': 'ProjectNOMAD/3.4.0'})
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    total = int(resp.headers.get('Content-Length', 0))
+                    downloaded = 0
+                    with open(dest, 'wb') as f:
+                        while True:
+                            chunk = resp.read(1024 * 256)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total > 0:
+                                pct = int(downloaded / total * 100)
+                                speed = format_size(downloaded)
+                                _map_downloads[dl_id] = {'progress': pct, 'status': f'{speed} / {format_size(total)}', 'error': None}
+                            else:
+                                _map_downloads[dl_id] = {'progress': 50, 'status': f'{format_size(downloaded)} downloaded', 'error': None}
+                _map_downloads[dl_id] = {'progress': 100, 'status': f'Complete ({format_size(os.path.getsize(dest))})', 'error': None}
+            except Exception as e:
+                _map_downloads[dl_id] = {'progress': 0, 'status': 'Error', 'error': str(e)}
+
+        threading.Thread(target=_dl_thread, daemon=True).start()
+        return jsonify({'status': 'started', 'dl_id': dl_id})
+
+    @app.route('/api/maps/import-file', methods=['POST'])
+    def api_maps_import_file():
+        """Import a local map file by copying it to the maps directory."""
+        data = request.get_json() or {}
+        source_path = data.get('path', '').strip()
+        if not source_path or not os.path.isfile(source_path):
+            return jsonify({'error': 'File not found'}), 404
+        filename = os.path.basename(source_path)
+        dest = os.path.join(get_maps_dir(), filename)
+        try:
+            shutil.copy2(source_path, dest)
+            return jsonify({'status': 'imported', 'filename': filename, 'size': format_size(os.path.getsize(dest))})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
     # ─── Connectivity & Network ───────────────────────────────────────
 
