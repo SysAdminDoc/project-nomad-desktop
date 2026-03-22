@@ -1027,6 +1027,7 @@ a { color: var(--accent); text-decoration: none; }
   <div class="header-logo"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
   <h1>Project N.O.M.A.D. <span class="version">v{{ version }}</span></h1>
   <div class="header-right">
+    <button class="btn btn-sm btn-ghost" onclick="showHelp()" title="Help & Guide" style="font-size:13px;padding:3px 8px;">?</button>
     <a id="update-banner" href="#" target="_blank" style="display:none;font-size:11px;padding:4px 12px;background:var(--green-dim);color:var(--green);border-radius:20px;font-weight:600;">Update Available</a>
     <span id="net-status" style="font-size:11px;display:flex;align-items:center;gap:5px;color:var(--text-muted);"></span>
     <div class="theme-switcher" title="Switch theme">
@@ -1130,6 +1131,7 @@ a { color: var(--accent); text-decoration: none; }
               <option value="water_specialist">Water/Sanitation</option>
               <option value="tactical">Security/OPSEC</option>
               <option value="forager">Foraging/Wild Food</option>
+              <option value="nuclear">Nuclear Preparedness</option>
               <option disabled>--- Scenarios ---</option>
               <option value="scenario_grid">Scenario: Grid Down</option>
               <option value="scenario_medical">Scenario: Medical Emergency</option>
@@ -1502,7 +1504,8 @@ a { color: var(--accent); text-decoration: none; }
             <span>My Checklists</span>
           </div>
           <div class="prep-template-btns" id="prep-template-btns"></div>
-          <div style="padding:4px 8px;border-bottom:1px solid var(--border);display:flex;gap:4px;">
+          <div style="padding:4px 8px;border-bottom:1px solid var(--border);display:flex;gap:4px;flex-wrap:wrap;">
+            <button class="btn btn-sm" onclick="createCustomChecklist()" style="font-size:9px;padding:2px 6px;" title="Create blank custom checklist">+ Custom</button>
             <input type="file" id="cl-import-file" style="display:none;" accept=".json" onchange="importChecklistJSON()">
             <button class="btn btn-sm" onclick="document.getElementById('cl-import-file').click()" style="font-size:9px;padding:2px 6px;" title="Import shared checklist">Import</button>
             <button class="btn btn-sm" onclick="exportCurrentChecklist()" style="font-size:9px;padding:2px 6px;" title="Export current checklist for sharing">Share</button>
@@ -1512,7 +1515,10 @@ a { color: var(--accent); text-decoration: none; }
         <div class="prep-main">
           <div class="prep-main-header">
             <h4 id="prep-active-name">Select or create a checklist</h4>
-            <span id="prep-active-stats" style="font-size:11px;color:var(--text-muted);"></span>
+            <div style="display:flex;gap:4px;align-items:center;">
+              <span id="prep-active-stats" style="font-size:11px;color:var(--text-muted);"></span>
+              <button class="btn btn-sm" onclick="addChecklistItem()" style="font-size:9px;padding:2px 6px;" title="Add item to this checklist">+ Item</button>
+            </div>
           </div>
           <div class="prep-progress-bar"><div class="fill" id="prep-progress-fill" style="width:0%"></div></div>
           <div class="prep-checklist" id="prep-checklist">
@@ -1582,6 +1588,7 @@ a { color: var(--accent); text-decoration: none; }
         </select>
         <input id="inv-search" style="flex:1;min-width:200px;background:var(--surface);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:var(--radius-sm);font-size:12px;outline:none;" placeholder="Search supplies..." oninput="loadInventory()">
         <button class="btn btn-sm btn-primary" onclick="showInvForm()">+ Add Item</button>
+        <button class="btn btn-sm" onclick="showInvQuickAdd()" title="Quick-add common supplies">Quick Add</button>
         <button class="btn btn-sm" onclick="showShoppingList()" title="Auto-generate shopping list from gaps">Shopping List</button>
         <button class="btn btn-sm" onclick="window.open('/api/inventory/export-csv','_blank')" title="Export to CSV">Export</button>
         <input type="file" id="inv-import-file" style="display:none;" accept=".csv" onchange="importInvCSV()">
@@ -1606,6 +1613,8 @@ a { color: var(--accent); text-decoration: none; }
           <button class="btn btn-sm" onclick="hideInvForm()">Cancel</button>
         </div>
       </div>
+      <!-- Inventory Visualization -->
+      <div id="inv-viz" style="margin-bottom:12px;"></div>
       <!-- Burn Rate Dashboard -->
       <div id="burn-rate-dash" style="margin-bottom:16px;"></div>
       <div id="inv-table-wrap" style="overflow-x:auto;">
@@ -3037,6 +3046,15 @@ a { color: var(--accent); text-decoration: none; }
               <button class="btn btn-sm" onclick="setAuthPassword()">Set</button>
               <button class="btn btn-sm" onclick="clearAuthPassword()">Clear</button>
             </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">Auto Backup</span>
+            <select id="auto-backup-interval" class="preset-select" onchange="saveAutoBackup()" style="min-width:120px;">
+              <option value="0">Disabled</option>
+              <option value="3600">Every hour</option>
+              <option value="21600">Every 6 hours</option>
+              <option value="86400">Daily</option>
+            </select>
           </div>
           <div class="setting-row">
             <span class="setting-label">Setup Wizard</span>
@@ -4799,6 +4817,7 @@ const PRESETS = {
   forager: 'You are a wild food and foraging expert. Help identify edible plants, mushrooms, insects, and wild game. Cover safe foraging practices, poisonous look-alikes, seasonal availability, preparation methods, and nutritional value. Include preservation techniques for wild-harvested food. Always emphasize positive identification and the rule: when in doubt, do NOT eat it.',
   scenario_grid: 'You are an emergency planning advisor. The power grid has been down for 3 days with no estimated restoration. Help me prioritize: water procurement and purification, food preservation from thawing freezers, alternative heating/cooling, communication with family and neighbors, security considerations, medical needs, fuel conservation. Ask about my specific situation (how many people, location, supplies on hand, season/weather) and provide a detailed hour-by-hour and day-by-day action plan.',
   scenario_medical: 'You are a remote/austere medicine advisor. There is a medical emergency and professional medical help is not available. Help me assess and treat the situation using available supplies. Ask about: the patient (age, weight, conditions, medications), the injury/illness symptoms, what medical supplies are available, distance to nearest medical facility. Provide step-by-step treatment, monitoring instructions, warning signs to watch for, and when to escalate. Reference TCCC and wilderness medicine protocols.',
+  nuclear: 'You are a nuclear preparedness and civil defense expert. Advise on: blast radius effects by yield (thermal, overpressure, radiation), optimal shelter locations (PF ratings, basement vs above-ground), fallout protection (shelter-in-place timing, 7-10 rule of decay), decontamination procedures, potassium iodide dosing, EMP effects on electronics (Faraday protection), evacuation vs shelter-in-place decision criteria based on distance from ground zero, long-term fallout zone mapping, food/water contamination assessment. Reference Glasstone & Dolan nuclear effects data. Be specific about distances, timeframes, and protection factors.',
   scenario_evacuation: 'You are an evacuation planning expert. Help me plan an emergency evacuation. Ask about: number of people (ages, mobility), vehicles available, fuel levels, distance to destinations, current threats (fire, flood, civil unrest, chemical), time available, supplies already packed. Provide: route planning (primary + 2 alternates), vehicle loading priority, communication plan, rally points, go/no-go decision criteria, and what to grab in the last 5 minutes.',
 };
 // Load saved custom prompt
@@ -5102,7 +5121,7 @@ function switchPrepSub(sub) {
   document.querySelectorAll('.prep-subtab').forEach(b => b.classList.toggle('active', b.dataset.psub === sub));
   document.querySelectorAll('.prep-sub').forEach(p => p.classList.toggle('active', p.id === 'psub-' + sub));
   if (sub === 'incidents') loadIncidents();
-  if (sub === 'inventory') { loadInventory(); loadBurnRate(); }
+  if (sub === 'inventory') { loadInventory(); loadBurnRate(); loadInvViz(); }
   if (sub === 'contacts') { loadContacts(); loadSkillsMatrix(); }
   if (sub === 'calculators') { calcWater(); calcFood(); calcPower(); calcWatch(); document.getElementById('solar-date').value=new Date().toISOString().slice(0,10); calcSolar(); document.getElementById('moon-date').value=new Date().toISOString().slice(0,10); calcMoon(); convertCoords(); calcTravel(); calcBattery(); calcHorizon(); updateCalTracker(); calcPlan(); }
   if (sub === 'vault' && _vaultKey) loadVaultList();
@@ -5913,6 +5932,7 @@ async function loadTimers() {
         window._alertedTimers.add(t.id);
         toast(`Timer "${t.name}" is DONE!`, 'warning');
         sendNotification('Timer Complete', `${t.name} has finished!`);
+        playAlertSound('timer');
       }
     });
   } catch(e) {}
@@ -7459,6 +7479,187 @@ function checkNightMode() {
 }
 setInterval(checkNightMode, 60000);
 
+/* ─── Inventory Visualization ─── */
+async function loadInvViz() {
+  try {
+    const summary = await (await fetch('/api/inventory/summary')).json();
+    const el = document.getElementById('inv-viz');
+    if (!summary.categories.length) { el.innerHTML = ''; return; }
+    const maxQty = Math.max(...summary.categories.map(c => c.total_qty), 1);
+    el.innerHTML = `<div style="display:flex;gap:4px;flex-wrap:wrap;">${summary.categories.map(c => {
+      const pct = Math.min(100, Math.round(c.total_qty / maxQty * 100));
+      return `<div style="flex:1;min-width:80px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 8px;text-align:center;font-size:10px;">
+        <div style="text-transform:uppercase;letter-spacing:0.3px;color:var(--text-dim);font-weight:600;margin-bottom:3px;">${c.category}</div>
+        <div style="font-size:14px;font-weight:700;color:var(--accent);">${c.count}</div>
+        <div style="height:3px;background:var(--surface3);border-radius:2px;margin-top:3px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px;"></div></div>
+      </div>`;
+    }).join('')}</div>`;
+  } catch(e) {}
+}
+
+/* ─── Inventory Quick-Add Presets ─── */
+const INV_QUICK_ITEMS = [
+  {name:'Water (1 gallon)', cat:'water', unit:'gal', qty:1, daily:0.25},
+  {name:'Rice (5 lb bag)', cat:'food', unit:'bags', qty:1},
+  {name:'Canned beans', cat:'food', unit:'cans', qty:1},
+  {name:'Canned meat', cat:'food', unit:'cans', qty:1},
+  {name:'MRE', cat:'food', unit:'ea', qty:1},
+  {name:'AA Batteries', cat:'power', unit:'pk', qty:1},
+  {name:'Ibuprofen 200mg', cat:'medical', unit:'bottles', qty:1},
+  {name:'Bandages (box)', cat:'medical', unit:'boxes', qty:1},
+  {name:'Toilet paper', cat:'hygiene', unit:'rolls', qty:1},
+  {name:'Bleach (unscented)', cat:'water', unit:'gal', qty:1},
+  {name:'Matches/lighter', cat:'tools', unit:'ea', qty:1},
+  {name:'Duct tape', cat:'tools', unit:'rolls', qty:1},
+  {name:'Paracord (100ft)', cat:'tools', unit:'ea', qty:1},
+  {name:'N95 Masks', cat:'medical', unit:'ea', qty:10},
+  {name:'Propane (1lb)', cat:'fuel', unit:'cans', qty:1},
+  {name:'Trash bags', cat:'hygiene', unit:'boxes', qty:1},
+];
+
+function showInvQuickAdd() {
+  let html = '<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:20px;z-index:10001;box-shadow:var(--shadow);max-width:500px;max-height:70vh;overflow-y:auto;">';
+  html += '<h3 style="font-size:14px;margin-bottom:10px;display:flex;justify-content:space-between;"><span>Quick Add Supplies</span><span style="cursor:pointer;font-size:18px;" onclick="this.parentElement.parentElement.remove()">x</span></h3>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">';
+  INV_QUICK_ITEMS.forEach(item => {
+    html += `<button class="btn btn-sm" onclick="quickAddInvItem(${JSON.stringify(item).replace(/"/g,'&quot;')});this.style.background='var(--green-dim)';this.textContent='Added!'" style="text-align:left;font-size:10px;padding:6px 8px;">${item.name} <span style="color:var(--text-muted);">(${item.cat})</span></button>`;
+  });
+  html += '</div><div style="margin-top:8px;font-size:10px;color:var(--text-muted);">Click items to add them to inventory with default quantities.</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+async function quickAddInvItem(item) {
+  await fetch('/api/inventory', {method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name:item.name, category:item.cat, unit:item.unit, quantity:item.qty, daily_usage:item.daily||0})});
+  loadInventory();
+}
+
+/* ─── Custom Checklist Creator ─── */
+async function createCustomChecklist() {
+  const name = prompt('Checklist name:');
+  if (!name) return;
+  const r = await (await fetch('/api/checklists', {method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name, items:[]})})).json();
+  toast(`Created: ${name}`, 'success');
+  _currentChecklistId = r.id;
+  await loadChecklists();
+  await selectChecklist(r.id);
+  // Show add-item prompt
+  addChecklistItem();
+}
+
+function addChecklistItem() {
+  if (!_currentChecklistId) return;
+  const text = prompt('Add item (or cancel when done):');
+  if (!text) return;
+  const cat = prompt('Category (e.g. gear, food, medical, tools):', 'general') || 'general';
+  _currentChecklistItems.push({text, checked: false, cat});
+  renderChecklist();
+  // Save
+  fetch(`/api/checklists/${_currentChecklistId}`, {method:'PUT', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({items: _currentChecklistItems})});
+  // Ask for more
+  addChecklistItem();
+}
+
+/* ─── Emergency Alert Sounds ─── */
+let _alertAudioCtx = null;
+function playAlertSound(type) {
+  if (!_alertAudioCtx) _alertAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const ctx = _alertAudioCtx;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  if (type === 'broadcast') {
+    osc.type = 'sawtooth'; osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.5);
+    // Second tone
+    const osc2 = ctx.createOscillator(); const g2 = ctx.createGain();
+    osc2.connect(g2); g2.connect(ctx.destination);
+    osc2.type = 'sawtooth'; osc2.frequency.value = 660;
+    g2.gain.setValueAtTime(0.3, ctx.currentTime + 0.6);
+    g2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.1);
+    osc2.start(ctx.currentTime + 0.6); osc2.stop(ctx.currentTime + 1.1);
+  } else if (type === 'timer') {
+    osc.type = 'sine'; osc.frequency.value = 1000;
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    for (let i = 0; i < 3; i++) {
+      gain.gain.setValueAtTime(0.2, ctx.currentTime + i * 0.3);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.3 + 0.15);
+    }
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.9);
+  }
+}
+
+/* ─── Help / Guide ─── */
+function showHelp() {
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>N.O.M.A.D. Help Guide</title>
+  <style>body{font-family:'Segoe UI',sans-serif;background:#0d0d0d;color:#e8e8ed;padding:20px 40px;line-height:1.7;max-width:800px;margin:0 auto;}
+  h1{color:#5b9fff;border-bottom:1px solid #333;padding-bottom:8px;}h2{color:#4caf50;margin-top:24px;}h3{color:#ff9800;}
+  kbd{background:#1e1e26;padding:2px 6px;border-radius:4px;font-size:12px;border:1px solid #333;}
+  table{border-collapse:collapse;width:100%;margin:8px 0;}th,td{border:1px solid #333;padding:6px 10px;text-align:left;font-size:13px;}th{background:#1e1e26;}
+  </style></head><body>
+  <h1>Project N.O.M.A.D. for Windows — Help Guide</h1>
+  <p>Version ${VERSION} — The most complete offline survival command center available.</p>
+
+  <h2>Getting Started</h2>
+  <p>On first run, the Setup Wizard guides you through choosing a storage drive and what to download. You can re-run it anytime from <strong>Settings > Re-run Setup Wizard</strong>.</p>
+
+  <h2>Keyboard Shortcuts</h2>
+  <table><tr><th>Shortcut</th><th>Action</th></tr>
+  <tr><td><kbd>Alt+1</kbd> - <kbd>Alt+8</kbd></td><td>Switch main tabs</td></tr>
+  <tr><td><kbd>Alt+T</kbd></td><td>Toggle timer widget</td></tr>
+  <tr><td><kbd>Alt+C</kbd></td><td>Toggle LAN chat</td></tr>
+  <tr><td><kbd>Alt+N</kbd></td><td>New note</td></tr>
+  <tr><td><kbd>Ctrl+K</kbd></td><td>Global search</td></tr></table>
+
+  <h2>Main Tabs</h2>
+  <h3>Services</h3><p>Install, start, and manage the 6 core services. The command dashboard shows situation status, active timers, low stock alerts, and recent incidents.</p>
+  <h3>AI Chat</h3><p>Chat with a local AI model. Toggle <strong>"My Situation"</strong> to make the AI aware of your inventory, incidents, and threat levels. Drag-drop files for context.</p>
+  <h3>Library</h3><p>Browse and download offline content (Wikipedia, medical references, survival guides). Upload and view PDFs.</p>
+  <h3>Maps</h3><p>Offline maps with persistent waypoints (7 categories), zone drawing, measurement, and GPX export. 23 regions worldwide.</p>
+  <h3>Tools</h3><p>NukeMap simulator, Meshtastic radio, barcode scanner, video library, and guided emergency drills.</p>
+  <h3>Preparedness</h3><p>13 sub-tabs: Checklists, Incident Log, Inventory, Contacts, Calculators, Radio Ref, Quick Ref, Protocols, Vault, Weather, Signals, Operations, Family Plan.</p>
+
+  <h2>Key Features</h2>
+  <h3>Situation Board</h3><p>Click the colored cells at the top of the Preparedness tab to cycle threat levels (Green > Yellow > Orange > Red) for Security, Water, Food, Medical, Power, Comms.</p>
+  <h3>Inventory Burn Rate</h3><p>Set a "Daily Usage" when adding items to see "Days Left" projections. Items below minimum quantity or expiring soon show alerts.</p>
+  <h3>Emergency Broadcast</h3><p>In Operations, type a message and click Broadcast to push an alert to ALL devices connected to the LAN. A colored banner appears at the top of every browser.</p>
+  <h3>Encrypted Vault</h3><p>Set a password to unlock, then store sensitive information. AES-256 encryption happens in your browser — the password never leaves your machine.</p>
+  <h3>LAN Access</h3><p>Other devices on your network can access the dashboard at the URL shown in the LAN banner. Everything is shared — inventory, contacts, chat, maps.</p>
+
+  <h2>Data Storage</h2>
+  <p>All data is in <code>%APPDATA%\\ProjectNOMAD\\</code>. Use <strong>Settings > Full Backup</strong> to download a ZIP of everything. Use <strong>Sneakernet Sync</strong> to share data between NOMAD installations via USB.</p>
+  </body></html>`);
+  w.document.close();
+}
+
+/* ─── Auto Backup ─── */
+let _autoBackupTimer = null;
+function saveAutoBackup() {
+  const interval = parseInt(document.getElementById('auto-backup-interval').value);
+  localStorage.setItem('nomad-auto-backup', interval);
+  setupAutoBackup(interval);
+}
+function setupAutoBackup(interval) {
+  if (_autoBackupTimer) { clearInterval(_autoBackupTimer); _autoBackupTimer = null; }
+  if (interval > 0) {
+    _autoBackupTimer = setInterval(() => {
+      fetch('/api/export-config').then(() => {}); // Triggers server-side backup
+    }, interval * 1000);
+  }
+}
+(function() {
+  const interval = parseInt(localStorage.getItem('nomad-auto-backup') || '0');
+  if (interval > 0) setupAutoBackup(interval);
+  const el = document.getElementById('auto-backup-interval');
+  if (el) el.value = interval;
+})();
+
 /* ─── AI Conversation Starters ─── */
 function useStarter(text) {
   document.getElementById('chat-input').value = text;
@@ -7523,6 +7724,12 @@ async function pollBroadcast() {
       banner.style.color = colors[b.severity] || colors.info;
       banner.textContent = b.message;
       banner.title = 'Click to dismiss | ' + b.timestamp;
+      // Play alert sound once per broadcast
+      if (!window._lastBroadcastTs || window._lastBroadcastTs !== b.timestamp) {
+        window._lastBroadcastTs = b.timestamp;
+        playAlertSound('broadcast');
+        sendNotification('Emergency Broadcast', b.message);
+      }
     }
   } catch(e) {}
 }
