@@ -205,7 +205,7 @@ a { color: var(--accent); text-decoration: none; }
 /* ─── Command Center Cards (Original NOMAD Style) ─── */
 .cc-card {
   background: linear-gradient(135deg, var(--accent), var(--green));
-  color: #fff;
+  color: var(--card-text);
   border: 2px solid var(--accent);
   border-radius: var(--radius);
   padding: 24px;
@@ -219,17 +219,36 @@ a { color: var(--accent); text-decoration: none; }
   justify-content: center;
 }
 .cc-card:hover {
-  background: transparent;
+  background: var(--surface);
   color: var(--text);
+  border-color: var(--border-hover);
   transform: translateY(-3px);
   box-shadow: var(--shadow);
 }
-.cc-card .cc-icon { margin-bottom: 10px; opacity: 0.9; }
+.cc-card .cc-icon { margin-bottom: 10px; opacity: 0.9; font-size: 36px; }
 .cc-card .cc-title { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
 .cc-card .cc-sub { font-size: 11px; opacity: 0.8; margin-bottom: 8px; }
 .cc-card .cc-desc { font-size: 12px; opacity: 0.85; line-height: 1.5; }
 .cc-card:hover .cc-icon { opacity: 1; }
 .cc-card:hover .cc-desc { opacity: 1; }
+/* NukeMap variant */
+.cc-card-nuke {
+  background: linear-gradient(135deg, var(--red), var(--orange));
+  border-color: var(--red);
+}
+.cc-card-nuke:hover {
+  border-color: var(--red);
+}
+/* Theme-specific card adjustments */
+[data-theme="nightops"] .cc-card { color: var(--card-text); }
+[data-theme="cyber"] .cc-card { color: var(--card-text); }
+[data-theme="redlight"] .cc-card {
+  background: linear-gradient(135deg, var(--accent), var(--red));
+  border-color: var(--accent);
+}
+[data-theme="redlight"] .cc-card-nuke {
+  background: linear-gradient(135deg, var(--red), #660000);
+}
 
 /* ─── Cards ─── */
 .services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
@@ -1151,6 +1170,12 @@ a { color: var(--accent); text-decoration: none; }
         <div class="cc-icon"><svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
         <div class="cc-title">Notes</div>
         <div class="cc-desc">Markdown notes with tags, pinning, live preview, and auto-save.</div>
+      </div>
+      <div class="cc-card cc-card-nuke" onclick="openAppFrame('NukeMap','/nukemap')">
+        <div class="cc-icon">&#9762;</div>
+        <div class="cc-title">NukeMap</div>
+        <div class="cc-sub">Nuclear Effects Simulator</div>
+        <div class="cc-desc">Blast radius, fallout, shelter analysis, MIRV simulation, WW3 engine — 418 targets, 7 scenarios.</div>
       </div>
     </div>
 
