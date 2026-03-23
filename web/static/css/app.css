@@ -405,7 +405,9 @@ a { color: var(--accent); text-decoration: none; }
 .message .content pre code { background: none; padding: 0; }
 .message .content p { margin: 4px 0; }
 .message .content ul, .message .content ol { margin: 4px 0 4px 18px; }
-.message .content h1,.message .content h2,.message .content h3 { margin: 8px 0 4px; font-size: 14px; }
+.message .content h3 { margin: 8px 0 4px; font-size: 15px; font-weight: 700; }
+.message .content h4 { margin: 6px 0 3px; font-size: 14px; font-weight: 600; }
+.message .content h5 { margin: 5px 0 2px; font-size: 13px; font-weight: 600; }
 .message .content blockquote { border-left: 3px solid var(--accent); padding-left: 10px; color: var(--text-dim); margin: 6px 0; }
 .message .thinking { font-size: 11px; color: var(--text-muted); font-style: italic; padding: 4px 0; }
 .message.user .content { background: var(--accent-dim); }

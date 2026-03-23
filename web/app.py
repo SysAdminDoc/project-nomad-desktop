@@ -2582,10 +2582,10 @@ def create_app():
         data = request.get_json() or {}
         db = get_db()
         cur = db.execute(
-            'INSERT INTO inventory (name, category, quantity, unit, min_quantity, daily_usage, location, expiration, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO inventory (name, category, quantity, unit, min_quantity, daily_usage, location, expiration, barcode, cost, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             (data.get('name', ''), data.get('category', 'other'), data.get('quantity', 0),
              data.get('unit', 'ea'), data.get('min_quantity', 0), data.get('daily_usage', 0),
-             data.get('location', ''), data.get('expiration', ''), data.get('notes', '')))
+             data.get('location', ''), data.get('expiration', ''), data.get('barcode', ''), data.get('cost', 0), data.get('notes', '')))
         db.commit()
         item_id = cur.lastrowid
         row = db.execute('SELECT * FROM inventory WHERE id = ?', (item_id,)).fetchone()
@@ -2596,7 +2596,7 @@ def create_app():
     def api_inventory_update(item_id):
         data = request.get_json() or {}
         db = get_db()
-        allowed = ['name', 'category', 'quantity', 'unit', 'min_quantity', 'daily_usage', 'location', 'expiration', 'notes']
+        allowed = ['name', 'category', 'quantity', 'unit', 'min_quantity', 'daily_usage', 'location', 'expiration', 'barcode', 'cost', 'notes']
         fields = []
         vals = []
         for k in allowed:
