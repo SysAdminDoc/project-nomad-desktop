@@ -103,6 +103,17 @@ def start():
     if not is_installed():
         raise RuntimeError('Ollama is not installed')
 
+    # If Ollama is already running (e.g. from previous session), adopt it
+    if check_port(OLLAMA_PORT):
+        try:
+            resp = requests.get(f'http://localhost:{OLLAMA_PORT}/api/tags', timeout=2)
+            if resp.ok:
+                log.info('Ollama already running, adopting existing instance')
+                _adopt_running_instance()
+                return None
+        except Exception:
+            pass
+
     env = get_ollama_gpu_env()
     env['OLLAMA_HOST'] = f'0.0.0.0:{OLLAMA_PORT}'
     env['OLLAMA_MODELS'] = os.path.join(get_install_dir(), 'models')
@@ -140,7 +151,41 @@ def stop():
 
 
 def running():
-    return is_running(SERVICE_ID) and check_port(OLLAMA_PORT)
+    if is_running(SERVICE_ID) and check_port(OLLAMA_PORT):
+        return True
+    # Fallback: PID tracking may be stale after app restart — check if Ollama API responds
+    if check_port(OLLAMA_PORT):
+        try:
+            resp = requests.get(f'http://localhost:{OLLAMA_PORT}/api/tags', timeout=2)
+            if resp.ok:
+                log.info('Ollama running (detected via API, updating PID tracking)')
+                _adopt_running_instance()
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def _adopt_running_instance():
+    """Update DB/process tracking when Ollama is running but PID tracking is stale."""
+    from services.manager import _processes
+    try:
+        # Find the actual Ollama PID via the port
+        import subprocess as _sp
+        result = _sp.run(
+            ['powershell', '-NoProfile', '-Command',
+             f"(Get-NetTCPConnection -LocalPort {OLLAMA_PORT} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess"],
+            capture_output=True, text=True, timeout=5, creationflags=0x08000000,
+        )
+        pid = int(result.stdout.strip()) if result.returncode == 0 and result.stdout.strip() else None
+        if pid:
+            db = get_db()
+            db.execute('UPDATE services SET running = 1, pid = ? WHERE id = ?', (pid, SERVICE_ID))
+            db.commit()
+            db.close()
+            log.info(f'Adopted running Ollama instance (PID {pid})')
+    except Exception as e:
+        log.warning(f'Could not adopt Ollama PID: {e}')
 
 
 def list_models():
