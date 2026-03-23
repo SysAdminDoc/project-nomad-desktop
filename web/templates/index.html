@@ -55,6 +55,7 @@ body{background:var(--bg);color:var(--text)}
     <button class="tab" data-tab="ai-chat">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
       AI Assistant
+      <span id="badge-ai-chat" class="tab-badge" style="display:none;"></span>
     </button>
     <button class="tab" data-tab="kiwix-library">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
@@ -79,6 +80,7 @@ body{background:var(--bg);color:var(--text)}
     <button class="tab" data-tab="preparedness">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
       Preparedness
+      <span id="badge-preparedness" class="tab-badge" style="display:none;"></span>
     </button>
     <button class="tab" data-tab="benchmark">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg></span>
@@ -270,9 +272,18 @@ body{background:var(--bg);color:var(--text)}
 
     <!-- Activity Feed -->
     <div class="settings-card" style="margin-top:20px;">
-      <h3 style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
         Activity Feed
-        <button class="btn btn-sm" onclick="loadActivity()">Refresh</button>
+        <span style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+          <select id="activity-filter" onchange="loadActivity()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:2px 6px;border-radius:4px;font-size:10px;">
+            <option value="">All Activity</option>
+            <option value="service">Services</option>
+            <option value="inventory">Inventory</option>
+            <option value="medical">Medical</option>
+            <option value="sync">Sync</option>
+          </select>
+          <button class="btn btn-sm" onclick="loadActivity()">Refresh</button>
+        </span>
       </h3>
       <div id="activity-feed" style="max-height:200px;overflow-y:auto;margin-top:8px;font-size:11px;"><div style="color:var(--text-muted);font-size:11px;">Loading activity...</div></div>
     </div>
@@ -464,6 +475,7 @@ body{background:var(--bg);color:var(--text)}
       <button class="btn btn-sm" onclick="printMapView()" style="display:none;" id="print-map-btn">Print</button>
       <button class="btn btn-sm" onclick="saveMapBookmark()" style="display:none;" id="bookmark-btn">Bookmark</button>
       <button class="btn btn-sm" onclick="calcBearingDistance()" style="display:none;" id="bearing-btn">Bearing</button>
+      <button class="btn btn-sm" onclick="cycleMapStyle()" style="display:none;" id="style-btn" title="Change map style">Style</button>
       <button class="btn btn-sm" onclick="window.location='/api/waypoints/export-gpx'" style="display:none;" id="gpx-btn">Export GPX</button>
       <span id="map-coords" style="font-size:10px;color:var(--text-muted);margin-left:auto;font-family:monospace;"></span>
     </div>
@@ -509,6 +521,8 @@ body{background:var(--bg);color:var(--text)}
           <div style="display:flex;gap:6px;margin-top:8px;">
             <button class="btn btn-sm" onclick="loadWPDistances()">Refresh</button>
             <button class="btn btn-sm" onclick="window.location='/api/waypoints/export-gpx'">Export GPX</button>
+            <input type="file" id="gpx-import-input" accept=".gpx" style="display:none;" onchange="importGpxFile(this)">
+            <button class="btn btn-sm" onclick="document.getElementById('gpx-import-input').click()">Import GPX</button>
           </div>
         </div>
       </div>
@@ -720,10 +734,10 @@ body{background:var(--bg);color:var(--text)}
       <div class="media-main">
         <!-- Sub-Tab Bar -->
         <div class="media-subtabs">
-          <button class="media-subtab active" data-msub="videos" onclick="switchMediaSub('videos')">Videos</button>
-          <button class="media-subtab" data-msub="audio" onclick="switchMediaSub('audio')">Audio</button>
-          <button class="media-subtab" data-msub="books" onclick="switchMediaSub('books')">Books</button>
-          <button class="media-subtab" data-msub="channels" onclick="switchMediaSub('channels')" style="border-left:1px solid var(--border);margin-left:4px;padding-left:10px;">Browse Channels</button>
+          <button class="media-subtab active" data-msub="channels" onclick="switchMediaSub('channels')">Browse Channels</button>
+          <button class="media-subtab" data-msub="videos" onclick="switchMediaSub('videos')">My Videos</button>
+          <button class="media-subtab" data-msub="audio" onclick="switchMediaSub('audio')">My Audio</button>
+          <button class="media-subtab" data-msub="books" onclick="switchMediaSub('books')">My Books</button>
           <div style="flex:1;"></div>
           <div style="font-size:11px;color:var(--text-muted);padding:6px 12px;" id="media-total-stats"></div>
         </div>
@@ -6197,7 +6211,7 @@ function toggleMapView() {
   document.getElementById('map-viewer').style.display = _mapVisible ? 'block' : 'none';
   document.getElementById('map-management').style.display = _mapVisible ? 'none' : 'block';
   document.getElementById('map-toggle-btn').textContent = _mapVisible ? 'Manage Maps' : 'Show Map';
-  ['pin-btn','measure-btn','clear-pins-btn','save-wp-btn','draw-zone-btn','gpx-btn','property-btn','print-map-btn','bookmark-btn','bearing-btn'].forEach(id => document.getElementById(id).style.display = _mapVisible ? '' : 'none');
+  ['pin-btn','measure-btn','clear-pins-btn','save-wp-btn','draw-zone-btn','gpx-btn','property-btn','print-map-btn','bookmark-btn','bearing-btn','style-btn'].forEach(id => document.getElementById(id).style.display = _mapVisible ? '' : 'none');
   if (_mapVisible && !_map) initMap();
   if (_mapVisible && _map) loadWaypoints();
 }
@@ -6205,6 +6219,36 @@ function toggleMapView() {
 let _mapMarkers = [];
 let _measurePoints = [];
 let _measureMode = false;
+
+let _mapStyleIdx = 0;
+const MAP_STYLES = [
+  {name: 'Default', filter: null},
+  {name: 'Dark', filter: 'invert(1) hue-rotate(180deg)'},
+  {name: 'Satellite', filter: 'saturate(1.3) contrast(1.1)'},
+];
+
+function cycleMapStyle() {
+  _mapStyleIdx = (_mapStyleIdx + 1) % MAP_STYLES.length;
+  const canvas = document.querySelector('#map-container canvas');
+  if (canvas) {
+    canvas.style.filter = MAP_STYLES[_mapStyleIdx].filter || 'none';
+  }
+  toast(`Map style: ${MAP_STYLES[_mapStyleIdx].name}`, 'info');
+}
+
+async function importGpxFile(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const r = await fetch('/api/waypoints/import-gpx', {method:'POST', body: formData});
+    const d = await r.json();
+    toast(`Imported ${d.count || 0} waypoints from GPX`, 'success');
+    loadWPDistances();
+  } catch(e) { toast('GPX import failed', 'error'); }
+  input.value = '';
+}
 
 function initMap() {
   if (typeof maplibregl === 'undefined') {
@@ -6487,6 +6531,13 @@ function debounceSearch() {
   _searchTimer = setTimeout(doUnifiedSearch, 300);
 }
 
+function highlightMatch(text, query) {
+  if (!query) return escapeHtml(text);
+  const escaped = escapeHtml(text);
+  const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return escaped.replace(re, '<mark style="background:var(--accent);color:#fff;padding:0 2px;border-radius:2px;">$1</mark>');
+}
+
 async function doUnifiedSearch() {
   const q = document.getElementById('unified-search').value.trim();
   const el = document.getElementById('search-results');
@@ -6514,7 +6565,7 @@ async function doUnifiedSearch() {
         html += `<div style="padding:4px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);background:var(--surface2);">${typeIcons[type]||''} ${typeLabels[type]||type} (${list.length})</div>`;
         html += list.map(i => `
           <div class="search-result-item" onmousedown="event.preventDefault()" onclick="openSearchResult('${i.type}',${i.id})">
-            <span>${escapeHtml(i.title)}</span>
+            <span>${highlightMatch(i.title, q)}</span>
           </div>
         `).join('');
       }
@@ -6679,7 +6730,9 @@ async function loadReadiness() {
 /* ─── Activity Feed ─── */
 async function loadActivity() {
   try {
-    const items = await (await fetch('/api/activity?limit=30')).json();
+    const filter = document.getElementById('activity-filter')?.value || '';
+    const url = filter ? `/api/activity?limit=30&filter=${encodeURIComponent(filter)}` : '/api/activity?limit=30';
+    const items = await (await fetch(url)).json();
     const el = document.getElementById('activity-feed');
     if (!items.length) { el.innerHTML = '<span style="color:var(--text-muted);">No activity yet.</span>'; return; }
     el.innerHTML = items.map(a => {
@@ -8610,6 +8663,20 @@ async function loadCmdDashboard() {
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim);font-weight:600;">Pressure</div>
         <div style="font-size:16px;font-weight:700;color:var(--text);margin:2px 0;">${d.pressure_current}</div>
       </div>` : ''}
+      ${(() => {
+        const ts = localStorage.getItem('nomad-last-backup');
+        let backupLabel = 'Never';
+        let backupColor = 'var(--red)';
+        if (ts) {
+          const ago = Math.round((Date.now() - new Date(ts).getTime()) / (1000*60*60*24));
+          backupLabel = ago === 0 ? 'Today' : ago + 'd ago';
+          backupColor = ago > 30 ? 'var(--red)' : ago > 7 ? 'var(--orange)' : 'var(--green)';
+        }
+        return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;text-align:center;cursor:pointer;" onclick="document.querySelector('[data-tab=\\'settings\\']').click()">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim);font-weight:600;">Last Backup</div>
+          <div style="font-size:16px;font-weight:700;color:${backupColor};margin:2px 0;">${backupLabel}</div>
+        </div>`;
+      })()}
     `;
     // Append critical alerts from parallel fetch
     let critHtml = '';
@@ -9022,7 +9089,7 @@ let _mediaFolder = '';
 let _mediaViewGrid = true;
 let _mediaCatalogVisible = false;
 let _mediaDlPoll = null;
-let _mediaSub = 'videos'; // videos | audio | books
+let _mediaSub = 'channels'; // videos | audio | books | channels
 let _mediaBookRendition = null;
 let _mediaSort = 'title'; // title | date | size | favorited
 let _mediaSortDir = 'asc';
@@ -9431,6 +9498,12 @@ async function browseChannelVideos(channelUrl, channelName) {
   try {
     const videos = await (await fetch(`/api/youtube/channel-videos?url=${encodeURIComponent(channelUrl)}&limit=15`)).json();
     if (videos.error) { results.innerHTML = `<div style="padding:20px;color:var(--red);text-align:center;"><div style="font-weight:600;margin-bottom:6px;">Channel Error</div><div style="font-size:12px;">${escapeHtml(videos.error)}</div></div>`; return; }
+    if (!videos.length) {
+      // Channel has no videos — mark as dead and remove from view
+      fetch('/api/channels/validate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:channelUrl})});
+      results.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);"><div style="font-size:24px;margin-bottom:8px;">Channel Unavailable</div><div style="font-size:12px;">${escapeHtml(channelName)} has no videos or has been removed from YouTube.<br>It has been hidden from the channel list.</div><div style="margin-top:12px;"><button class="btn btn-sm" onclick="backToChannels();loadChannelBrowser();">Back to Channels</button></div></div>`;
+      return;
+    }
     renderVideoResults(videos, channelName);
   } catch(e) { results.innerHTML = '<div style="padding:20px;color:var(--red);text-align:center;"><div style="font-weight:600;margin-bottom:6px;">Failed to Load Videos</div><div style="font-size:12px;">Could not fetch videos from this channel. Check your internet connection.</div></div>'; }
   finally { _channelBrowsing = false; }
@@ -13797,14 +13870,40 @@ async function updateStatusStrip() {
   if (timeEl) timeEl.textContent = now.toLocaleDateString([], {weekday:'short',month:'short',day:'numeric'}) + ' ' + now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
 }
 
+/* ─── Tab Badges ─── */
+function updateTabBadges() {
+  // Preparedness badge: low stock + expired items + active alerts
+  Promise.all([
+    fetch('/api/inventory/summary').then(r => r.json()).catch(() => ({})),
+    fetch('/api/alerts').then(r => r.json()).catch(() => []),
+  ]).then(([inv, alerts]) => {
+    const lowCount = (inv.low_stock || 0) + (inv.expired || 0) + (alerts.length || 0);
+    const badge = document.getElementById('badge-preparedness');
+    if (badge) {
+      if (lowCount > 0) { badge.textContent = lowCount; badge.style.display = ''; badge.className = 'tab-badge'; }
+      else { badge.style.display = 'none'; }
+    }
+  });
+  // AI Chat badge: green dot if Ollama running, red dot if not
+  fetch('/api/services').then(r => r.json()).then(svcs => {
+    const ollama = svcs.find(s => s.id === 'ollama');
+    const badge = document.getElementById('badge-ai-chat');
+    if (badge) {
+      badge.style.display = '';
+      badge.innerHTML = '&#9679;';
+      badge.className = 'tab-badge ' + (ollama && ollama.running ? 'green' : 'red');
+    }
+  }).catch(() => {});
+}
+
 /* ─── Init ─── */
 // Critical: load immediately
 loadServices();
 loadReadiness();
 // Defer non-critical by 500ms to avoid 11 concurrent fetches on startup
 setTimeout(() => { loadCmdDashboard(); loadServiceQuickLinks(); loadCmdChecklists(); loadReadinessScore(); }, 500);
-setTimeout(() => { loadActivity(); loadContentSummary(); updateStatusStrip(); }, 1000);
-setInterval(() => { if (!document.hidden) updateStatusStrip(); }, 30000);
+setTimeout(() => { loadActivity(); loadContentSummary(); updateStatusStrip(); updateTabBadges(); }, 1000);
+setInterval(() => { if (!document.hidden) { updateStatusStrip(); updateTabBadges(); } }, 30000);
 let _svcPollTimer = setInterval(() => {
   if (document.hidden) return;
   const activeTab = document.querySelector('.tab.active');

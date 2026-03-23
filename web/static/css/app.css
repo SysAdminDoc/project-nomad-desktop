@@ -201,6 +201,9 @@ a { color: var(--accent); text-decoration: none; }
   box-shadow: 0 2px 8px var(--accent-glow);
 }
 .tab.active .tab-icon { opacity: 1; }
+.tab-badge { background:var(--red); color:#fff; font-size:9px; font-weight:700; min-width:16px; height:16px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; padding:0 4px; margin-left:auto; }
+.tab-badge.green { background:var(--green); }
+.tab-badge.red { background:var(--red); }
 .tab-content { display: none; animation: fadeSlideIn 0.3s ease; }
 .tab-content.active { display: block; }
 /* Vertical centering for pages with less content */
