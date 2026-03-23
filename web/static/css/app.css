@@ -179,8 +179,8 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 /* ─── Layout ─── */
-.main-content { margin-left: 240px; min-height: 100vh; }
-.container { max-width: 1200px; margin: 0 auto; padding: 16px 24px; }
+.main-content { margin-left: 240px; min-height: 100vh; overflow-x: hidden; }
+.container { max-width: 1400px; margin: 0 auto; padding: 24px 32px; overflow: hidden; }
 
 /* ─── Nav Items (sidebar) ─── */
 .tab {
@@ -460,7 +460,7 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 /* ─── Settings ─── */
-.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 100%; overflow: hidden; }
 @media (max-width: 800px) { .settings-grid { grid-template-columns: 1fr; } }
 .settings-card {
   background: var(--surface); backdrop-filter: blur(16px);
