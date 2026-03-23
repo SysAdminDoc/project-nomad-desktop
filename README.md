@@ -16,7 +16,7 @@ Native Windows port — no Docker, no WSL, no VMs. 6 managed services, 100+ down
 
 ---
 
-> Competitors charge $280+ for a USB stick with curated content (Prepper Disk, Prep Drive). N.O.M.A.D. for Windows does everything they do and 10x more — for free. ~34,000 lines of code, 228 API endpoints, 32 database tables, 50+ map sources, 10 interactive calculators, 25+ reference cards, 17 emergency protocols, 10 interactive decision guides with 200+ nodes, 15 checklist templates, 4 training scenarios, NukeMap v3.2.0 nuclear simulator, medical module with drug interaction checking, food production tracking, multi-node sync, power management, security cameras, AI document intelligence, and printable emergency reference sheets — the most comprehensive offline prepper command center ever built into a single application.
+> Competitors charge $280+ for a USB stick with curated content (Prepper Disk, Prep Drive). N.O.M.A.D. for Windows does everything they do and 10x more — for free. 50+ map sources, 10 interactive calculators, 25+ reference cards, 17 emergency procedures, 10 interactive decision guides, 15 checklist templates, 4 training scenarios, NukeMap v3.2.0 nuclear simulator, medical module with drug interaction checking, food production tracking, multi-node sync, power management, security cameras, AI document intelligence, a 38-section built-in user guide, and printable emergency reference sheets — the most comprehensive offline prepper command center ever built into a single application.
 
 **[Download Portable .exe](https://github.com/SysAdminDoc/nomad-windows/releases/latest/download/ProjectNOMAD.exe)** — single file, no install needed, run from anywhere (USB, desktop, etc.)
 
@@ -36,6 +36,10 @@ Native Windows port — no Docker, no WSL, no VMs. 6 managed services, 100+ down
 - **Night Vision Mode** — Red-on-black theme that preserves scotopic vision during darkness operations. Auto-switches at sunset.
 - **Printable Emergency Reports** — Inventory reports, contact directories, patient care cards, and a comprehensive emergency reference sheet aggregating all critical data.
 - **Getting Started Wizard** — New user onboarding checklist guides you through initial setup step by step.
+- **38-Section User Guide** — Comprehensive built-in reference manual with contextual help icons (?) on every major feature. Covers setup, all 19 sub-tabs, AI model selection, inventory best practices, calculators, medical/power/security guides, troubleshooting, FAQ, and glossary.
+- **Readiness Score** — Cross-module A-F grade (0-100) with 7 clickable categories (water, food, medical, security, communications, power, planning). Click any category to jump directly to that section.
+- **Status Strip** — Persistent bar showing running services, inventory count, contacts, active alerts, and current date/time at a glance.
+- **58 Quick-Add Supplies** — One-click templates for common inventory items across 8 categories (water, food, medical, power, fuel, hygiene, tools, communications) with recommended starting quantities.
 
 ## 9 Main Tabs
 
@@ -49,7 +53,7 @@ Native Windows port — no Docker, no WSL, no VMs. 6 managed services, 100+ down
 | **Benchmark** | CPU, memory, disk, AI inference scoring (NOMAD Score 0-100) with trend deltas |
 | **Tools** | NukeMap, Meshtastic, barcode scanner, video library, guided drills, immersive training scenarios |
 | **Preparedness** | 19 sub-tabs of survival tools (see below) |
-| **Settings** | System monitoring, model management, network federation, power management, security, host control |
+| **Settings** | System monitoring, AI model management, multi-system sync, preferences, backup/restore, data summary |
 
 ## 6 Managed Services
 
@@ -62,35 +66,35 @@ Native Windows port — no Docker, no WSL, no VMs. 6 managed services, 100+ down
 | **Qdrant** | Vector database for document upload and semantic search (RAG) | 6333 |
 | **Stirling PDF** | Merge, split, compress, convert, OCR — 50+ PDF tools | 8443 |
 
-## 19 Preparedness Sub-Tabs
+## 19 Preparedness Sub-Tabs (ordered by emergency priority)
 
 | Sub-Tab | Features |
 |---------|---------|
-| **Checklists** | 15 templates (72hr kit, bug-out bag, medical, comms, vehicle, winter storm, grid failure, CBRN shelter, infant kit, and more). JSON import/export, custom checklists. |
-| **Incident Log** | Chronological event timeline with severity levels, category filtering, cluster detection. |
-| **Inventory** | Supply tracking with quantities, expiration alerts, burn rate dashboard, daily usage projections, Days Left, shopping list generator, CSV import/export. Harvests auto-feed in from Garden tab. |
-| **Contacts** | Emergency directory with callsigns, roles, skills, blood types, rally points, medical notes. Skills matrix with gap analysis. CSV import/export. Quick-add 7 standard emergency contacts (911, poison control, etc). |
-| **Security** | IP camera feeds (MJPEG/snapshot/HLS), access logging (entry/exit/patrol), security dashboard with threat level, 24h access count, 48h incident count. Common camera URL examples (Reolink, Amcrest, Wyze, ONVIF). |
-| **Power** | Device registry (solar panels, batteries, charge controllers, inverters, generators). Power log (voltage, SOC, solar/load watts). Autonomy projection dashboard with color-coded gauges (green >7d, orange >3d, red <3d). |
-| **Garden** | Garden plots (dimensions, sun exposure, soil). Seed inventory with auto-calculated viability (25 species). Harvest log auto-creates inventory items. Livestock records (10 species) with health event logging. USDA hardiness zone lookup by latitude. |
-| **Medical** | Patient profiles linked to contacts (weight, age, allergies, medications, conditions). Vital signs tracking (BP, pulse, resp, temp, SpO2, pain, GCS) with color-coded abnormals. Wound documentation (8 types, 4 severities). 26-pair drug interaction checker. Printable patient care cards. Import patients from contacts with one click. |
-| **Calculators** | 10+ interactive calculators: water, food storage (LDS/FEMA), generator fuel, rainwater harvest, radio range (12 types), medication dosage (weight-based), solar sizing, BOB weight, resource planning, travel time, battery life, bleach dosing, and more. |
-| **Guides** | 10 interactive decision trees with 200+ nodes: water purification, wound assessment, fire starting, shelter construction, radio setup, food preservation, START triage, power outage response, vehicle emergency, bug-out vs shelter decision. Step-by-step branching Q&A. "Ask AI" button at any step. Printable procedure cards. Works fully offline. |
-| **Radio Ref** | Complete frequency table: NOAA, FRS (22ch), GMRS, MURS, CB, HAM (2m/70cm/HF), shortwave. |
-| **Quick Ref** | 25+ reference cards: NATO alphabet, Morse code trainer, unit converter, triage, companion planting, calorie DB, livestock care, WHO medicines, knots, navigation, sanitation, wild edibles, EMP guide, OPSEC, and more. |
-| **Protocols** | 17 emergency procedures with search and expand-all: CPR, bleeding, water purification, shelter, fire, choking, hypothermia, wound closure, burns, fractures, snake bite, anaphylaxis, dental, PFA, CERT, tornado/earthquake/flood/wildfire/hurricane. Printable wallet card. |
-| **Vault** | AES-256-GCM encrypted document storage with password verification. Legal document templates. Password generator with show/hide toggle. |
-| **Weather** | Barometric pressure journal with automated trend analysis and weather forecasting. |
-| **Signals** | Radio check-in schedule planner + full communications log (HAM-style contact tracking). |
-| **Operations** | SITREP generator, message cipher, infrastructure tracker (12 utilities), vehicle readiness board, threat assessment matrix, after-action review, emergency broadcast, 35-item home security assessment. |
-| **Family Plan** | FEMA-style family emergency plan: meeting locations, 3 evacuation routes, household members (medical info, blood types), insurance/utility info. |
+| **Inventory** | Supply tracking with quantities, expiration alerts, daily usage projections, Days Left, shopping list generator, quick-add 58 common items, one-click Daily Consume, +/- quantity buttons, CSV import/export. Harvests auto-feed in from Garden. |
+| **Contacts** | Emergency directory with callsigns, roles, skills, blood types, rally points, medical notes. Skills matrix with gap analysis. CSV import/export. Quick-add 7 standard emergency contacts. |
+| **Checklists** | 15 templates (72hr kit, bug-out bag, vehicle kit, winter storm, CBRN shelter, infant kit, and more). JSON import/export, custom checklists. |
+| **Medical** | Patient profiles linked to contacts. Vital signs tracking (BP, pulse, resp, temp, SpO2, pain, GCS) with color-coded abnormals. Wound documentation (8 types, 4 severities). 26-pair drug interaction checker. Printable patient care cards. |
+| **Incidents** | Chronological event timeline with severity levels, category filtering, cluster detection. |
+| **Family Plan** | FEMA-style emergency plan: meeting locations, 3 evacuation routes, household members (medical info, blood types), insurance/utility info. Auto-saves as you type. |
+| **Security** | IP camera feeds (MJPEG/snapshot/HLS), access logging (entry/exit/patrol), security dashboard with threat level. Camera URL examples for Reolink, Amcrest, Wyze, ONVIF. |
+| **Power** | Device registry (solar/battery/controller/inverter/generator). Power log (voltage, SOC, watts). Autonomy projection dashboard with color-coded gauges. |
+| **Garden** | Garden plots, seed inventory with auto-viability (25 species), harvest log auto-creates inventory items, livestock records (10 species), USDA hardiness zone lookup. |
+| **Weather** | Barometric pressure journal with automated trend analysis and storm prediction. |
+| **Guides** | 10 interactive decision trees with 200+ nodes. Step-by-step branching Q&A. "Ask AI" at any step. Printable procedure cards. Works fully offline. |
+| **Calculators** | 10+ calculators: water, food storage, generator fuel, rainwater, radio range, medication dosage, solar sizing, BOB weight, resource planning, travel time, battery life, bleach dosing. |
+| **Procedures** | 17 emergency procedures: CPR, bleeding, water purification, shelter, fire, choking, hypothermia, wound closure, burns, fractures, snake bite, anaphylaxis, and more. Printable wallet card. |
+| **Radio** | Complete frequency table: NOAA, FRS (22ch), GMRS, MURS, CB, HAM (2m/70cm/HF), shortwave. |
+| **Quick Ref** | 25+ reference cards: NATO alphabet, Morse code trainer, unit converter, triage, companion planting, wild edibles, EMP guide, OPSEC, and more. |
+| **Signals** | Ground-to-air emergency signals, sound signal patterns, smoke signal guide. |
+| **Command Post** | Situation Report (SITREP) generator, message cipher, infrastructure tracker, vehicle readiness, threat assessment matrix, after-action review, emergency broadcast, home security assessment. |
 | **Journal** | Daily journal entries with mood tracking (5 moods), tag system, chronological timeline, and full export. |
+| **Secure Vault** | AES-256-GCM encrypted storage for passwords, coordinates, sensitive documents. Password generator. |
 
 ## AI Features
 
 - **Proactive alert engine** — background monitoring with AI-generated natural language situation summaries
 - **19 system prompt presets**: General, Medical, Coding, Survival, Teacher, Analyst, Field Medic, HAM Radio, Homesteader, Water/Sanitation, Security/OPSEC, Foraging, Nuclear Preparedness, Solar Power Expert, Land Navigation, Medicinal Herbalist, plus 3 scenario planners
-- **Situation-aware context**: Toggle "My Situation" to auto-inject your inventory, burn rates, incidents, contacts, threat levels, weather, power status, patient conditions, and garden data (7 context sources)
+- **Situation-aware context**: Toggle "Include My Prep Data" to auto-inject your inventory, burn rates, incidents, contacts, threat levels, weather, power status, patient conditions, and garden data
 - **Document intelligence**: AI classifies uploaded documents (8 categories), generates summaries, extracts entities (people, dates, medications, addresses, vehicles, amounts, coordinates), cross-references against contacts
 - **Drag-drop file context**: Attach PDFs, text files, CSVs to your chat messages
 - **12 recommended models** including medical-specific (MedGemma, Meditron)
@@ -114,7 +118,7 @@ Native Windows port — no Docker, no WSL, no VMs. 6 managed services, 100+ down
 - AI-scored After-Action Review (0-100) with improvement recommendations
 - Score history tracks improvement over time
 
-## Network Federation
+## Connect Multiple Systems
 
 Sync data between multiple N.O.M.A.D. installations:
 
@@ -202,7 +206,7 @@ pyinstaller build.spec
 | Component | Technology |
 |-----------|-----------|
 | Window | pywebview + WebView2 |
-| Backend | Flask (0.0.0.0 for LAN access) — 228 API routes |
+| Backend | Flask (0.0.0.0 for LAN access) |
 | Database | SQLite (32 tables, WAL mode, auto-backups, performance indexes) |
 | AI | Ollama native + GPU auto-config (NVIDIA/AMD/Intel) |
 | Alerts | Background engine (5-min cycle) + browser notifications |
