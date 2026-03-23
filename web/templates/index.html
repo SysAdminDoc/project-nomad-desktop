@@ -191,8 +191,8 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 /* ─── Layout ─── */
-.main-content { margin-left: 240px; min-height: 100vh; }
-.container { max-width: 1200px; margin: 0 auto; padding: 16px 24px; }
+.main-content { margin-left: 240px; min-height: 100vh; overflow-x: hidden; }
+.container { max-width: 1400px; margin: 0 auto; padding: 24px 32px; overflow: hidden; }
 
 /* ─── Nav Items (sidebar) ─── */
 .tab {
@@ -266,7 +266,7 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 /* ─── Cards ─── */
-.services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
 .service-card {
   background: var(--surface); backdrop-filter: blur(16px);
   border: 1px solid var(--border); border-radius: var(--radius); padding: 20px;
@@ -472,8 +472,8 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 /* ─── Settings ─── */
-.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 800px) { .settings-grid { grid-template-columns: 1fr; } }
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 100%; overflow: hidden; }
+@media (max-width: 900px) { .settings-grid { grid-template-columns: 1fr; } }
 .settings-card {
   background: var(--surface); backdrop-filter: blur(16px);
   border: 1px solid var(--border); border-radius: var(--radius); padding: 20px;
@@ -4762,7 +4762,7 @@ a { color: var(--accent); text-decoration: none; }
     <div class="settings-grid">
       <div class="settings-card" style="grid-column:1/-1;">
         <h3>System Monitoring</h3>
-        <div class="gauge-row" id="system-gauges"></div>
+        <div class="gauge-row" id="system-gauges"><div style="color:var(--text-muted);font-size:12px;padding:8px 0;">Loading system metrics...</div></div>
       </div>
       <div class="settings-card">
         <h3>System Information</h3>
