@@ -95,6 +95,13 @@ def create_app():
         except Exception:
             pass
 
+    @app.after_request
+    def no_cache(response):
+        """Prevent WebView2 from caching HTML/API responses."""
+        if 'text/html' in response.content_type or 'application/json' in response.content_type:
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
+
     # ─── Pages ─────────────────────────────────────────────────────────
 
     @app.route('/')
