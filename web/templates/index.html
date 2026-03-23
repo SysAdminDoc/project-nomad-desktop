@@ -553,7 +553,8 @@ body{background:var(--bg);color:var(--text)}
           <button class="btn btn-sm btn-danger" onclick="deleteNote()">Delete</button>
         </div>
         <div class="notes-editor-split">
-          <textarea id="note-content" placeholder="Start writing (Markdown supported)..." oninput="autoSaveNote();updateNotePreview()"></textarea>
+          <textarea id="note-content" placeholder="Start writing (Markdown supported)..." oninput="autoSaveNote();updateNotePreview();updateNoteWordCount()"></textarea>
+          <span id="note-word-count" style="font-size:10px;color:var(--text-muted);"></span>
           <div class="notes-preview" id="note-preview" style="display:none;"></div>
         </div>
       </div>
@@ -1024,7 +1025,9 @@ body{background:var(--bg);color:var(--text)}
           <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Min Qty (alert)</label><input id="inv-min" type="number" min="0" step="0.5" value="0" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;"></div>
           <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Daily Usage</label><input id="inv-daily" type="number" min="0" step="0.1" value="0" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;" title="How much you use each day (e.g. 0.5 gallons of water per day)"></div>
           <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Expiration</label><input id="inv-exp" type="date" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;"></div>
-          <div style="grid-column:span 2;"><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Notes</label><input id="inv-notes" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="Optional notes"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Barcode</label><input id="inv-barcode" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="UPC/barcode"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Cost per unit</label><input id="inv-cost" type="number" step="0.01" min="0" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="0.00"></div>
+          <div><label style="color:var(--text-dim);display:block;margin-bottom:3px;">Notes</label><input id="inv-notes" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;" placeholder="Optional notes"></div>
         </div>
         <input type="hidden" id="inv-edit-id" value="">
         <div style="display:flex;gap:6px;margin-top:10px;">
@@ -1038,8 +1041,9 @@ body{background:var(--bg);color:var(--text)}
       <div id="burn-rate-dash" style="margin-bottom:16px;"></div>
       <div id="inv-table-wrap" style="overflow-x:auto;">
         <table class="freq-table" id="inv-table">
-          <thead><tr><th>Name</th><th>Cat</th><th>Qty</th><th>Days Left</th><th>Location</th><th>Expires</th><th>Notes</th><th style="width:70px;"></th></tr></thead>
-          <tbody id="inv-tbody"><tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:20px;">No items yet. Click "+ Add Item" to start tracking supplies.</td></tr></tbody>
+          <thead><tr><th>Name</th><th>Cat</th><th>Qty</th><th>Days Left</th><th>Cost</th><th>Location</th><th>Expires</th><th>Notes</th><th style="width:70px;"></th></tr></thead>
+          <tbody id="inv-tbody"><tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:20px;">No items yet. Click "+ Add Item" to start tracking supplies.</td></tr></tbody>
+          <tfoot id="inv-tfoot"></tfoot>
         </table>
       </div>
     </div>
@@ -4269,14 +4273,43 @@ function formatBytes(b) {
 }
 
 /* ─── Markdown ─── */
+function highlightSyntax(code) {
+  const tokens = [];
+  let tid = 0;
+  function stash(html) { const id = '\x01T' + (tid++) + '\x01'; tokens.push({id, html}); return id; }
+  // Strings (single/double quoted — escaped HTML entities &#39; and &quot;)
+  code = code.replace(/(&#39;(?:[^\\]|\\.)*?&#39;|&quot;(?:[^\\]|\\.)*?&quot;)/g, m =>
+    stash('<span style="color:var(--green)">' + m + '</span>'));
+  // Comments (// and #)
+  code = code.replace(/(\/\/.*$|#.*$)/gm, m =>
+    stash('<span style="color:var(--text-muted)">' + m + '</span>'));
+  // Numbers
+  code = code.replace(/\b(\d+\.?\d*)\b/g, m =>
+    stash('<span style="color:var(--orange)">' + m + '</span>'));
+  // Keywords
+  code = code.replace(/\b(function|const|let|var|if|else|for|while|return|import|from|class|def|async|await|try|catch|throw|new|this|self|True|False|None|true|false|null|undefined|export|default|switch|case|break|continue|yield|lambda|with|as|in|not|and|or|elif|except|finally|raise|pass|del|print|typeof|instanceof)\b/g, m =>
+    stash('<span style="color:var(--accent)">' + m + '</span>'));
+  tokens.forEach(t => { code = code.split(t.id).join(t.html); });
+  return code;
+}
 function renderMarkdown(text) {
   if (!text) return '';
   let h = escapeHtml(text);
-  // Code blocks with copy button
-  h = h.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
-    `<div class="code-wrap"><pre><code>${code}</code></pre><button class="code-copy-btn" onclick="copyCode(this)">Copy</button></div>`);
-  // Inline code
-  h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Extract code blocks first to protect content from other transforms
+  const codeBlocks = [];
+  h = h.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    const highlighted = highlightSyntax(code);
+    const ph = '\x00CB' + codeBlocks.length + '\x00';
+    codeBlocks.push(`<div class="code-wrap"><pre><code>${highlighted}</code></pre><button class="code-copy-btn" onclick="copyCode(this)">Copy</button></div>`);
+    return ph;
+  });
+  // Extract inline code to protect from other transforms
+  const inlineCodes = [];
+  h = h.replace(/`([^`]+)`/g, (_, code) => {
+    const ph = '\x00IC' + inlineCodes.length + '\x00';
+    inlineCodes.push('<code>' + code + '</code>');
+    return ph;
+  });
   // Tables
   h = h.replace(/((?:\|.+\|\n?)+)/g, (match) => {
     const rows = match.trim().split('\n').filter(r => r.trim());
@@ -4303,21 +4336,46 @@ function renderMarkdown(text) {
   h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   // Italic
   h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  // Headers
-  h = h.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  h = h.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  h = h.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-  // Blockquote
-  h = h.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
-  // Unordered list
-  h = h.replace(/((?:^[*-] .+$\n?)+)/gm, (match) => {
-    const items = match.trim().split('\n').map(l => '<li>' + l.replace(/^[*-] /, '') + '</li>').join('');
-    return '<ul>' + items + '</ul>';
+  // Headers (shifted down for chat bubble context: # -> h3, ## -> h4, ### -> h5)
+  h = h.replace(/^### (.+)$/gm, '<h5>$1</h5>');
+  h = h.replace(/^## (.+)$/gm, '<h4>$1</h4>');
+  h = h.replace(/^# (.+)$/gm, '<h3>$1</h3>');
+  // Blockquotes (merge consecutive > lines into one blockquote)
+  h = h.replace(/((?:^&gt; .+$\n?)+)/gm, (match) => {
+    const lines = match.trim().split('\n').map(l => l.replace(/^&gt; /, '')).join('<br>');
+    return '<blockquote>' + lines + '</blockquote>';
   });
-  // Numbered list
-  h = h.replace(/((?:^\d+\. .+$\n?)+)/gm, (match) => {
-    const items = match.trim().split('\n').map(l => '<li>' + l.replace(/^\d+\. /, '') + '</li>').join('');
-    return '<ol>' + items + '</ol>';
+  // Unordered list (supports 2-space nested lists)
+  h = h.replace(/((?:^(?:  )*[*-] .+$\n?)+)/gm, (match) => {
+    const lines = match.trim().split('\n');
+    let result = '', depth = 0;
+    lines.forEach(l => {
+      const level = Math.floor(l.match(/^( *)/)[1].length / 2);
+      const content = l.replace(/^ *[*-] /, '');
+      while (depth < level) { result += '<ul>'; depth++; }
+      while (depth > level) { result += '</li></ul>'; depth--; }
+      if (result && depth === level && !result.endsWith('<ul>')) result += '</li>';
+      result += '<li>' + content;
+    });
+    while (depth > 0) { result += '</li></ul>'; depth--; }
+    result += '</li>';
+    return '<ul>' + result + '</ul>';
+  });
+  // Ordered list (supports 2-space nested lists)
+  h = h.replace(/((?:^(?:  )*\d+\. .+$\n?)+)/gm, (match) => {
+    const lines = match.trim().split('\n');
+    let result = '', depth = 0;
+    lines.forEach(l => {
+      const level = Math.floor(l.match(/^( *)/)[1].length / 2);
+      const content = l.replace(/^ *\d+\. /, '');
+      while (depth < level) { result += '<ol>'; depth++; }
+      while (depth > level) { result += '</li></ol>'; depth--; }
+      if (result && depth === level && !result.endsWith('<ol>')) result += '</li>';
+      result += '<li>' + content;
+    });
+    while (depth > 0) { result += '</li></ol>'; depth--; }
+    result += '</li>';
+    return '<ol>' + result + '</ol>';
   });
   // Links
   h = h.replace(/\[(.+?)\]\((.+?)\)/g, (m, text, url) => {
@@ -4327,6 +4385,9 @@ function renderMarkdown(text) {
   // Paragraphs
   h = h.replace(/\n\n/g, '</p><p>');
   h = h.replace(/\n/g, '<br>');
+  // Restore protected content
+  inlineCodes.forEach((code, i) => { h = h.split('\x00IC' + i + '\x00').join(code); });
+  codeBlocks.forEach((block, i) => { h = h.split('\x00CB' + i + '\x00').join(block); });
   return '<p>' + h + '</p>';
 }
 
@@ -5308,7 +5369,7 @@ function renderNotesList() {
         ${n.pinned ? '<span style="color:var(--accent);font-size:10px;" title="Pinned">&#9733;</span>' : ''}
         <div class="note-title">${escapeHtml(n.title||'Untitled')}</div>
       </div>
-      <div class="note-date">${n.tags ? '<span style="color:var(--accent);font-size:9px;">'+escapeHtml(n.tags)+'</span> ' : ''}${new Date(n.updated_at).toLocaleDateString()}</div>
+      <div class="note-date">${n.tags ? n.tags.split(',').map(t=>t.trim()).filter(t=>t).map(t=>'<span style="display:inline-block;background:var(--accent-dim,rgba(137,180,250,0.15));color:var(--accent);padding:1px 6px;border-radius:10px;font-size:9px;margin:1px;">'+escapeHtml(t)+'</span>').join('') + ' ' : ''}${new Date(n.updated_at).toLocaleDateString()}</div>
     </div>
   `).join('') || '<div style="padding:14px;color:var(--text-muted);font-size:12px;text-align:center;">No notes yet</div>';
 }
@@ -5322,6 +5383,7 @@ function selectNote(id) {
     document.getElementById('note-pin-btn').textContent = n.pinned ? 'Unpin' : 'Pin';
   }
   renderNotesList();
+  updateNoteWordCount();
 }
 async function createNote() {
   const n = await (await fetch('/api/notes', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title:'New Note', content:''})})).json();
@@ -5352,6 +5414,14 @@ function filterNotes() {
       <div class="note-date">${new Date(n.updated_at).toLocaleDateString()}</div>
     </div>
   `).join('') || '<div style="padding:14px;color:var(--text-muted);font-size:12px;text-align:center;">No matches</div>';
+}
+
+function updateNoteWordCount() {
+  const text = document.getElementById('note-content')?.value || '';
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const chars = text.length;
+  const el = document.getElementById('note-word-count');
+  if (el) el.textContent = words > 0 ? `${words} words | ${chars} chars` : '';
 }
 
 function autoSaveNote() {
@@ -6957,10 +7027,12 @@ async function loadInventory() {
     _cachedInvItems = items;
     const tbody = document.getElementById('inv-tbody');
     if (!items.length) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:20px;">No items found.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:20px;">No items found.</td></tr>';
+      document.getElementById('inv-tfoot').innerHTML = '';
     } else {
       const today = new Date().toISOString().slice(0,10);
       const soon = new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+      let totalValue = 0;
       tbody.innerHTML = items.map(i => {
         let expCls = '';
         if (i.expiration) {
@@ -6972,17 +7044,22 @@ async function loadInventory() {
         const expDays = i.expiration ? Math.round((new Date(i.expiration) - new Date(today)) / 86400000) : null;
         const daysLeft = usageDays !== null && expDays !== null ? Math.min(usageDays, expDays) : usageDays !== null ? usageDays : expDays;
         const daysColor = daysLeft === null ? '' : daysLeft < 7 ? 'color:var(--red);font-weight:600;' : daysLeft < 30 ? 'color:var(--orange);font-weight:600;' : 'color:var(--green);';
+        const itemCost = (i.cost || 0);
+        const itemValue = itemCost * i.quantity;
+        totalValue += itemValue;
         return `<tr>
           <td style="${lowStock?'color:var(--red);font-weight:600;':''}">${escapeHtml(i.name)}</td>
           <td><span class="check-cat">${i.category}</span></td>
           <td style="${lowStock?'color:var(--red);font-weight:600;':''}"><span class="qty-adj" onclick="adjustQty(${i.id},-1)" title="-1">&#9660;</span> ${i.quantity} ${escapeHtml(i.unit)} <span class="qty-adj" onclick="adjustQty(${i.id},1)" title="+1">&#9650;</span></td>
           <td style="${daysColor}font-size:12px;font-weight:500;">${daysLeft !== null ? daysLeft + 'd' : '-'}</td>
+          <td style="font-size:11px;">${itemCost > 0 ? '$'+itemCost.toFixed(2) : '-'}</td>
           <td style="font-size:11px;">${escapeHtml(i.location)}</td>
           <td style="${expCls}font-size:11px;">${i.expiration||'-'}</td>
           <td style="font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(i.notes)}</td>
           <td><span style="cursor:pointer;color:var(--accent);font-size:11px;margin-right:6px;" onclick="editInvItem(${i.id})">edit</span><span style="cursor:pointer;color:var(--red);font-size:11px;" onclick="deleteInvItem(${i.id})">x</span></td>
         </tr>`;
       }).join('');
+      document.getElementById('inv-tfoot').innerHTML = totalValue > 0 ? `<tr><td colspan="4" style="text-align:right;font-weight:600;font-size:12px;padding:8px;">Total Inventory Value:</td><td style="font-weight:700;font-size:12px;color:var(--accent);">$${totalValue.toFixed(2)}</td><td colspan="4"></td></tr>` : '';
     }
     // Load summary alerts
     const summary = await (await fetch('/api/inventory/summary')).json();
@@ -7000,7 +7077,7 @@ async function loadInventory() {
       cats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
     }
   } catch(e) {
-    document.getElementById('inv-tbody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red);padding:20px;">Failed to load inventory</td></tr>';
+    document.getElementById('inv-tbody').innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--red);padding:20px;">Failed to load inventory</td></tr>';
   }
 }
 
@@ -7016,14 +7093,17 @@ function showInvForm(item) {
     document.getElementById('inv-daily').value = item.daily_usage || 0;
     document.getElementById('inv-location').value = item.location;
     document.getElementById('inv-exp').value = item.expiration;
+    document.getElementById('inv-barcode').value = item.barcode || '';
+    document.getElementById('inv-cost').value = item.cost || 0;
     document.getElementById('inv-notes').value = item.notes;
   } else {
     document.getElementById('inv-edit-id').value = '';
-    ['inv-name','inv-location','inv-notes'].forEach(id => document.getElementById(id).value = '');
+    ['inv-name','inv-location','inv-notes','inv-barcode'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('inv-qty').value = 1;
     document.getElementById('inv-unit').value = 'ea';
     document.getElementById('inv-min').value = 0;
     document.getElementById('inv-daily').value = 0;
+    document.getElementById('inv-cost').value = 0;
     document.getElementById('inv-exp').value = '';
   }
   // Populate category dropdown
@@ -7048,6 +7128,8 @@ async function saveInvItem() {
     daily_usage: parseFloat(document.getElementById('inv-daily').value) || 0,
     location: document.getElementById('inv-location').value.trim(),
     expiration: document.getElementById('inv-exp').value,
+    barcode: document.getElementById('inv-barcode').value.trim(),
+    cost: parseFloat(document.getElementById('inv-cost').value) || 0,
     notes: document.getElementById('inv-notes').value.trim(),
   };
   if (!data.name) { toast('Name is required', 'warning'); return; }
@@ -8931,7 +9013,7 @@ function stopBarcodeScanner() {
 function barcodeToInventory(code) {
   stopBarcodeScanner();
   document.querySelector('[data-tab="preparedness"]').click();
-  setTimeout(() => { switchPrepSub('inventory'); showInvForm(); document.getElementById('inv-name').value = code; }, 300);
+  setTimeout(() => { switchPrepSub('inventory'); showInvForm(); document.getElementById('inv-barcode').value = code; }, 300);
 }
 
 /* ─── Media Tab ─── */
@@ -9302,20 +9384,37 @@ async function downloadChannelVideo(channelUrl, channelName, category) {
 // ── YouTube Search & Browse ──
 let _ytSearching = false;
 let _channelBrowsing = false;
+let _lastYtSearch = '';
+let _ytSearchLimit = 15;
 
 async function searchYouTube() {
   const q = document.getElementById('yt-search-input').value.trim();
   if (!q || _ytSearching) return;
   _ytSearching = true;
+  _lastYtSearch = q;
+  _ytSearchLimit = 15;
   const results = document.getElementById('yt-video-results');
   const channels = document.getElementById('channel-list');
   results.style.display = ''; channels.style.display = 'none';
-  results.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:12px;">Searching YouTube...</div>';
+  results.innerHTML = '<div style="text-align:center;padding:40px;"><div style="width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px;"></div><div style="color:var(--text-muted);font-size:12px;">Searching YouTube...</div></div>';
   try {
-    const videos = await (await fetch(`/api/youtube/search?q=${encodeURIComponent(q)}&limit=15`)).json();
-    if (videos.error) { results.innerHTML = `<div style="padding:20px;color:var(--red);">${escapeHtml(videos.error)}</div>`; return; }
+    const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(q)}&limit=${_ytSearchLimit}`);
+    const videos = await resp.json();
+    if (videos.error) { results.innerHTML = `<div style="padding:20px;color:var(--red);text-align:center;"><div style="font-weight:600;margin-bottom:6px;">Search Error</div><div style="font-size:12px;">${escapeHtml(videos.error)}</div></div>`; return; }
     renderVideoResults(videos, `Search: "${q}"`);
-  } catch(e) { results.innerHTML = '<div style="padding:20px;color:var(--red);">Search failed</div>'; }
+  } catch(e) { results.innerHTML = '<div style="padding:20px;color:var(--red);text-align:center;"><div style="font-weight:600;margin-bottom:6px;">Search Failed</div><div style="font-size:12px;">Could not connect to the search service. Check your internet connection.</div></div>'; }
+  finally { _ytSearching = false; }
+}
+
+async function loadMoreResults() {
+  if (!_lastYtSearch || _ytSearching) return;
+  _ytSearching = true;
+  _ytSearchLimit += 15;
+  const results = document.getElementById('yt-video-results');
+  try {
+    const videos = await (await fetch(`/api/youtube/search?q=${encodeURIComponent(_lastYtSearch)}&limit=${_ytSearchLimit}`)).json();
+    if (!videos.error) renderVideoResults(videos, `Search: "${_lastYtSearch}"`);
+  } catch(e) { toast('Failed to load more results', 'error'); }
   finally { _ytSearching = false; }
 }
 
@@ -9325,12 +9424,15 @@ async function browseChannelVideos(channelUrl, channelName) {
   const results = document.getElementById('yt-video-results');
   const channels = document.getElementById('channel-list');
   results.style.display = ''; channels.style.display = 'none';
-  results.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:12px;">Loading videos from ${escapeHtml(channelName)}...</div>`;
+  results.innerHTML = `<div style="text-align:center;padding:40px;">
+  <div style="width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px;"></div>
+  <div style="color:var(--text-muted);font-size:12px;">Loading videos from ${escapeHtml(channelName)}...</div>
+</div>`;
   try {
     const videos = await (await fetch(`/api/youtube/channel-videos?url=${encodeURIComponent(channelUrl)}&limit=15`)).json();
-    if (videos.error) { results.innerHTML = `<div style="padding:20px;color:var(--red);">${escapeHtml(videos.error)}</div>`; return; }
+    if (videos.error) { results.innerHTML = `<div style="padding:20px;color:var(--red);text-align:center;"><div style="font-weight:600;margin-bottom:6px;">Channel Error</div><div style="font-size:12px;">${escapeHtml(videos.error)}</div></div>`; return; }
     renderVideoResults(videos, channelName);
-  } catch(e) { results.innerHTML = '<div style="padding:20px;color:var(--red);">Failed to load channel videos</div>'; }
+  } catch(e) { results.innerHTML = '<div style="padding:20px;color:var(--red);text-align:center;"><div style="font-weight:600;margin-bottom:6px;">Failed to Load Videos</div><div style="font-size:12px;">Could not fetch videos from this channel. Check your internet connection.</div></div>'; }
   finally { _channelBrowsing = false; }
 }
 
@@ -9363,6 +9465,9 @@ function renderVideoResults(videos, heading) {
     </div>`;
   }
   html += '</div>';
+  if (_lastYtSearch && heading.startsWith('Search:')) {
+    html += '<div style="text-align:center;margin-top:16px;"><button class="btn btn-sm" onclick="loadMoreResults()">Load More Results</button></div>';
+  }
   results.innerHTML = html;
 }
 
@@ -12022,7 +12127,15 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'c') { e.preventDefault(); toggleLanChat(); }
     if (e.key === 'n') { e.preventDefault(); document.querySelector('[data-tab="notes"]').click(); setTimeout(createNote, 200); }
   }
+  if (e.key === '?' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)) {
+    toggleShortcutsHelp();
+  }
 });
+
+function toggleShortcutsHelp() {
+  const el = document.getElementById('shortcuts-overlay');
+  el.style.display = el.style.display === 'flex' ? 'none' : 'flex';
+}
 
 /* ─── Daily Journal ─── */
 async function loadJournal() {
@@ -13713,5 +13826,22 @@ setInterval(() => { if (!document.hidden) pollBroadcast(); }, 5000);
 setTimeout(loadAlerts, 5000);
 setInterval(() => { if (!document.hidden) loadAlerts(); }, 60000);
 </script>
+<div id="shortcuts-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;align-items:center;justify-content:center;" onclick="if(event.target===this)toggleShortcutsHelp()">
+  <div style="background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="margin:0;font-size:16px;">Keyboard Shortcuts</h3>
+      <button class="btn btn-sm btn-ghost" onclick="toggleShortcutsHelp()" style="font-size:18px;padding:2px 8px;">x</button>
+    </div>
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:12px;">
+      <kbd style="background:var(--surface2);padding:2px 8px;border-radius:4px;font-family:monospace;font-size:11px;">Alt+1-9</kbd><span>Switch tabs</span>
+      <kbd style="background:var(--surface2);padding:2px 8px;border-radius:4px;font-family:monospace;font-size:11px;">Ctrl+K</kbd><span>Global search</span>
+      <kbd style="background:var(--surface2);padding:2px 8px;border-radius:4px;font-family:monospace;font-size:11px;">Alt+N</kbd><span>New note</span>
+      <kbd style="background:var(--surface2);padding:2px 8px;border-radius:4px;font-family:monospace;font-size:11px;">Alt+T</kbd><span>Toggle timer</span>
+      <kbd style="background:var(--surface2);padding:2px 8px;border-radius:4px;font-family:monospace;font-size:11px;">Alt+C</kbd><span>Toggle LAN chat</span>
+      <kbd style="background:var(--surface2);padding:2px 8px;border-radius:4px;font-family:monospace;font-size:11px;">Alt+Q</kbd><span>Quick actions</span>
+      <kbd style="background:var(--surface2);padding:2px 8px;border-radius:4px;font-family:monospace;font-size:11px;">?</kbd><span>This help dialog</span>
+    </div>
+  </div>
+</div>
 </body>
 </html>
