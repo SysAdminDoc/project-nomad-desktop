@@ -138,6 +138,7 @@ body{background:var(--bg);color:var(--text)}
   <span id="ss-inventory" title="Total inventory items" style="cursor:pointer;" onclick="switchToTab('preparedness');switchPrepSub('inventory')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Supplies: <strong style="color:var(--text);">-</strong></span>
   <span id="ss-contacts" title="Emergency contacts" style="cursor:pointer;" onclick="switchToTab('preparedness');switchPrepSub('contacts')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Contacts: <strong style="color:var(--text);">-</strong></span>
   <span id="ss-alerts" title="Active alerts" style="cursor:pointer;" onclick="toggleAlertBar()" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Alerts: <strong style="color:var(--text);">0</strong></span>
+  <span id="ss-situation" title="Situation board" style="cursor:pointer;" onclick="switchToTab('preparedness')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Status: <strong style="color:var(--green);">Normal</strong></span>
   <span style="flex:1;"></span>
   <span id="ss-time" style="font-family:'Cascadia Code','Consolas',monospace;font-size:10px;"></span>
 </div>
@@ -747,6 +748,7 @@ body{background:var(--bg);color:var(--text)}
             <input type="text" id="media-search" placeholder="Search..." oninput="filterMediaList()" style="width:120px;padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:11px;">
             <button class="btn btn-sm" onclick="toggleMediaSelect()" id="media-select-btn" title="Select multiple items">Select</button>
             <button class="btn btn-sm" onclick="toggleMediaView()" id="media-view-btn" title="Toggle grid/list view">Grid</button>
+            <button class="btn btn-sm" onclick="toggleDlQueue()" id="dl-queue-btn" title="Download queue">Downloads</button>
           </div>
         </div>
 
@@ -768,6 +770,15 @@ body{background:var(--bg);color:var(--text)}
             <span id="media-dl-speed" style="color:var(--text-muted);font-size:11px;"></span>
           </div>
           <div class="progress-bar"><div class="fill" id="media-dl-fill" style="width:0%"></div></div>
+        </div>
+
+        <!-- Download Queue -->
+        <div id="dl-queue-panel" style="display:none;border-top:1px solid var(--border);background:var(--surface);max-height:200px;overflow-y:auto;">
+          <div style="padding:6px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);">
+            <span style="font-weight:600;font-size:12px;">Downloads</span>
+            <button class="btn btn-sm btn-ghost" onclick="toggleDlQueue()" style="font-size:12px;padding:2px 6px;">x</button>
+          </div>
+          <div id="dl-queue-list" style="padding:4px 16px;font-size:11px;"></div>
         </div>
 
         <!-- Catalog Panel (hidden by default) -->
@@ -806,6 +817,7 @@ body{background:var(--bg);color:var(--text)}
             <span style="font-weight:600;font-size:13px;">Survival Channel Library</span>
             <span style="font-size:11px;color:var(--text-muted);" id="channel-count">171 channels across 20 categories</span>
             <div style="flex:1;"></div>
+            <button class="btn btn-sm" onclick="loadSubscriptions()" id="subs-btn" title="My subscriptions">Subscriptions</button>
             <select id="channel-cat-filter" onchange="filterChannels()" style="background:var(--surface);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:6px;font-size:11px;">
               <option value="">All Categories</option>
             </select>
@@ -9257,6 +9269,7 @@ function renderChannels(channels) {
           <div style="font-size:10px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(ch.focus)}</div>
         </div>
         <div style="display:flex;gap:4px;flex-shrink:0;">
+          <button class="btn btn-sm" onclick="event.stopPropagation();subscribeChannel('${escapeAttr(ch.url)}','${escapeAttr(ch.name)}','${escapeAttr(ch.category)}')" title="Subscribe">+</button>
           <button class="btn btn-sm btn-primary" onclick="browseChannelVideos('${escapeAttr(ch.url)}','${escapeAttr(ch.name)}')" title="Browse videos">Browse</button>
           <button class="btn btn-sm" onclick="downloadChannelVideo('${escapeAttr(ch.url)}','${escapeAttr(ch.name)}','${escapeAttr(ch.category)}')" title="Download latest videos from this channel">Download</button>
           <a href="${escapeAttr(ch.url)}" target="_blank" class="btn btn-sm btn-ghost" style="text-decoration:none;" title="Open channel on YouTube">Visit</a>
@@ -9544,6 +9557,7 @@ function pollMediaDownloads(watchId) {
         document.getElementById('media-dl-title').textContent = active.title || 'Downloading...';
         document.getElementById('media-dl-fill').style.width = active.percent + '%';
         document.getElementById('media-dl-speed').textContent = active.speed || '';
+        if (document.getElementById('dl-queue-panel').style.display !== 'none') refreshDlQueue();
         if (active.status === 'complete') {
           toast('Download complete: ' + active.title, 'success');
           bar.style.display = 'none'; clearInterval(_mediaDlPoll); _mediaDlPoll = null;
@@ -9558,6 +9572,84 @@ function pollMediaDownloads(watchId) {
       }
     } catch(e) {}
   }, 1500); }, 500);
+}
+
+function toggleDlQueue() {
+  const panel = document.getElementById('dl-queue-panel');
+  panel.style.display = panel.style.display === 'none' ? '' : 'none';
+  if (panel.style.display !== 'none') refreshDlQueue();
+}
+
+async function refreshDlQueue() {
+  try {
+    const all = await (await fetch('/api/ytdlp/progress')).json();
+    const el = document.getElementById('dl-queue-list');
+    const entries = Object.entries(all);
+    if (!entries.length) {
+      el.innerHTML = '<div style="padding:8px 0;color:var(--text-muted);">No downloads</div>';
+      return;
+    }
+    el.innerHTML = entries.map(([id, p]) => {
+      const statusColor = p.status === 'complete' ? 'var(--green)' : p.status === 'error' ? 'var(--red)' : 'var(--accent)';
+      const pct = p.status === 'complete' ? 100 : (p.percent || 0);
+      return `<div style="padding:4px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(p.title || 'Download #' + id)}</span>
+          <span style="color:${statusColor};font-weight:600;margin-left:8px;">${p.status === 'complete' ? 'Done' : p.status === 'error' ? 'Failed' : pct + '%'}</span>
+        </div>
+        ${p.status === 'downloading' ? `<div style="height:3px;background:var(--surface2);border-radius:2px;margin-top:2px;"><div style="height:100%;background:var(--accent);border-radius:2px;width:${pct}%;transition:width 0.3s;"></div></div>` : ''}
+        ${p.speed ? `<div style="color:var(--text-muted);font-size:10px;">${p.speed}</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch {}
+}
+
+async function subscribeChannel(url, name, category) {
+  try {
+    const r = await fetch('/api/subscriptions', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name, url, category})});
+    const d = await r.json();
+    if (d.status === 'subscribed') toast(`Subscribed to ${name}`, 'success');
+    else toast(d.error || 'Already subscribed', 'info');
+  } catch(e) { toast('Failed to subscribe', 'error'); }
+}
+
+async function unsubscribeChannel(id, name) {
+  await fetch(`/api/subscriptions/${id}`, {method:'DELETE'});
+  toast(`Unsubscribed from ${name}`, 'info');
+  loadSubscriptions();
+}
+
+async function loadSubscriptions() {
+  const results = document.getElementById('yt-video-results');
+  const channels = document.getElementById('channel-list');
+  results.style.display = 'none'; channels.style.display = '';
+  try {
+    const subs = await (await fetch('/api/subscriptions')).json();
+    if (!subs.length) {
+      channels.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);"><div style="font-size:24px;margin-bottom:8px;">No subscriptions yet</div><div style="font-size:12px;">Click the + button on any channel to subscribe</div></div>';
+      return;
+    }
+    let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-weight:700;font-size:14px;">My Subscriptions <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(${subs.length} channels)</span></span>
+      <button class="btn btn-sm" onclick="filterChannels()">Back to All Channels</button>
+    </div>`;
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:6px;">';
+    for (const s of subs) {
+      html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div style="min-width:0;flex:1;">
+          <div style="font-weight:600;font-size:12px;">${escapeHtml(s.channel_name)}</div>
+          <div style="font-size:10px;color:var(--text-muted);">${escapeHtml(s.category)}</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0;">
+          <button class="btn btn-sm btn-primary" onclick="browseChannelVideos('${escapeAttr(s.channel_url)}','${escapeAttr(s.channel_name)}')" title="Browse videos">Browse</button>
+          <button class="btn btn-sm" style="color:var(--red);" onclick="unsubscribeChannel(${s.id},'${escapeAttr(s.channel_name)}')" title="Unsubscribe">x</button>
+        </div>
+      </div>`;
+    }
+    html += '</div>';
+    channels.innerHTML = html;
+  } catch(e) { channels.innerHTML = '<div style="padding:20px;color:var(--red);">Failed to load subscriptions</div>'; }
 }
 
 async function uploadMediaFiles() {
@@ -13571,6 +13663,20 @@ async function updateStatusStrip() {
     el('ss-inventory', `Supplies: <strong style="color:var(--text)">${inv.total||0}</strong>${inv.low_stock>0?` <span style="color:var(--red);">(${inv.low_stock} low)</span>`:''}`);
     el('ss-contacts', `Contacts: <strong style="color:var(--text)">${contacts.length||0}</strong>`);
     el('ss-alerts', `Alerts: <strong style="color:${alerts.length>0?'var(--orange)':'var(--text)'}">${alerts.length}</strong>`);
+  } catch(e) {}
+  // Update situation board status
+  try {
+    const allSettings = await (await fetch('/api/settings')).json();
+    const sitRaw = allSettings['sit_board'];
+    if (sitRaw) {
+      const sit = JSON.parse(sitRaw);
+      const levels = Object.values(sit || {});
+      const worst = levels.includes('red') ? 'red' : levels.includes('yellow') ? 'yellow' : 'green';
+      const labels = {red:'Alert',yellow:'Caution',green:'Normal'};
+      const colors = {red:'var(--red)',yellow:'var(--orange)',green:'var(--green)'};
+      const el2 = document.getElementById('ss-situation');
+      if (el2) el2.innerHTML = `Status: <strong style="color:${colors[worst]};">${labels[worst]}</strong>`;
+    }
   } catch(e) {}
   // Update clock
   const now = new Date();

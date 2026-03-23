@@ -3590,6 +3590,40 @@ def create_app():
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
+    # ─── Channel Subscriptions ──────────────────────────────────────
+    @app.route('/api/subscriptions')
+    def api_subscriptions_list():
+        db = get_db()
+        rows = db.execute('SELECT * FROM subscriptions ORDER BY channel_name').fetchall()
+        db.close()
+        return jsonify([dict(r) for r in rows])
+
+    @app.route('/api/subscriptions', methods=['POST'])
+    def api_subscriptions_add():
+        data = request.get_json() or {}
+        name = data.get('name', '').strip()
+        url = data.get('url', '').strip()
+        category = data.get('category', '')
+        if not name or not url:
+            return jsonify({'error': 'Name and URL required'}), 400
+        db = get_db()
+        try:
+            db.execute('INSERT INTO subscriptions (channel_name, channel_url, category) VALUES (?, ?, ?)', (name, url, category))
+            db.commit()
+        except Exception:
+            db.close()
+            return jsonify({'error': 'Already subscribed'}), 409
+        db.close()
+        return jsonify({'status': 'subscribed'})
+
+    @app.route('/api/subscriptions/<int:sid>', methods=['DELETE'])
+    def api_subscriptions_delete(sid):
+        db = get_db()
+        db.execute('DELETE FROM subscriptions WHERE id = ?', (sid,))
+        db.commit()
+        db.close()
+        return jsonify({'status': 'unsubscribed'})
+
     # ─── Media Shared Endpoints (favorites, batch) ────────────────────
 
     @app.route('/api/media/favorite', methods=['POST'])
@@ -3733,15 +3767,22 @@ def create_app():
 
         def do_download():
             vdir = get_video_dir()
+            dl_url = url
             try:
                 # Get video info first
                 _ytdlp_downloads[dl_id]['status'] = 'fetching info'
                 info_result = subprocess.run(
-                    [exe, '--no-download', '--print', '%(title)s|||%(duration_string)s|||%(filesize_approx)s', url],
+                    [exe, '--no-download', '--print', '%(title)s|||%(duration_string)s|||%(filesize_approx)s', dl_url],
                     capture_output=True, text=True, timeout=30, creationflags=0x08000000,
                 )
+                if info_result.returncode != 0:
+                    # Video unavailable — report error with clear message
+                    _ytdlp_downloads[dl_id] = {'status': 'error', 'percent': 0,
+                        'title': 'Video unavailable', 'speed': '',
+                        'error': 'This video is unavailable on YouTube. Try searching for it by name.'}
+                    return
                 parts = info_result.stdout.strip().split('|||')
-                video_title = parts[0] if parts else url
+                video_title = parts[0] if parts else dl_url
                 video_duration = parts[1] if len(parts) > 1 else ''
                 _ytdlp_downloads[dl_id]['title'] = video_title
 
@@ -3860,17 +3901,49 @@ def create_app():
 
         def do_queue():
             vdir = get_video_dir()
+            succeeded = 0
+            failed = 0
             for i, item in enumerate(to_download):
+                title = item.get('title', '...')
                 _ytdlp_downloads[queue_id].update({
                     'status': 'downloading', 'percent': 0, 'queue_pos': i + 1,
-                    'title': f'[{i+1}/{len(to_download)}] {item.get("title", "...")}', 'speed': '',
+                    'title': f'[{i+1}/{len(to_download)}] {title}', 'speed': '',
                 })
+
+                # Try direct URL first, then search fallback if unavailable
+                url = item['url']
+                use_search = False
+                try:
+                    check = subprocess.run(
+                        [exe, '--simulate', '--no-playlist', url],
+                        capture_output=True, text=True, timeout=15, creationflags=0x08000000,
+                    )
+                    if check.returncode != 0:
+                        # URL is dead — search for the video by title instead
+                        use_search = True
+                        _ytdlp_downloads[queue_id]['title'] = f'[{i+1}/{len(to_download)}] Searching: {title}'
+                        search_result = subprocess.run(
+                            [exe, '--flat-playlist', '--dump-json', f'ytsearch1:{title}'],
+                            capture_output=True, text=True, timeout=20, creationflags=0x08000000,
+                        )
+                        if search_result.returncode == 0 and search_result.stdout.strip():
+                            found = json.loads(search_result.stdout.strip().split('\n')[0])
+                            url = f"https://www.youtube.com/watch?v={found['id']}"
+                            title = found.get('title', title)
+                            _ytdlp_downloads[queue_id]['title'] = f'[{i+1}/{len(to_download)}] {title}'
+                        else:
+                            log.warning(f'Video unavailable and search failed: {item.get("title")}')
+                            failed += 1
+                            continue
+                except Exception:
+                    pass  # If check fails, try downloading anyway
+
                 try:
                     output_tmpl = os.path.join(vdir, '%(title)s.%(ext)s')
                     proc = subprocess.Popen(
                         [exe, '-f', 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best',
                          '--merge-output-format', 'mp4', '--newline', '--no-playlist',
-                         '-o', output_tmpl, item['url']],
+                         '-o', output_tmpl, url],
                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                         creationflags=0x08000000,
                     )
@@ -3887,6 +3960,7 @@ def create_app():
                     proc.wait(timeout=3600)
 
                     if proc.returncode == 0:
+                        succeeded += 1
                         # Find the file
                         for f in sorted(os.listdir(vdir), key=lambda x: os.path.getmtime(os.path.join(vdir, x)), reverse=True):
                             fpath = os.path.join(vdir, f)
@@ -3901,7 +3975,10 @@ def create_app():
                 except Exception as e:
                     log.error(f'Catalog download failed for {item.get("title")}: {e}')
 
-            _ytdlp_downloads[queue_id] = {'status': 'complete', 'percent': 100, 'title': f'Done — {len(to_download)} videos',
+            summary = f'Done — {succeeded} downloaded'
+            if failed:
+                summary += f', {failed} unavailable'
+            _ytdlp_downloads[queue_id] = {'status': 'complete', 'percent': 100, 'title': summary,
                                            'speed': '', 'error': '', 'queue_total': len(to_download), 'queue_pos': len(to_download)}
 
         threading.Thread(target=do_queue, daemon=True).start()
