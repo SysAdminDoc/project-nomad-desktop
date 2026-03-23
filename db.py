@@ -488,6 +488,8 @@ def init_db():
     # Schema migrations FIRST (before indexes that depend on new columns)
     for migration in [
         'ALTER TABLE inventory ADD COLUMN daily_usage REAL DEFAULT 0',
+        'ALTER TABLE inventory ADD COLUMN barcode TEXT DEFAULT ""',
+        'ALTER TABLE inventory ADD COLUMN cost REAL DEFAULT 0',
         'ALTER TABLE notes ADD COLUMN tags TEXT DEFAULT ""',
         'ALTER TABLE notes ADD COLUMN pinned INTEGER DEFAULT 0',
         'ALTER TABLE documents ADD COLUMN doc_category TEXT DEFAULT ""',
