@@ -4705,60 +4705,6 @@ a { color: var(--accent); text-decoration: none; }
     </div><!-- /psub-family -->
   </div>
 
-  <!-- LAN Chat Widget -->
-  <div id="lan-chat-btn" onclick="toggleLanChat()" style="position:fixed;bottom:20px;left:260px;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--green));color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:9990;font-size:18px;transition:transform 0.2s;" title="LAN Chat">&#9993;</div>
-  <div id="lan-chat-panel" style="display:none;position:fixed;bottom:80px;left:260px;width:360px;height:440px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);z-index:9990;flex-direction:column;overflow:hidden;">
-    <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
-      <span style="font-weight:600;font-size:13px;">LAN Chat</span>
-      <div style="display:flex;gap:6px;align-items:center;">
-        <span style="font-size:10px;color:var(--text-muted);" id="lan-chat-status">Local network</span>
-        <button class="btn btn-sm btn-ghost" onclick="toggleLanChat()" style="font-size:16px;padding:2px 6px;">x</button>
-      </div>
-    </div>
-    <div style="padding:6px 14px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;">
-      <label style="font-size:11px;color:var(--text-dim);">Name:</label>
-      <input id="lan-chat-name" style="flex:1;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:6px;font-size:11px;outline:none;" placeholder="Your name" oninput="localStorage.setItem('nomad-lan-name',this.value)">
-    </div>
-    <div id="lan-chat-messages" style="flex:1;overflow-y:auto;padding:8px 14px;font-size:12px;"></div>
-    <div style="padding:8px 14px;border-top:1px solid var(--border);display:flex;gap:6px;">
-      <input id="lan-chat-input" style="flex:1;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:var(--radius-sm);font-size:12px;outline:none;" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendLanMsg()">
-      <button class="btn btn-sm btn-primary" onclick="sendLanMsg()">Send</button>
-    </div>
-  </div>
-
-  <!-- Quick Actions -->
-  <div id="quick-actions-btn" onclick="toggleQuickActions()" style="position:fixed;bottom:20px;right:20px;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--green));color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:9990;font-size:22px;transition:transform 0.2s;" title="Quick Actions">+</div>
-  <div id="quick-actions-menu" style="display:none;position:fixed;bottom:78px;right:20px;z-index:9990;flex-direction:column;gap:6px;">
-    <button class="btn btn-sm btn-primary" onclick="quickLogIncident()" style="box-shadow:var(--shadow-sm);">Log Incident</button>
-    <button class="btn btn-sm btn-primary" onclick="toggleTimerPanel();toggleQuickActions()" style="box-shadow:var(--shadow-sm);">Start Timer</button>
-    <button class="btn btn-sm btn-primary" onclick="quickAddInventory()" style="box-shadow:var(--shadow-sm);">Add Supply</button>
-    <button class="btn btn-sm btn-primary" onclick="quickWeatherObs()" style="box-shadow:var(--shadow-sm);">Weather Obs</button>
-    <button class="btn btn-sm btn-primary" onclick="quickNewNote()" style="box-shadow:var(--shadow-sm);">New Note</button>
-  </div>
-
-  <!-- Timer Widget -->
-  <div id="timer-btn" onclick="toggleTimerPanel()" style="position:fixed;bottom:20px;right:80px;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--red));color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:9990;font-size:18px;transition:transform 0.2s;" title="Timers">&#9202;</div>
-  <div id="timer-panel" style="display:none;position:fixed;bottom:80px;right:80px;width:320px;max-height:400px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);z-index:9990;flex-direction:column;overflow:hidden;">
-    <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
-      <span style="font-weight:600;font-size:13px;">Timers</span>
-      <button class="btn btn-sm btn-ghost" onclick="toggleTimerPanel()" style="font-size:16px;padding:2px 6px;">x</button>
-    </div>
-    <div style="padding:8px 14px;border-bottom:1px solid var(--border);display:flex;gap:4px;flex-wrap:wrap;">
-      <input id="timer-name" style="flex:1;min-width:100px;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:6px;font-size:11px;outline:none;" placeholder="Timer name">
-      <input id="timer-mins" type="number" min="1" max="1440" value="30" style="width:50px;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:4px 6px;border-radius:6px;font-size:11px;outline:none;">
-      <span style="font-size:11px;color:var(--text-dim);align-self:center;">min</span>
-      <button class="btn btn-sm btn-primary" onclick="createTimer()">Start</button>
-    </div>
-    <div style="padding:4px 8px;border-bottom:1px solid var(--border);display:flex;gap:4px;flex-wrap:wrap;">
-      <button class="btn btn-sm" onclick="createTimerQuick('Water purification',30)" style="font-size:10px;padding:2px 8px;">Water 30m</button>
-      <button class="btn btn-sm" onclick="createTimerQuick('Medication',240)" style="font-size:10px;padding:2px 8px;">Meds 4h</button>
-      <button class="btn btn-sm" onclick="createTimerQuick('Watch change',120)" style="font-size:10px;padding:2px 8px;">Watch 2h</button>
-      <button class="btn btn-sm" onclick="createTimerQuick('Cooking',15)" style="font-size:10px;padding:2px 8px;">Cook 15m</button>
-    </div>
-    <div id="timer-list" style="flex:1;overflow-y:auto;padding:8px 14px;font-size:12px;"></div>
-  </div>
-
-  <!-- Settings Tab -->
   <div id="tab-settings" class="tab-content">
     <div class="settings-grid">
       <div class="settings-card" style="grid-column:1/-1;">
@@ -4950,6 +4896,59 @@ a { color: var(--accent); text-decoration: none; }
   </div>
 </div>
 </div><!-- /main-content -->
+
+<!-- LAN Chat Widget (fixed position, outside main content flow) -->
+<div id="lan-chat-btn" onclick="toggleLanChat()" style="position:fixed;bottom:20px;left:260px;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--green));color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:9990;font-size:18px;transition:transform 0.2s;" title="LAN Chat">&#9993;</div>
+<div id="lan-chat-panel" style="display:none;position:fixed;bottom:80px;left:260px;width:360px;height:440px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);z-index:9990;flex-direction:column;overflow:hidden;">
+  <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+    <span style="font-weight:600;font-size:13px;">LAN Chat</span>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <span style="font-size:10px;color:var(--text-muted);" id="lan-chat-status">Local network</span>
+      <button class="btn btn-sm btn-ghost" onclick="toggleLanChat()" style="font-size:16px;padding:2px 6px;">x</button>
+    </div>
+  </div>
+  <div style="padding:6px 14px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;">
+    <label style="font-size:11px;color:var(--text-dim);">Name:</label>
+    <input id="lan-chat-name" style="flex:1;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:6px;font-size:11px;outline:none;" placeholder="Your name" oninput="localStorage.setItem('nomad-lan-name',this.value)">
+  </div>
+  <div id="lan-chat-messages" style="flex:1;overflow-y:auto;padding:8px 14px;font-size:12px;"></div>
+  <div style="padding:8px 14px;border-top:1px solid var(--border);display:flex;gap:6px;">
+    <input id="lan-chat-input" style="flex:1;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:var(--radius-sm);font-size:12px;outline:none;" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendLanMsg()">
+    <button class="btn btn-sm btn-primary" onclick="sendLanMsg()">Send</button>
+  </div>
+</div>
+
+<!-- Quick Actions (fixed position, outside main content flow) -->
+<div id="quick-actions-btn" onclick="toggleQuickActions()" style="position:fixed;bottom:20px;right:20px;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--green));color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:9990;font-size:22px;transition:transform 0.2s;" title="Quick Actions">+</div>
+<div id="quick-actions-menu" style="display:none;position:fixed;bottom:78px;right:20px;z-index:9990;flex-direction:column;gap:6px;">
+  <button class="btn btn-sm btn-primary" onclick="quickLogIncident()" style="box-shadow:var(--shadow-sm);">Log Incident</button>
+  <button class="btn btn-sm btn-primary" onclick="toggleTimerPanel();toggleQuickActions()" style="box-shadow:var(--shadow-sm);">Start Timer</button>
+  <button class="btn btn-sm btn-primary" onclick="quickAddInventory()" style="box-shadow:var(--shadow-sm);">Add Supply</button>
+  <button class="btn btn-sm btn-primary" onclick="quickWeatherObs()" style="box-shadow:var(--shadow-sm);">Weather Obs</button>
+  <button class="btn btn-sm btn-primary" onclick="quickNewNote()" style="box-shadow:var(--shadow-sm);">New Note</button>
+</div>
+
+<!-- Timer Widget (fixed position, outside main content flow) -->
+<div id="timer-btn" onclick="toggleTimerPanel()" style="position:fixed;bottom:20px;right:80px;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--red));color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:9990;font-size:18px;transition:transform 0.2s;" title="Timers">&#9202;</div>
+<div id="timer-panel" style="display:none;position:fixed;bottom:80px;right:80px;width:320px;max-height:400px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);z-index:9990;flex-direction:column;overflow:hidden;">
+  <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+    <span style="font-weight:600;font-size:13px;">Timers</span>
+    <button class="btn btn-sm btn-ghost" onclick="toggleTimerPanel()" style="font-size:16px;padding:2px 6px;">x</button>
+  </div>
+  <div style="padding:8px 14px;border-bottom:1px solid var(--border);display:flex;gap:4px;flex-wrap:wrap;">
+    <input id="timer-name" style="flex:1;min-width:100px;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:6px;font-size:11px;outline:none;" placeholder="Timer name">
+    <input id="timer-mins" type="number" min="1" max="1440" value="30" style="width:50px;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:4px 6px;border-radius:6px;font-size:11px;outline:none;">
+    <span style="font-size:11px;color:var(--text-dim);align-self:center;">min</span>
+    <button class="btn btn-sm btn-primary" onclick="createTimer()">Start</button>
+  </div>
+  <div style="padding:4px 8px;border-bottom:1px solid var(--border);display:flex;gap:4px;flex-wrap:wrap;">
+    <button class="btn btn-sm" onclick="createTimerQuick('Water purification',30)" style="font-size:10px;padding:2px 8px;">Water 30m</button>
+    <button class="btn btn-sm" onclick="createTimerQuick('Medication',240)" style="font-size:10px;padding:2px 8px;">Meds 4h</button>
+    <button class="btn btn-sm" onclick="createTimerQuick('Watch change',120)" style="font-size:10px;padding:2px 8px;">Watch 2h</button>
+    <button class="btn btn-sm" onclick="createTimerQuick('Cooking',15)" style="font-size:10px;padding:2px 8px;">Cook 15m</button>
+  </div>
+  <div id="timer-list" style="flex:1;overflow-y:auto;padding:8px 14px;font-size:12px;"></div>
+</div>
 
 <!-- Setup Wizard -->
 <div class="wizard-overlay" id="wizard" role="dialog" aria-modal="true" aria-label="Setup Wizard" style="display:none;">
