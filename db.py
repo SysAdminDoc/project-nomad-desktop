@@ -473,6 +473,15 @@ def init_db():
             dismissed INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            channel_name TEXT NOT NULL,
+            channel_url TEXT NOT NULL UNIQUE,
+            category TEXT DEFAULT '',
+            last_checked TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now'))
+        );
     ''')
     conn.commit()
 
