@@ -4691,6 +4691,10 @@ async function sendChat() {
       body: JSON.stringify({model, knowledge_base: kbEnabled, situation_context: document.getElementById('sit-context-toggle').checked, system_prompt: PRESETS[activePreset] || '', messages: chatMessages.filter(m=>m.content && m.role !== 'thinking').slice(0,-1)}),
       signal: _chatAbortCtrl.signal,
     });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || `AI service error (${resp.status})`);
+    }
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
     let full = '';
