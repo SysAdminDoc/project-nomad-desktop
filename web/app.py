@@ -1954,8 +1954,13 @@ def create_app():
     @app.route('/api/activity')
     def api_activity():
         limit = request.args.get('limit', 50, type=int)
+        filter_val = request.args.get('filter', '')
         db = get_db()
-        rows = db.execute('SELECT * FROM activity_log ORDER BY created_at DESC LIMIT ?', (limit,)).fetchall()
+        if filter_val:
+            rows = db.execute('SELECT * FROM activity_log WHERE event LIKE ? OR service LIKE ? ORDER BY created_at DESC LIMIT ?',
+                              (f'%{filter_val}%', f'%{filter_val}%', limit)).fetchall()
+        else:
+            rows = db.execute('SELECT * FROM activity_log ORDER BY created_at DESC LIMIT ?', (limit,)).fetchall()
         db.close()
         return jsonify([dict(r) for r in rows])
 
@@ -3490,16 +3495,62 @@ def create_app():
 
     @app.route('/api/channels/catalog')
     def api_channels_catalog():
+        # Filter out dead channels
+        db = get_db()
+        dead_row = db.execute("SELECT value FROM settings WHERE key = 'dead_channels'").fetchone()
+        db.close()
+        dead_urls = set(json.loads(dead_row['value']) if dead_row and dead_row['value'] else [])
+        live = [c for c in CHANNEL_CATALOG if c['url'] not in dead_urls]
         category = request.args.get('category', '')
         if category:
-            return jsonify([c for c in CHANNEL_CATALOG if c['category'] == category])
-        return jsonify(CHANNEL_CATALOG)
+            return jsonify([c for c in live if c['category'] == category])
+        return jsonify(live)
 
     @app.route('/api/channels/categories')
     def api_channels_categories():
         from collections import Counter
-        counts = Counter(c['category'] for c in CHANNEL_CATALOG)
-        return jsonify([{'name': cat, 'count': counts[cat]} for cat in CHANNEL_CATEGORIES])
+        db = get_db()
+        dead_row = db.execute("SELECT value FROM settings WHERE key = 'dead_channels'").fetchone()
+        db.close()
+        dead_urls = set(json.loads(dead_row['value']) if dead_row and dead_row['value'] else [])
+        live = [c for c in CHANNEL_CATALOG if c['url'] not in dead_urls]
+        counts = Counter(c['category'] for c in live)
+        cats = sorted(counts.keys())
+        return jsonify([{'name': cat, 'count': counts[cat]} for cat in cats])
+
+    @app.route('/api/channels/validate', methods=['POST'])
+    def api_channels_validate():
+        """Check a channel URL — mark dead if no videos found."""
+        data = request.get_json() or {}
+        url = data.get('url', '').strip()
+        if not url:
+            return jsonify({'error': 'No URL'}), 400
+        exe = get_ytdlp_path()
+        if not os.path.isfile(exe):
+            return jsonify({'error': 'Downloader not installed'}), 400
+        try:
+            result = subprocess.run(
+                [exe, '--flat-playlist', '--dump-json', '--playlist-end', '1', url + '/videos'],
+                capture_output=True, text=True, timeout=20, creationflags=0x08000000,
+            )
+            alive = result.returncode == 0 and bool(result.stdout.strip())
+            if not alive:
+                db = get_db()
+                row = db.execute("SELECT value FROM settings WHERE key = 'dead_channels'").fetchone()
+                dead = json.loads(row['value']) if row and row['value'] else []
+                if url not in dead:
+                    dead.append(url)
+                    if row:
+                        db.execute("UPDATE settings SET value = ? WHERE key = 'dead_channels'", (json.dumps(dead),))
+                    else:
+                        db.execute("INSERT INTO settings (key, value) VALUES ('dead_channels', ?)", (json.dumps(dead),))
+                    db.commit()
+                db.close()
+            return jsonify({'url': url, 'alive': alive})
+        except subprocess.TimeoutExpired:
+            return jsonify({'url': url, 'alive': True})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
     # ─── YouTube Search & Channel Videos ─────────────────────────────
 
@@ -4639,6 +4690,32 @@ def create_app():
         gpx += '</gpx>'
         return Response(gpx, mimetype='application/gpx+xml',
                        headers={'Content-Disposition': 'attachment; filename="nomad-waypoints.gpx"'})
+
+    # ─── GPX Waypoint Import ─────────────────────────────────────────
+
+    @app.route('/api/waypoints/import-gpx', methods=['POST'])
+    def api_waypoints_import_gpx():
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file'}), 400
+        file = request.files['file']
+        content = file.read().decode('utf-8', errors='replace')
+        import re
+        wpts = re.findall(r'<wpt\s+lat="([^"]+)"\s+lon="([^"]+)"[^>]*>.*?</wpt>', content, re.DOTALL)
+        db = get_db()
+        count = 0
+        for lat, lon in wpts:
+            segment = content[content.find(f'lat="{lat}"'):][:500]
+            name_match = re.search(r'<name>([^<]+)</name>', segment)
+            name = name_match.group(1) if name_match else f'Imported {lat},{lon}'
+            try:
+                db.execute('INSERT INTO waypoints (name, lat, lng, category) VALUES (?, ?, ?, ?)',
+                           (name, float(lat), float(lon), 'imported'))
+                count += 1
+            except Exception:
+                pass
+        db.commit()
+        db.close()
+        return jsonify({'status': 'imported', 'count': count})
 
     # ─── Enhanced Dashboard API ───────────────────────────────────────
 
