@@ -5831,6 +5831,7 @@ let currentNoteId = null;
 let saveTimer = null;
 let isSending = false;
 let _chatAbortCtrl = null;
+let _streamRAF = null;
 let currentConvoId = null;
 let allConvos = [];
 let aiName = 'AI';
@@ -6518,10 +6519,13 @@ async function sendChat() {
             if (!lastMsgEl) {
               lastMsgEl = msgs.querySelector('.message.assistant:last-child .content');
             }
-            if (lastMsgEl) {
-              lastMsgEl.innerHTML = renderMarkdown(full);
-              const nearBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 100;
-              if (nearBottom) msgs.scrollTop = msgs.scrollHeight;
+            if (lastMsgEl && !_streamRAF) {
+              _streamRAF = requestAnimationFrame(() => {
+                _streamRAF = null;
+                if (lastMsgEl) lastMsgEl.innerHTML = renderMarkdown(full);
+                const nearBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 100;
+                if (nearBottom) msgs.scrollTop = msgs.scrollHeight;
+              });
             }
           }
           if (d.done && d.eval_count) {
@@ -6869,7 +6873,8 @@ function deleteMap(filename, btn) {
     return;
   }
   fetch('/api/maps/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({filename})})
-    .then(() => { toast('Map deleted', 'warning'); loadMaps(); });
+    .then(r => { if (!r.ok) throw new Error(); toast('Map deleted', 'warning'); loadMaps(); })
+    .catch(() => toast('Failed to delete map', 'error'));
 }
 
 async function downloadMapRegion(regionId) {
@@ -9048,7 +9053,7 @@ async function pollLanMessages() {
     const msgs = await (await fetch(`/api/lan/messages?after=${_lanLastId}`)).json();
     if (msgs.length) {
       const el = document.getElementById('lan-chat-messages');
-      msgs.forEach(m => el.innerHTML += renderLanMsg(m));
+      msgs.forEach(m => el.insertAdjacentHTML('beforeend', renderLanMsg(m)));
       _lanLastId = msgs[msgs.length-1].id;
       el.scrollTop = el.scrollHeight;
     }
@@ -9082,7 +9087,7 @@ async function sendLanMsg() {
     const el = document.getElementById('lan-chat-messages');
     // Remove empty state if present
     if (el.querySelector('div[style*="text-align:center"]')) el.innerHTML = '';
-    el.innerHTML += renderLanMsg(msg);
+    el.insertAdjacentHTML('beforeend', renderLanMsg(msg));
     _lanLastId = msg.id;
     el.scrollTop = el.scrollHeight;
   } catch(e) { toast('Failed to send', 'error'); }
@@ -10517,10 +10522,9 @@ function deleteVaultEntry(id, btn) {
     setTimeout(() => { btn.textContent = 'Delete'; btn.style.background = ''; btn.style.color = ''; delete btn.dataset.confirm; }, 3000);
     return;
   }
-  fetch(`/api/vault/${id}`, {method:'DELETE'}).then(() => {
-    toast('Entry deleted', 'warning');
-    loadVaultList();
-  });
+  fetch(`/api/vault/${id}`, {method:'DELETE'})
+    .then(r => { if (!r.ok) throw new Error(); toast('Entry deleted', 'warning'); loadVaultList(); })
+    .catch(() => toast('Failed to delete entry', 'error'));
 }
 
 /* ─── Weather Journal ─── */
@@ -10678,10 +10682,10 @@ async function readMeshSerial() {
       const {value, done} = await reader.read();
       if (done) break;
       const text = decoder.decode(value);
-      log.innerHTML += `<div>${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})} ${escapeHtml(text)}</div>`;
+      log.insertAdjacentHTML('beforeend', `<div>${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})} ${escapeHtml(text)}</div>`);
       log.scrollTop = log.scrollHeight;
     }
-  } catch(e) { log.innerHTML += `<div style="color:var(--red);">Connection lost</div>`; }
+  } catch(e) { log.insertAdjacentHTML('beforeend', `<div style="color:var(--red);">Connection lost</div>`); }
 }
 
 async function sendMeshMsg() {
@@ -10692,7 +10696,7 @@ async function sendMeshMsg() {
   await writer.write(new TextEncoder().encode(msg + '\n'));
   writer.releaseLock();
   document.getElementById('mesh-msg').value = '';
-  document.getElementById('mesh-log').innerHTML += `<div style="color:var(--accent);">${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} > ${escapeHtml(msg)}</div>`;
+  document.getElementById('mesh-log').insertAdjacentHTML('beforeend', `<div style="color:var(--accent);">${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} > ${escapeHtml(msg)}</div>`);
 }
 
 /* ─── Barcode Scanner ─── */
