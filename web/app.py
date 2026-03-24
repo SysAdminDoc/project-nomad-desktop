@@ -40,7 +40,7 @@ SERVICE_MODULES = {
     'stirling': stirling,
 }
 
-VERSION = '1.9.0'
+VERSION = '2.0.0'
 
 
 def set_version(v):
@@ -536,39 +536,43 @@ def create_app():
     def api_notes_create():
         data = request.get_json() or {}
         db = get_db()
-        cur = db.execute('INSERT INTO notes (title, content) VALUES (?, ?)',
-                         (data.get('title', 'Untitled'), data.get('content', '')))
-        db.commit()
-        note_id = cur.lastrowid
-        note = db.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
-        db.close()
-        return jsonify(dict(note)), 201
+        try:
+            cur = db.execute('INSERT INTO notes (title, content) VALUES (?, ?)',
+                             (data.get('title', 'Untitled'), data.get('content', '')))
+            db.commit()
+            note_id = cur.lastrowid
+            note = db.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
+            return jsonify(dict(note)), 201
+        finally:
+            db.close()
 
     @app.route('/api/notes/<int:note_id>', methods=['PUT'])
     def api_notes_update(note_id):
         data = request.get_json() or {}
         db = get_db()
-        # Fetch current values to preserve on partial update
-        current = db.execute('SELECT title, content FROM notes WHERE id = ?', (note_id,)).fetchone()
-        if not current:
+        try:
+            current = db.execute('SELECT title, content FROM notes WHERE id = ?', (note_id,)).fetchone()
+            if not current:
+                return jsonify({'error': 'Not found'}), 404
+            title = data.get('title') if data.get('title') is not None else current['title']
+            content = data.get('content') if data.get('content') is not None else current['content']
+            db.execute('UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                       (title, content, note_id))
+            db.commit()
+            note = db.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
+            return jsonify(dict(note))
+        finally:
             db.close()
-            return jsonify({'error': 'Not found'}), 404
-        title = data.get('title') if data.get('title') is not None else current['title']
-        content = data.get('content') if data.get('content') is not None else current['content']
-        db.execute('UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                   (title, content, note_id))
-        db.commit()
-        note = db.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
-        db.close()
-        return jsonify(dict(note))
 
     @app.route('/api/notes/<int:note_id>', methods=['DELETE'])
     def api_notes_delete(note_id):
         db = get_db()
-        db.execute('DELETE FROM notes WHERE id = ?', (note_id,))
-        db.commit()
-        db.close()
-        return jsonify({'status': 'deleted'})
+        try:
+            db.execute('DELETE FROM notes WHERE id = ?', (note_id,))
+            db.commit()
+            return jsonify({'status': 'deleted'})
+        finally:
+            db.close()
 
     # ─── Settings API ─────────────────────────────────────────────────
 
@@ -1027,11 +1031,16 @@ def create_app():
     def api_content_summary():
         """Human-readable summary of offline knowledge capacity."""
         db = get_db()
-        convo_count = db.execute('SELECT COUNT(*) as c FROM conversations').fetchone()['c']
-        note_count = db.execute('SELECT COUNT(*) as c FROM notes').fetchone()['c']
-        doc_count = db.execute('SELECT COUNT(*) as c FROM documents WHERE status = ?', ('ready',)).fetchone()['c']
-        doc_chunks = db.execute('SELECT COALESCE(SUM(chunks_count), 0) as c FROM documents WHERE status = ?', ('ready',)).fetchone()['c']
-        db.close()
+        try:
+            row = db.execute('''SELECT
+                (SELECT COUNT(*) FROM conversations) as convos,
+                (SELECT COUNT(*) FROM notes) as notes,
+                (SELECT COUNT(*) FROM documents WHERE status = 'ready') as docs,
+                (SELECT COALESCE(SUM(chunks_count), 0) FROM documents WHERE status = 'ready') as chunks
+            ''').fetchone()
+            convo_count, note_count, doc_count, doc_chunks = row['convos'], row['notes'], row['docs'], row['chunks']
+        finally:
+            db.close()
 
         # Disk usage
         data_dir = get_data_dir()
