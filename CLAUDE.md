@@ -1,11 +1,11 @@
 # Project N.O.M.A.D. for Windows
 
 ## Overview
-Native Windows port of [Project N.O.M.A.D.](https://github.com/Crosstalk-Solutions/project-nomad) — the most comprehensive offline survival command center available. No Docker required. 6 managed services, proactive AI alerts, 13 interactive decision guides, 33 calculators, 30+ quick reference cards, medical module, training scenarios, food production, multi-node federation, power management, security cameras, AI document intelligence, built-in BitTorrent client, media library with 200 survival channels, 38-section user guide, and a premium dark dashboard with 4 themes.
+Native Windows port of [Project N.O.M.A.D.](https://github.com/Crosstalk-Solutions/project-nomad) — the most comprehensive offline survival command center available. No Docker required. 6 managed services, proactive AI alerts, 21 interactive decision guides, 41 calculators, 37+ quick reference cards, medical module, training scenarios, food production, multi-node federation, power management, security cameras, AI document intelligence, built-in BitTorrent client, media library with 200 survival channels, 38-section user guide, and a premium dark dashboard with 4 themes.
 
 ## Tech Stack
 - **Python 3** — Flask web server + pywebview (WebView2) embedded browser
-- **SQLite** — 43 tables, WAL mode, auto-backups, performance indexes
+- **SQLite** — 43 tables, WAL mode, 30s timeout, FK enforcement, SQLite backup API, 35 performance indexes
 - **CSS** — External files: `web/static/css/app.css` (base) + `web/static/css/premium.css` (polish layer)
 - **Native process management** — subprocess for Ollama, kiwix-serve, Kolibri; threading HTTP server for CyberChef
 - **pystray** — system tray icon for background operation
@@ -24,7 +24,7 @@ db.py                 # SQLite init (43 tables), indexes, migrations (migrations
 config.py             # Data directory management
 build.spec            # PyInstaller spec for portable exe
 icon.ico              # App icon (multi-size, 16-256px)
-installer.iss         # Inno Setup installer script (v1.0.0)
+installer.iss         # Inno Setup installer script
 ROADMAP.md            # 10-phase implementation plan (all complete)
 .github/workflows/
   build.yml           # CI/CD — PyInstaller + Inno Setup, dual artifact release on tag push
@@ -55,7 +55,12 @@ services/
 ```
 
 ## Version
-v1.7.0 — ~82,000 lines, 311 API routes, 43 DB tables, 25 prep sub-tabs, 38-section user guide, 21 decision guides, 41 calculators
+v2.0.0 — ~82,000 lines, 311 API routes, 43 DB tables, 25 prep sub-tabs, 38-section user guide, 21 decision guides, 41 calculators
+
+## Audit History
+- v1.8.0: Security — auth deny-on-failure, thread-safe installs, path traversal hardening, DB try-finally on all services, stirling stderr fix, race conditions, Flask startup error feedback
+- v1.9.0: Frontend+DB — resp.ok checks, debounce filters, try-catch loadNotes, SQLite backup API, 30s timeout, FK enforcement, 10 new indexes, division-by-zero guard
+- v2.0.0: Performance+Polish — RAF debounce on streaming chat, insertAdjacentHTML for mesh/LAN log, fetch error handlers, notes CRUD try-finally, content-summary single query, CLAUDE.md update
 
 ## Run / Build
 ```bash
