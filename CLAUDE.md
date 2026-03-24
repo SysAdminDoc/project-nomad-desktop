@@ -29,7 +29,8 @@ ROADMAP.md            # 10-phase implementation plan (all complete)
 .github/workflows/
   build.yml           # CI/CD — PyInstaller + Inno Setup, dual artifact release on tag push
 web/
-  app.py              # Flask routes (~311 endpoints) — ~7845 lines
+  app.py              # Flask routes (~311 endpoints) — ~7900 lines
+  catalog.py          # Content catalogs (books, videos, audio, torrents)
   static/
     css/
       app.css         # Base styles (1173 lines) — themes, layout, components
@@ -51,32 +52,31 @@ services/
   kolibri.py          # Kolibri education
   qdrant.py           # Qdrant vector DB
   stirling.py         # Stirling PDF
-  torrent.py          # BitTorrent client (libtorrent)
+  torrent.py          # BitTorrent client (libtorrent) — singleton TorrentManager, thread-safe
 ```
 
 ## Version
-v2.0.0 — ~82,000 lines, 311 API routes, 43 DB tables, 25 prep sub-tabs, 38-section user guide, 21 decision guides, 41 calculators
+v2.1.0 — ~82,000 lines, 311 API routes, 43 DB tables, 25 prep sub-tabs, 38-section user guide, 21 decision guides, 41 calculators
 
-## Audit History
-- v1.8.0: Security — auth deny-on-failure, thread-safe installs, path traversal hardening, DB try-finally on all services, stirling stderr fix, race conditions, Flask startup error feedback
-- v1.9.0: Frontend+DB — resp.ok checks, debounce filters, try-catch loadNotes, SQLite backup API, 30s timeout, FK enforcement, 10 new indexes, division-by-zero guard
-- v2.0.0: Performance+Polish — RAF debounce on streaming chat, insertAdjacentHTML for mesh/LAN log, fetch error handlers, notes CRUD try-finally, content-summary single query, CLAUDE.md update
+## Audit History (4 rounds)
+- **v1.8.0 — Security**: Auth deny-on-failure, thread-safe install lock, path traversal hardening (normpath+startswith on maps/ZIM delete), DB try-finally on all 7 services, stirling stderr crash fix, race conditions (window handler before thread, health monitor MAX_RESTARTS), Flask startup error feedback
+- **v1.9.0 — Frontend+DB**: resp.ok on AI warmup, debounced media/channel filters (200ms), try-catch loadNotes, SQLite backup API (WAL-safe), 30s connection timeout, FK enforcement, 10 new indexes, division-by-zero guard on critical_burn
+- **v2.0.0 — Performance**: requestAnimationFrame debounce on streaming chat rendering, insertAdjacentHTML for mesh/LAN log (O(1) vs O(n^2)), content-summary 4 queries→1, fetch error handlers on map/vault delete, notes CRUD try-finally
+- **v2.1.0 — Input Validation**: Safe int/float with try-except on ammo/fuel/radiation routes, NULL coalescing on cumulative_rem, harvest quantity >= 0 validation, search escapeAttr+parseInt, timer resp.ok, calculator tab try-catch (30 init calls)
 
 ## Run / Build
 ```bash
 python nomad.py                    # Run from source
-pyinstaller build.spec             # Build portable exe → dist/ProjectNOMAD.exe
-iscc installer.iss                 # Build installer → ProjectNOMAD-Setup.exe
+pyinstaller build.spec             # Build portable exe -> dist/ProjectNOMAD.exe
+iscc installer.iss                 # Build installer -> ProjectNOMAD-Setup.exe
 ```
 
 ## Release Process
 ```bash
-gh release delete v1.0.0 --yes
-git push origin :refs/tags/v1.0.0
-git tag -d v1.0.0
-git tag v1.0.0
-git push origin v1.0.0
-# CI auto-builds both artifacts and creates release
+# Tag and push — CI builds both artifacts
+git tag v2.1.0 && git push origin v2.1.0
+# Or manual: build locally, then create release
+gh release create v2.1.0 dist/ProjectNOMAD-Portable.exe ProjectNOMAD-Setup.exe --title "Project N.O.M.A.D. v2.1.0"
 ```
 
 ## CSS Architecture
@@ -110,66 +110,28 @@ Services, AI Chat, Library, Maps, Notes, Media, Tools, Preparedness, Benchmark, 
 ## 25 Preparedness Sub-Tabs (ordered by emergency priority)
 Inventory, Contacts, Checklists, Medical, Incidents, Family Plan, Security, Power, Garden, Weather, Guides, Calculators, Procedures, Radio, Quick Ref, Signals, Command Post, Journal, Secure Vault, Skills, Ammo, Community, Radiation, Fuel, Equipment
 
-## Key APIs
-- New decision guides: hypothermia_response (7 nodes, pulseless/severe/moderate/mild paths), chest_trauma (11 nodes, penetrating/blunt/tamponade/hemothorax/tension ptx paths), envenomation (snakebite/scorpion/spider/marine), missing_person (child/dementia/hiker/despondent/unknown adult)
-- Medical Supply Status panel in Medical tab: `loadMedicalSupplies()` fetches `/api/inventory?category=Medical`, groups by expired/expiring-soon/low-stock/ok/no-date with color coding
-- New decision guides: wound_infection (fresh/6-24h/1-3d/4+d branches, bite sub-types, lymphangitis), anaphylaxis (mild/moderate/severe-airway/shock with epinephrine dosing)
-- New calculators: Radiation Dose Accumulator (mR/mSv/µSv, protection factor, FEMA thresholds), Water Needs (adults/children/activity/climate/days, container count), Generator Runtime (wattage/load/fuel type/qty, daily burn rates)
-- New quick ref cards: NATO Phonetic Alphabet + Q Codes + APCO 10-codes, Ground-to-Air Signals + Universal Distress Signals, Improvised Shelter (debris hut/lean-to/quinzhee)
-- Bug fixed: aiName in chat empty-state now wrapped with escapeHtml() (XSS prevention)
-- Bugs fixed: model names (option elements), content tier names, LAN IP/URL all wrapped with escapeHtml()/escapeAttr()
-- New decision guides: electrical_hazard (downed lines, active contact, post-shock, fire, lightning), drowning (rescue, resuscitation modified protocol, secondary drowning, cold water)
-- New calculators: Dehydration Assessment (fluid deficit mL by weight/severity/age, replacement route/rate), Vital Signs Assessment (all 5 vitals with age-specific ranges, shock index, color-coded findings)
-- New quick ref cards: Vital Signs Normal Ranges by Age (table + BP classification + critical thresholds), Survival Drug Interactions & Contraindications (dangerous combos, key contraindications)
-- New calculators: Hypothermia Assessment (NOAA wind chill + staging + treatment), Oral Rehydration Therapy (WHO ORT formula), Antibiotic Inventory Planner (10 drugs, courses/days by stock)
-- New quick ref cards: TCCC/MARCH Protocol (6-section combat trauma), Blood Type Compatibility (full ABO chart + transfusion steps)
-- `/api/readiness-score` — 7 categories (water/food/medical/security/comms/shelter/planning), letter grades A-F
-- `/api/inventory/<id>/consume` — decrement by daily_usage or custom amount
-- `/api/inventory/batch-consume` — one-click daily consume for all tracked items
-- `/api/data-summary` — record counts across all 43 tables
-- `/api/skills` — CRUD + seed 60 defaults across 10 survival categories, proficiency tracking
-- `/api/ammo` + `/api/ammo/summary` — ammunition inventory with caliber-grouped summary cards
-- `/api/community` — community resource registry with trust levels and skills/equipment tracking
-- `/api/radiation` + `/api/radiation/clear` — nuclear dose rate log with cumulative rem tracking
-- `/api/fuel` + `/api/fuel/summary` — fuel storage CRUD with type-grouped totals and expiry tracking
-- `/api/equipment` — equipment maintenance log CRUD with service scheduling and status tracking
-- `/api/search/all` — extended search includes skills, ammo, and equipment tables
-- `/api/torrent/*` — add/list/remove torrents, live progress, availability check
-- `/api/media/*` — videos, audio, books CRUD with categories and favorites
-- `/api/channels/*` — 200 survival channels across 24 categories, subscriptions, dead channel detection
-- **Content catalogs**: 123 reference books (archive.org/govt URLs), 114 tutorial videos, 74 training audio entries, 131 curated torrent collections (10 categories: survival/maps/weather/radio/textbooks/medical/farming/videos/software/encyclopedias)
-
-## 38-Section User Guide
-`showHelp(section)` opens an iframe-based guide with optional scroll-to anchor.
-29 contextual help icons (?) throughout the app link to relevant guide sections.
-Sections cover: getting started, all tabs, all prep sub-tabs, AI model selection, inventory best practices, printable reports, calculators reference, NukeMap guide, medical/garden/power/security/weather/comms/vault in-depth, training scenarios, FAQ, and glossary.
-
 ## Critical Gotchas
-- **DECISION_GUIDES array**: ALL 13 guide objects must be inside the `];`. Placing objects after the closing bracket causes a JS syntax error that kills ALL interactivity. Verify with `node -e "vm.createScript(script)"`.
-- **escapeAttr function**: Contains HTML entities (`&amp;`, `&quot;`, `&lt;`) which are correct — browsers do NOT decode entities inside `<script>` tags. Node.js testing with manual HTML decode gives false positives.
-- **FABs must be outside .container**: LAN Chat, Quick Actions, and Timer widgets (position:fixed) must be DOM siblings of .main-content, NOT inside .container. Being inside .container between tab-content divs causes layout interference.
-- **scrollTo on tab switch**: Without `window.scrollTo(0,0)` in the tab click handler, switching from a scrolled-down tab leaves the viewport at the old scroll position, showing blank space.
+- **DECISION_GUIDES array**: ALL 21 guide objects must be inside the `];`. Placing objects after the closing bracket causes a JS syntax error that kills ALL interactivity.
+- **escapeAttr function**: Contains HTML entities (`&amp;`, `&quot;`, `&lt;`) which are correct — browsers do NOT decode entities inside `<script>` tags.
+- **FABs must be outside .container**: LAN Chat, Quick Actions, and Timer widgets (position:fixed) must be DOM siblings of .main-content, NOT inside .container.
+- **scrollTo on tab switch**: Without `window.scrollTo(0,0)` in the tab click handler, switching from a scrolled-down tab leaves the viewport at the old scroll position.
 - **Duplicate CSS removed**: Inline `<style>` in index.html now contains ONLY theme variables (8 lines). All component/layout CSS is in external app.css. Don't re-add inline CSS.
 - **subprocess.PIPE blocks on Windows** — all service Popen calls MUST use subprocess.DEVNULL (4KB pipe buffer fills, process hangs forever)
 - **Ollama OLLAMA_MODELS env var** — must always point to app's configured data dir. Kill any system Ollama on port 11434 before starting app's own instance
-- **Extra </div> tags** — psub sections can have extra closes that push settings tab outside .container. Always verify nesting after editing prep sub-tabs
-- **AI chat streaming errors** — must check `resp.ok` before calling `resp.body.getReader()`, otherwise 503 errors silently hang on "thinking"
+- **AI chat streaming** — must check `resp.ok` before calling `resp.body.getReader()`, otherwise 503 errors silently hang. Streaming render uses requestAnimationFrame to avoid jank.
+- **DB connections** — all service files use try-finally on get_db(). Write routes (ammo, fuel, radiation, harvest, notes, media) also wrapped. SQLite timeout is 30s, FK enforcement ON.
+- **Input validation** — int/float conversions on user input (ammo qty, fuel stabilizer, radiation dose) wrapped in try-except with fallback to 0. Harvest quantity forced >= 0.
+- **Calculator tab init** — 30 calculator functions called on tab switch; wrapped in try-catch to prevent blank tab if any single calc fails.
+- **Extra </div> tags** — psub sections can have extra closes that push settings tab outside .container. Always verify nesting after editing prep sub-tabs.
 - **User data dir on G: drive** — config at `%LOCALAPPDATA%\ProjectNOMAD\config.json` → `{"data_dir":"G:\\ProjectNOMAD"}`
 - NukeMap: `/nukemap` redirects to `/nukemap/` (trailing slash for relative paths)
 - PyInstaller: `_bootstrap()` must skip when `sys.frozen`
 - DB migrations must run BEFORE index creation
 - json.loads from DB needs `or '{}'` / `or '[]'` fallback for NULL values
-- Nested f-strings require Python 3.12+ — extract to variables
 - Kiwix won't start without ZIM files
 - Qdrant uses env var not CLI arg for storage path
 - Planet PMTiles URL: `https://data.source.coop/protomaps/openstreetmap/v4.pmtiles` (build.protomaps.com is dead)
-- Media tab has 5 sub-tabs (Browse Channels/Videos/Audio/Books/Torrents) sharing the same sidebar folder navigation
-- yt-dlp.exe and ffmpeg.exe are auto-installed to services dir, not bundled
-- epub.js is bundled (`web/static/js/epub.min.js`), PDFs use WebView2's built-in PDF viewer via iframe
-- Book catalog URLs point to Internet Archive — may change or go down
 - `switchPrepSub` is overridden at bottom of script to auto-load new tab data; override must come AFTER original definition
-- ICS form entries (_ics309Entries, _ics214Entries) are JS arrays (not DB) — ephemeral, print-only forms
-- QR code via qrserver.com API — works on LAN with internet; graceful text fallback when offline
 - `switchPrepSub` override must call `loadChecklists()` for 'checklists' sub — it doesn't auto-load from the original function
 - Readiness score factors in: ammo (security), fuel (shelter/power), skills proficiency (planning), trusted community members (planning)
 - Equipment `markServiced()` sends full record with updated last_service + status='operational' via PUT
@@ -183,3 +145,5 @@ Sections cover: getting started, all tabs, all prep sub-tabs, AI model selection
 - Prep sub-tabs ordered by emergency priority (Inventory first)
 - Quick-add templates for 58 common inventory items across 8 categories
 - Status strip shows key metrics at a glance
+- Debounced search inputs (media filter, channel filter) at 200ms
+- Error feedback on destructive actions (map delete, vault delete, model delete)
