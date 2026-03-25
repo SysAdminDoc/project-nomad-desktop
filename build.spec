@@ -3,6 +3,10 @@
 # Build: pyinstaller build.spec
 
 import os
+import sys
+
+_is_windows = sys.platform == 'win32'
+_is_macos = sys.platform == 'darwin'
 
 a = Analysis(
     ['nomad.py'],
@@ -51,6 +55,13 @@ a = Analysis(
 
 pyz = PYZ(a.pure)
 
+# Platform-appropriate icon
+_icon = None
+if _is_windows and os.path.isfile('icon.ico'):
+    _icon = 'icon.ico'
+elif _is_macos and os.path.isfile('icon.icns'):
+    _icon = 'icon.icns'
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -70,5 +81,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='icon.ico',
+    icon=_icon,
 )
