@@ -11,7 +11,24 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: ProjectNOMAD-Windows
+            binary: dist/ProjectNOMAD.exe
+            release_name: ProjectNOMAD-Windows.exe
+          - os: ubuntu-22.04
+            artifact: ProjectNOMAD-Linux
+            binary: dist/ProjectNOMAD
+            release_name: ProjectNOMAD-Linux
+          - os: macos-13
+            artifact: ProjectNOMAD-macOS
+            binary: dist/ProjectNOMAD
+            release_name: ProjectNOMAD-macOS
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -22,35 +39,78 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Python dependencies
-        run: pip install flask requests pywebview pystray pillow psutil PyPDF2 pyinstaller
+      # Linux: install system deps for pywebview and pystray
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-gi gir1.2-webkit2-4.1 gobject-introspection \
+            libgirepository1.0-dev libcairo2-dev pkg-config \
+            libappindicator3-dev gir1.2-appindicator3-0.1
 
-      - name: Build portable exe
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build binary
         run: pyinstaller build.spec
 
+      # Windows: also build Inno Setup installer
       - name: Install Inno Setup
+        if: runner.os == 'Windows'
         run: choco install innosetup -y --no-progress
 
       - name: Build installer
+        if: runner.os == 'Windows'
         run: iscc installer.iss
 
-      - name: Upload portable exe
+      # Linux: mark binary executable
+      - name: Mark executable
+        if: runner.os != 'Windows'
+        run: chmod +x dist/ProjectNOMAD
+
+      - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: ProjectNOMAD-Portable
-          path: dist/ProjectNOMAD.exe
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.binary }}
 
       - name: Upload installer
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: ProjectNOMAD-Setup
           path: ProjectNOMAD-Setup.exe
 
-      - name: Create release
-        if: startsWith(github.ref, 'refs/tags/')
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
         run: |
-          gh release create ${{ github.ref_name }} --generate-notes
-          gh release upload ${{ github.ref_name }} dist/ProjectNOMAD.exe --clobber
-          gh release upload ${{ github.ref_name }} ProjectNOMAD-Setup.exe --clobber
+          mkdir -p release
+          cp artifacts/ProjectNOMAD-Windows/ProjectNOMAD.exe release/ProjectNOMAD-Windows.exe
+          cp artifacts/ProjectNOMAD-Linux/ProjectNOMAD release/ProjectNOMAD-Linux
+          cp artifacts/ProjectNOMAD-macOS/ProjectNOMAD release/ProjectNOMAD-macOS
+          cp artifacts/ProjectNOMAD-Setup/ProjectNOMAD-Setup.exe release/ProjectNOMAD-Setup.exe
+          chmod +x release/ProjectNOMAD-Linux release/ProjectNOMAD-macOS
+
+      - name: Create release
+        run: |
+          gh release create ${{ github.ref_name }} \
+            release/ProjectNOMAD-Windows.exe \
+            release/ProjectNOMAD-Setup.exe \
+            release/ProjectNOMAD-Linux \
+            release/ProjectNOMAD-macOS \
+            --repo ${{ github.repository }} \
+            --title "Project N.O.M.A.D. Desktop ${{ github.ref_name }}" \
+            --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
