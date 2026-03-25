@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: build-release
+  cancel-in-progress: false
+
 jobs:
   build:
     strategy:
@@ -23,7 +27,7 @@ jobs:
             artifact: ProjectNOMAD-Linux
             binary: dist/ProjectNOMAD
             release_name: ProjectNOMAD-Linux
-          - os: macos-13
+          - os: macos-latest
             artifact: ProjectNOMAD-macOS
             binary: dist/ProjectNOMAD
             release_name: ProjectNOMAD-macOS
