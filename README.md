@@ -1,7 +1,7 @@
 <div align="center">
 <img src="project_nomad_logo.png" width="200" height="200"/>
 
-# Project N.O.M.A.D. v5.0.0
+# Project N.O.M.A.D. v1.0.0
 ### The Most Complete Offline Survival Command Center Available
 
 **Free. Open Source. No Internet Required After Setup.**
@@ -18,9 +18,13 @@ Cross-platform — runs natively on Windows, Linux, and macOS. No Docker, no WSL
 
 > Competitors charge $280+ for a USB stick with curated content (Prepper Disk, Prep Drive). N.O.M.A.D. does everything they do and 10x more — for free. Offline weather forecasting, 42 interactive calculators, 56 reference cards, 21 decision guides, 17 emergency procedures, 15 checklist templates, 4 training scenarios, NukeMap v3.2.0, VIPTrack military aircraft tracker, medical module with TCCC/triage and vital signs trending, receipt scanner with AI Vision OCR, food production with companion planting and pest guide, community intelligence network, power management, DTMF tone generator, NATO phonetic trainer, wiki-linked notes with templates, media library with resume playback, AI document intelligence with SITREP generation, multimodal AI chat with image analysis, conversation branching, built-in BitTorrent client, 210 survival channels, watch rotation planner, analytics dashboard, and a 38-section user guide.
 
-**[Download Portable .exe](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD.exe)** — single file, no install needed, run from anywhere (USB, desktop, etc.)
+**[Download for Windows (Portable)](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-Windows.exe)** — single file, no install needed, run from anywhere (USB, desktop, etc.)
 
-**[Download Installer](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-Setup.exe)** — installs to Program Files with Start Menu shortcut and desktop icon
+**[Download for Windows (Installer)](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-Setup.exe)** — installs to Program Files with Start Menu shortcut and desktop icon
+
+**[Download for Linux](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-Linux)** — portable binary, `chmod +x` and run
+
+**[Download for macOS](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-macOS)** — portable binary, `chmod +x` and run
 
 ---
 
@@ -180,17 +184,31 @@ Cross-platform — runs natively on Windows, Linux, and macOS. No Docker, no WSL
 
 ## Quick Start
 
-### Option 1: Portable (no install)
-1. Download **[ProjectNOMAD.exe](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD.exe)**
+### Option 1: Windows Portable (no install)
+1. Download **[ProjectNOMAD-Windows.exe](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-Windows.exe)**
 2. Double-click to run — works from USB drives, desktops, anywhere
 3. Follow the setup wizard (choose Essential, Standard, Maximum, or Custom)
 
-### Option 2: Installer
+### Option 2: Windows Installer
 1. Download **[ProjectNOMAD-Setup.exe](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-Setup.exe)**
 2. Run installer — adds Start Menu shortcut and desktop icon
 3. Launch from Start Menu
 
-### Option 3: Run from source (any platform)
+### Option 3: Linux
+```bash
+wget https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-Linux
+chmod +x ProjectNOMAD-Linux
+./ProjectNOMAD-Linux
+```
+
+### Option 4: macOS
+```bash
+curl -LO https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-macOS
+chmod +x ProjectNOMAD-macOS
+./ProjectNOMAD-macOS
+```
+
+### Option 5: Run from source (any platform)
 ```bash
 git clone https://github.com/SysAdminDoc/project-nomad-desktop.git
 cd project-nomad-desktop
@@ -198,7 +216,7 @@ python nomad.py
 ```
 Dependencies auto-install on first run.
 
-### Option 4: Build your own binary
+### Option 6: Build your own binary
 ```bash
 pip install pyinstaller
 pyinstaller build.spec
@@ -305,61 +323,16 @@ Everything from the original plus: 26 preparedness sub-tabs, proactive + predict
 
 ---
 
-## What's New in v5.0.0
+## v1.0.0 Highlights
 
-### New Features
-- **VIPTrack** — Military & VIP aircraft tracker with live ADS-B data, 90+ aircraft silhouettes, watchlist alerts, weather radar. Embedded or hosted.
-- **Multimodal AI Chat** — Attach images for AI analysis using Gemma 3, LLaVA, and other vision models
-- **Conversation Branching** — Fork any AI conversation at any message. "What If?" scenarios for exploring alternate decisions with full branch management.
-- **Receipt Scanner** — AI Vision or Tesseract OCR extracts items/quantities/prices from receipt photos. Bulk import to inventory.
-- **AI Vision Scanner** — Photograph items for AI-powered inventory identification
-- **UPC Barcode Database** — 76 pre-loaded survival items with real UPC codes. Camera-based BarcodeDetector API scanning with manual fallback.
-- **Watch Rotation Planner** — Shift schedules with customizable duration, personnel assignment, and printable views
-- **Weather Action Rules** — Automated triggers on weather conditions with configurable thresholds, actions, and cooldowns
-- **Analytics Dashboard** — New Preparedness sub-tab with charts for inventory trends, categories, consumption, weather, power, and vitals
-- **Dead Drop Messaging** — Encrypted USB thumb drive message exchange using shared secrets
-- **Perimeter Zones** — Security zones with GeoJSON boundaries, camera/waypoint associations, threat levels, and map overlays
-- **Elevation Profiles** — Canvas-based elevation charts for map routes with contour line overlay
-- **Geocode Search** — Location search with autocomplete and reverse geocode on map click
-- **HF Propagation Forecast** — Band condition data for HF radio planning
-- **Medical Reference Flipbook** — 8-page pocket-sized (4x6") printable reference covering vital signs, GCS, TCCC MARCH, drug dosages, wound care, CPR, fractures, envenomation, SBAR, and 9-Line MEDEVAC
-- **Wound Photo Comparison** — Side-by-side healing comparison with photo timeline
-- **Mutual Aid Agreements** — Peer-to-peer commitment tracking via federation
-- **Group Exercises** — Multi-node training exercises with participant tracking, phase progression, and after-action reviews
-- **PDF Report Export** — Operations Binder, Wallet Cards, and SOI as downloadable PDFs via ReportLab
-
-### Architecture & Security
-- **Blueprint Extraction** — Monolithic app.py refactored into 15 Flask Blueprints for maintainability
-- **Database Migration System** — Formal migration tracking with `_migrations` table and SQL scripts in `db_migrations/`
-- **Config Class** — Environment-variable-overridable settings with `.env` file support via python-dotenv
-- **Rate Limiting** — flask-limiter integration (200/min general, 60/min mutating)
-- **CSRF Protection** — Token-based CSRF checking on all mutating requests
-- **SQL Injection Prevention** — Dedicated `sql_safety.py` module with column validation against table schema
-- **Input Validation** — Centralized `validation.py` for JSON and file upload validation
-- **Encrypted Backups** — Optional Fernet encryption for automatic database backups
-- **Vector Clocks** — CRDT-style conflict detection for federation sync
-
-### UI/UX Improvements
-- **E-Ink Theme** — High-contrast black-and-white theme optimized for e-ink displays (no animations, no shadows, grayscale images)
-- **Mobile Bottom Navigation** — Touch-friendly 56px bottom tab bar with slide-out sidebar drawer
-- **WCAG 2.1 AA Accessibility** — Skip-to-content links, ARIA roles throughout, focus-visible outlines, 44px minimum touch targets
-- **Voice Input** — Hands-free inventory entry and AI chat via Web Speech API
-- **Form State Recovery** — Auto-saves form inputs to localStorage to prevent data loss
-- **Dashboard Widget Configuration** — Drag-and-drop widget reordering with resize options
-- **RTL Language Support** — Full right-to-left layout
-- **Internationalization** — Translation system with language selector
-- **Battery Saver Mode** — Auto-disables animations when battery is low
-- **CSS/JS Asset Bundling** — Production bundle support for faster loading
-- **SSE Connection Indicator** — Real-time connection status in header
-- **Push Notifications** — Service worker push alerts when app is backgrounded
-
-### Bug Fixes
-- Fixed database connection leak in auto-start services
-- Fixed unbounded AI context queries causing memory issues with large databases
-- Fixed SQL injection vulnerability in undo system
-- Fixed undo error responses leaking internal exception details
-- Fixed WebView2 click event interception from `-webkit-app-region: drag` CSS on sidebar header
-- Fixed numerous XSS, font consistency, and CSS deduplication issues
+- **566 API routes** across 89 SQLite tables with 122 performance indexes
+- **15 Flask Blueprints** — modular architecture with dedicated `sql_safety.py`, `validation.py`, and `state.py`
+- **9 audit rounds** — security hardening, XSS prevention, DB connection safety (db_session context manager), cascade integrity, input validation, CSRF tokens, rate limiting
+- **338 automated tests** across 34 test files
+- **5 themes** — Desert, Night Ops, Cyber, Red Light, E-Ink
+- **10 languages** with RTL support
+- **PWA** with service worker, offline caching, and push notifications
+- **CI/CD** — GitHub Actions builds portable binaries + Windows installer for all 3 platforms on tag push
 
 ---
 
