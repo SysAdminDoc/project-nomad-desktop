@@ -2,6 +2,7 @@
 
 import sqlite3
 import os
+import glob
 import logging
 from contextlib import contextmanager
 from config import get_data_dir
@@ -86,10 +87,69 @@ def backup_db():
             pass
 
 
+def _get_migrations_dir():
+    """Return the path to db_migrations/ relative to this file."""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'db_migrations')
+
+
+def apply_migrations(conn):
+    """Apply unapplied SQL migration files from db_migrations/.
+
+    Each migration is executed inside its own transaction.  The filename
+    is recorded in the ``_migrations`` table so it is never replayed.
+    """
+    migrations_dir = _get_migrations_dir()
+    if not os.path.isdir(migrations_dir):
+        _log.debug('No db_migrations/ directory found — skipping migrations')
+        return
+
+    # Ensure the tracking table exists (bootstrap)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS _migrations (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename   TEXT    NOT NULL UNIQUE,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+
+    # Which migrations have already been applied?
+    applied = {
+        row[0]
+        for row in conn.execute('SELECT filename FROM _migrations').fetchall()
+    }
+
+    # Discover .sql files, sorted by name (numeric prefix keeps order)
+    sql_files = sorted(glob.glob(os.path.join(migrations_dir, '*.sql')))
+
+    for path in sql_files:
+        filename = os.path.basename(path)
+        if filename in applied:
+            continue
+
+        _log.info('Applying migration: %s', filename)
+        with open(path, 'r', encoding='utf-8') as fh:
+            sql = fh.read()
+
+        try:
+            conn.execute('BEGIN')
+            conn.executescript(sql)
+            conn.execute(
+                'INSERT INTO _migrations (filename) VALUES (?)', (filename,)
+            )
+            conn.commit()
+            _log.info('Migration applied: %s', filename)
+        except Exception:
+            conn.rollback()
+            _log.exception('Migration FAILED: %s', filename)
+            raise
+
+
 def init_db():
     conn = get_db()
     try:
         _init_db_inner(conn)
+        apply_migrations(conn)
     finally:
         conn.close()
 
@@ -406,6 +466,109 @@ def _init_db_inner(conn):
             situation TEXT DEFAULT '{}',
             alerts TEXT DEFAULT '[]',
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS mutual_aid_agreements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            peer_node_id TEXT NOT NULL,
+            peer_name TEXT DEFAULT '',
+            title TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            our_commitments TEXT DEFAULT '[]',
+            their_commitments TEXT DEFAULT '[]',
+            status TEXT DEFAULT 'draft',
+            effective_date TEXT DEFAULT '',
+            expiry_date TEXT DEFAULT '',
+            signed_by_us INTEGER DEFAULT 0,
+            signed_by_peer INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS vector_clocks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            table_name TEXT NOT NULL,
+            row_hash TEXT NOT NULL,
+            clock TEXT DEFAULT '{}',
+            last_node TEXT DEFAULT '',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(table_name, row_hash)
+        );
+
+        CREATE TABLE IF NOT EXISTS dead_drop_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            from_node_id TEXT DEFAULT '',
+            from_name TEXT DEFAULT '',
+            recipient TEXT DEFAULT '',
+            encrypted_data TEXT DEFAULT '',
+            checksum TEXT DEFAULT '',
+            message_timestamp TEXT DEFAULT '',
+            decrypted INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS group_exercises (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            exercise_id TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL,
+            scenario_type TEXT DEFAULT 'custom',
+            description TEXT DEFAULT '',
+            initiator_node TEXT DEFAULT '',
+            initiator_name TEXT DEFAULT '',
+            participants TEXT DEFAULT '[]',
+            status TEXT DEFAULT 'pending',
+            current_phase INTEGER DEFAULT 0,
+            shared_state TEXT DEFAULT '{}',
+            decisions_log TEXT DEFAULT '[]',
+            aar_text TEXT DEFAULT '',
+            score INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS training_datasets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            format TEXT DEFAULT 'jsonl',
+            record_count INTEGER DEFAULT 0,
+            file_path TEXT DEFAULT '',
+            base_model TEXT DEFAULT '',
+            status TEXT DEFAULT 'draft',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS training_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dataset_id INTEGER,
+            base_model TEXT NOT NULL,
+            output_model TEXT DEFAULT '',
+            method TEXT DEFAULT 'qlora',
+            epochs INTEGER DEFAULT 3,
+            learning_rate REAL DEFAULT 0.0002,
+            status TEXT DEFAULT 'pending',
+            progress INTEGER DEFAULT 0,
+            log_text TEXT DEFAULT '',
+            started_at TEXT DEFAULT '',
+            completed_at TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (dataset_id) REFERENCES training_datasets(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS perimeter_zones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            zone_type TEXT DEFAULT 'perimeter',
+            boundary_geojson TEXT DEFAULT '',
+            camera_ids TEXT DEFAULT '[]',
+            waypoint_ids TEXT DEFAULT '[]',
+            alert_on_entry INTEGER DEFAULT 1,
+            alert_on_exit INTEGER DEFAULT 0,
+            threat_level TEXT DEFAULT 'normal',
+            color TEXT DEFAULT '#ff0000',
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS triage_events (
@@ -982,6 +1145,48 @@ def _init_db_inner(conn):
             details TEXT DEFAULT '{}',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        /* ═══ v5.0 Phase 15: Watch/Shift Rotation Planner ═══ */
+        CREATE TABLE IF NOT EXISTS watch_schedules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL DEFAULT 'Watch Schedule',
+            start_date TEXT NOT NULL,
+            end_date TEXT,
+            shift_duration_hours INTEGER NOT NULL DEFAULT 4,
+            personnel TEXT DEFAULT '[]',
+            schedule_json TEXT DEFAULT '[]',
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        /* ═══ v5.0 Phase 15: Weather-Triggered Action Rules ═══ */
+        CREATE TABLE IF NOT EXISTS weather_action_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            condition_type TEXT NOT NULL DEFAULT 'pressure_drop',
+            threshold REAL NOT NULL,
+            comparison TEXT NOT NULL DEFAULT 'lt',
+            action_type TEXT NOT NULL DEFAULT 'alert',
+            action_data TEXT DEFAULT '{}',
+            enabled INTEGER DEFAULT 1,
+            last_triggered TEXT DEFAULT '',
+            cooldown_minutes INTEGER DEFAULT 60,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        /* ═══ UPC Barcode Database ═══ */
+        CREATE TABLE IF NOT EXISTS upc_database (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            upc TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            category TEXT DEFAULT 'General',
+            brand TEXT DEFAULT '',
+            size TEXT DEFAULT '',
+            unit TEXT DEFAULT 'each',
+            default_shelf_life_days INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
     ''')
     conn.commit()
 
@@ -1033,6 +1238,20 @@ def _init_db_inner(conn):
         'ALTER TABLE freq_database ADD COLUMN tone_freq REAL',
         'ALTER TABLE map_routes ADD COLUMN gpx_data TEXT DEFAULT ""',
         'ALTER TABLE map_routes ADD COLUMN elevation_profile TEXT DEFAULT "[]"',
+        # v4.6.0 — garden geo overlay
+        'ALTER TABLE garden_plots ADD COLUMN lat REAL',
+        'ALTER TABLE garden_plots ADD COLUMN lng REAL',
+        'ALTER TABLE garden_plots ADD COLUMN boundary_geojson TEXT DEFAULT ""',
+        # v4.6.0 — federation peer geo for supply chain map
+        'ALTER TABLE federation_peers ADD COLUMN lat REAL',
+        'ALTER TABLE federation_peers ADD COLUMN lng REAL',
+        # v4.8.0 — vector clocks for federation conflict detection
+        'ALTER TABLE sync_log ADD COLUMN vector_clock TEXT DEFAULT "{}"',
+        'ALTER TABLE sync_log ADD COLUMN conflicts_detected INTEGER DEFAULT 0',
+        'ALTER TABLE sync_log ADD COLUMN conflict_details TEXT DEFAULT "[]"',
+        # v4.9.0 — conflict resolution tracking
+        'ALTER TABLE sync_log ADD COLUMN resolved INTEGER DEFAULT 0',
+        'ALTER TABLE sync_log ADD COLUMN resolution TEXT DEFAULT ""',
     ]:
         try:
             conn.execute(migration)
@@ -1158,12 +1377,141 @@ def _init_db_inner(conn):
         'CREATE INDEX IF NOT EXISTS idx_pest_guide_type ON pest_guide(pest_type)',
         'CREATE INDEX IF NOT EXISTS idx_benchmark_results_type ON benchmark_results(test_type)',
         'CREATE INDEX IF NOT EXISTS idx_benchmark_results_created ON benchmark_results(created_at DESC)',
+        # Watch schedules
+        'CREATE INDEX IF NOT EXISTS idx_watch_schedules_start ON watch_schedules(start_date)',
         'CREATE INDEX IF NOT EXISTS idx_inventory_lot ON inventory(lot_number)',
         'CREATE INDEX IF NOT EXISTS idx_documents_workspace ON documents(workspace_id)',
         'CREATE INDEX IF NOT EXISTS idx_notes_journal ON notes(is_journal, created_at DESC)',
+        # Weather action rules
+        'CREATE INDEX IF NOT EXISTS idx_weather_action_rules_enabled ON weather_action_rules(enabled)',
+        'CREATE INDEX IF NOT EXISTS idx_vector_clocks_table ON vector_clocks(table_name)',
+        'CREATE INDEX IF NOT EXISTS idx_vector_clocks_hash ON vector_clocks(table_name, row_hash)',
+        'CREATE INDEX IF NOT EXISTS idx_dead_drop_created ON dead_drop_messages(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_group_exercises_status ON group_exercises(status)',
+        'CREATE INDEX IF NOT EXISTS idx_group_exercises_id ON group_exercises(exercise_id)',
+        'CREATE INDEX IF NOT EXISTS idx_training_datasets_status ON training_datasets(status)',
+        'CREATE INDEX IF NOT EXISTS idx_training_jobs_status ON training_jobs(status)',
+        'CREATE INDEX IF NOT EXISTS idx_perimeter_zones_type ON perimeter_zones(zone_type)',
+        # UPC barcode database
+        'CREATE INDEX IF NOT EXISTS idx_upc_database_upc ON upc_database(upc)',
+        'CREATE INDEX IF NOT EXISTS idx_upc_database_category ON upc_database(category)',
+        'CREATE INDEX IF NOT EXISTS idx_shopping_list_inventory_id ON shopping_list(inventory_id)',
+        'CREATE INDEX IF NOT EXISTS idx_conversation_branches_parent ON conversation_branches(parent_id)',
     ]:
         try:
             conn.execute(idx)
         except sqlite3.OperationalError:
             pass  # Index already exists or related issue
     conn.commit()
+
+    # ─── Seed UPC barcode database ──────────────────────────────────────
+    _seed_upc_database(conn)
+
+
+def _seed_upc_database(conn):
+    """Seed the UPC database with common survival/prep items if empty."""
+    count = conn.execute('SELECT COUNT(*) FROM upc_database').fetchone()[0]
+    if count > 0:
+        return  # Already seeded
+
+    # (upc, name, category, brand, size, unit, default_shelf_life_days)
+    items = [
+        # ─── Food (27 items) ───
+        ('041331024266', 'Black Beans (canned)', 'Food', 'Bush\'s', '15 oz', 'can', 1825),
+        ('041331025744', 'Pinto Beans (canned)', 'Food', 'Bush\'s', '15 oz', 'can', 1825),
+        ('080000525734', 'Chunk Light Tuna', 'Food', 'Bumble Bee', '5 oz', 'can', 1825),
+        ('017400100083', 'Long Grain White Rice', 'Food', 'Riceland', '2 lb', 'bag', 3650),
+        ('017400100106', 'Long Grain White Rice', 'Food', 'Riceland', '5 lb', 'bag', 3650),
+        ('076808006131', 'Spaghetti Pasta', 'Food', 'Barilla', '16 oz', 'box', 1095),
+        ('051500255162', 'Creamy Peanut Butter', 'Food', 'Jif', '16 oz', 'jar', 730),
+        ('030000065730', 'Old Fashioned Oats', 'Food', 'Quaker', '42 oz', 'canister', 730),
+        ('024300061363', 'Pure Honey', 'Food', 'Sue Bee', '16 oz', 'bottle', 36500),
+        ('050000340712', 'Instant Nonfat Dry Milk', 'Food', 'Carnation', '9.6 oz', 'box', 1095),
+        ('021130126026', 'MRE Meal Ready to Eat', 'Food', 'Sopakco', '1 meal', 'each', 1825),
+        ('020000124407', 'Sweet Peas (canned)', 'Food', 'Del Monte', '15 oz', 'can', 1825),
+        ('024000163695', 'Fruit Cocktail (canned)', 'Food', 'Del Monte', '15 oz', 'can', 1825),
+        ('044000003319', 'Original Beef Jerky', 'Food', 'Jack Link\'s', '2.85 oz', 'bag', 365),
+        ('041789002113', 'Ramen Noodle Soup - Chicken', 'Food', 'Maruchan', '3 oz', 'pack', 365),
+        ('051000025111', 'Condensed Chicken Noodle Soup', 'Food', 'Campbell\'s', '10.75 oz', 'can', 1825),
+        ('041129070574', 'Extra Virgin Olive Oil', 'Food', 'Bertolli', '17 oz', 'bottle', 730),
+        ('024600010603', 'Iodized Salt', 'Food', 'Morton', '26 oz', 'canister', 36500),
+        ('049800110069', 'Granulated White Sugar', 'Food', 'Domino', '4 lb', 'bag', 36500),
+        ('051500280058', 'All Purpose Flour', 'Food', 'Pillsbury', '5 lb', 'bag', 365),
+        ('071524017126', 'Great Northern Beans (dried)', 'Food', 'Goya', '1 lb', 'bag', 3650),
+        ('054100003324', 'Chunk Chicken Breast', 'Food', 'Hormel', '10 oz', 'can', 1825),
+        ('037600215114', 'Spam Classic', 'Food', 'Spam', '12 oz', 'can', 1825),
+        ('016000264601', 'Nature Valley Oats \'N Honey Granola Bars', 'Food', 'Nature Valley', '12 ct', 'box', 365),
+        ('021000658756', 'Kraft Mac & Cheese Original', 'Food', 'Kraft', '7.25 oz', 'box', 730),
+        ('020000122540', 'Whole Kernel Corn (canned)', 'Food', 'Green Giant', '15.25 oz', 'can', 1825),
+        ('020000124674', 'Diced Tomatoes (canned)', 'Food', 'Hunt\'s', '14.5 oz', 'can', 1825),
+
+        # ─── Water (8 items) ───
+        ('012000001024', 'Purified Drinking Water', 'Water', 'Aquafina', '16.9 oz', 'bottle', 730),
+        ('049000028904', 'Purified Water', 'Water', 'Dasani', '16.9 oz', 'bottle', 730),
+        ('078742225654', 'Spring Water Gallon Jug', 'Water', 'Great Value', '1 gal', 'jug', 730),
+        ('855801005048', 'LifeStraw Personal Water Filter', 'Water', 'LifeStraw', '1 unit', 'each', 1825),
+        ('891274000103', 'Water Purification Tablets', 'Water', 'Potable Aqua', '50 ct', 'bottle', 1460),
+        ('050716002041', 'Sawyer Mini Water Filter', 'Water', 'Sawyer', '1 unit', 'each', 3650),
+        ('044600010281', 'Regular Bleach (purification)', 'Water', 'Clorox', '64 oz', 'bottle', 365),
+        ('071254002019', 'WaterBOB Emergency Water Storage', 'Water', 'WaterBOB', '100 gal', 'each', 3650),
+
+        # ─── Medical (15 items) ───
+        ('381370044314', 'Adhesive Bandages Assorted', 'Medical', 'Band-Aid', '100 ct', 'box', 1825),
+        ('191565880708', 'Sterile Gauze Pads 4x4', 'Medical', 'Dynarex', '25 ct', 'box', 1825),
+        ('381370048060', 'Waterproof Medical Tape', 'Medical', 'Johnson & Johnson', '1 in x 10 yd', 'roll', 1825),
+        ('305730169301', 'Ibuprofen 200mg Tablets', 'Medical', 'Advil', '200 ct', 'bottle', 1095),
+        ('300450449108', 'Acetaminophen 500mg Extra Strength', 'Medical', 'Tylenol', '100 ct', 'bottle', 1095),
+        ('312547781183', 'Triple Antibiotic Ointment', 'Medical', 'Neosporin', '1 oz', 'tube', 1095),
+        ('305210016323', 'Hydrogen Peroxide 3%', 'Medical', 'Equate', '32 oz', 'bottle', 1095),
+        ('305212530161', '91% Isopropyl Alcohol', 'Medical', 'Equate', '32 oz', 'bottle', 1095),
+        ('819731011037', 'CAT Tourniquet Gen 7', 'Medical', 'NAR', '1 unit', 'each', 1825),
+        ('819731010078', 'HyFin Vent Chest Seal Twin Pack', 'Medical', 'NAR', '2 ct', 'pack', 1825),
+        ('819731010481', 'SAM Splint 36 inch', 'Medical', 'SAM Medical', '1 unit', 'each', 3650),
+        ('034197002059', 'Moleskin Plus Padding', 'Medical', 'Dr. Scholl\'s', '3 ct', 'pack', 1825),
+        ('816140010838', 'Oral Rehydration Salts', 'Medical', 'DripDrop', '8 ct', 'box', 730),
+        ('300450170125', 'Benadryl Allergy 25mg', 'Medical', 'Benadryl', '100 ct', 'bottle', 1095),
+        ('041167100103', 'Imodium A-D Anti-Diarrheal', 'Medical', 'Imodium', '24 ct', 'box', 1095),
+
+        # ─── Batteries/Power (8 items) ───
+        ('041333030012', 'AA Batteries (Duracell)', 'Batteries/Power', 'Duracell', '20 pk', 'pack', 3650),
+        ('039800011329', 'AA Batteries (Energizer)', 'Batteries/Power', 'Energizer', '20 pk', 'pack', 3650),
+        ('041333044002', 'AAA Batteries (Duracell)', 'Batteries/Power', 'Duracell', '16 pk', 'pack', 3650),
+        ('041333000060', 'D Cell Batteries (Duracell)', 'Batteries/Power', 'Duracell', '4 pk', 'pack', 3650),
+        ('041333016016', '9V Battery (Duracell)', 'Batteries/Power', 'Duracell', '2 pk', 'pack', 3650),
+        ('039800040985', 'CR123A Lithium Battery', 'Batteries/Power', 'Energizer', '2 pk', 'pack', 3650),
+        ('708431100251', '18650 Rechargeable Battery 3500mAh', 'Batteries/Power', 'Panasonic', '2 pk', 'pack', 1825),
+        ('840101202015', 'USB Power Bank 20000mAh', 'Batteries/Power', 'Anker', '1 unit', 'each', 1825),
+
+        # ─── Gear (10 items) ───
+        ('024099002318', '550 Paracord 100ft', 'Gear', 'Paracord Planet', '100 ft', 'hank', 3650),
+        ('075353091012', 'Duct Tape Heavy Duty', 'Gear', '3M', '1.88 in x 60 yd', 'roll', 3650),
+        ('078628080056', 'Cable Ties 8 inch (100 ct)', 'Gear', 'Gardner Bender', '100 ct', 'bag', 3650),
+        ('044600315409', 'Strike Anywhere Matches', 'Gear', 'Diamond', '250 ct', 'box', 3650),
+        ('070330624115', 'BIC Classic Lighter', 'Gear', 'BIC', '1 unit', 'each', 3650),
+        ('783583961554', 'Ferro Rod Fire Starter', 'Gear', 'bayite', '6 in', 'each', 36500),
+        ('816511010009', 'Heavy Duty Tarp 8x10', 'Gear', 'Everbilt', '8 x 10 ft', 'each', 1825),
+        ('091444200203', 'Emergency Mylar Blanket', 'Gear', 'Swiss Safe', '2 pk', 'pack', 3650),
+        ('079340687042', 'Glow Sticks 12 hr (12 pk)', 'Gear', 'Cyalume', '12 ct', 'pack', 1460),
+        ('013700835414', 'Contractor Trash Bags 42 gal', 'Gear', 'Glad', '20 ct', 'box', 3650),
+
+        # ─── Hygiene (8 items) ───
+        ('037000388876', 'Ivory Bar Soap', 'Hygiene', 'Ivory', '10 pk', 'pack', 1095),
+        ('037000449652', 'Crest Cavity Protection Toothpaste', 'Hygiene', 'Crest', '5.7 oz', 'tube', 730),
+        ('021130235018', 'Hand Sanitizer 8 oz', 'Hygiene', 'Purell', '8 oz', 'bottle', 1095),
+        ('037000862376', 'Charmin Toilet Paper', 'Hygiene', 'Charmin', '12 mega rolls', 'pack', 3650),
+        ('036000431063', 'Huggies Simply Clean Wipes', 'Hygiene', 'Huggies', '64 ct', 'pack', 730),
+        ('036000196207', 'U by Kotex Security Maxi Pads', 'Hygiene', 'Kotex', '36 ct', 'box', 1825),
+        ('044600010502', 'Clorox Disinfecting Bleach', 'Hygiene', 'Clorox', '81 oz', 'bottle', 365),
+        ('013700835216', 'ForceFlex Tall Kitchen Trash Bags', 'Hygiene', 'Glad', '80 ct', 'box', 3650),
+    ]
+
+    for upc, name, category, brand, size, unit, shelf_life in items:
+        try:
+            conn.execute(
+                'INSERT OR IGNORE INTO upc_database (upc, name, category, brand, size, unit, default_shelf_life_days) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (upc, name, category, brand, size, unit, shelf_life)
+            )
+        except Exception:
+            pass
+    conn.commit()
+    _log.info(f'Seeded UPC database with {len(items)} items')

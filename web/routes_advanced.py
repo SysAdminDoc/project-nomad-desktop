@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from html import escape as esc
 from flask import jsonify, request, Response
 
-from db import get_db, log_activity
+from db import get_db, db_session, log_activity
 from services import ollama
 
 log = logging.getLogger('nomad.web')
@@ -33,7 +33,7 @@ _UNDO_VALID_TABLES = {'inventory', 'contacts', 'notes', 'waypoints', 'documents'
                        'seeds', 'harvest_log', 'livestock', 'preservation_log',
                        'garden_plots', 'fuel_storage', 'equipment_log',
                        'ammo_inventory', 'community_resources', 'radiation_log',
-                       'scheduled_tasks', 'skills'}
+                       'scheduled_tasks', 'skills', 'watch_schedules'}
 
 
 def _push_undo(action_type, description, table, row_data):
@@ -89,7 +89,7 @@ def register_advanced_routes(app):
             # Inventory — low stock items
             low_stock = db.execute(
                 'SELECT name, quantity, unit, category, min_quantity FROM inventory '
-                'WHERE quantity <= min_quantity AND min_quantity > 0 ORDER BY category'
+                'WHERE quantity <= min_quantity AND min_quantity > 0 ORDER BY category LIMIT 50'
             ).fetchall()
             if low_stock:
                 ctx_parts.append('LOW STOCK ALERTS:\n' + '\n'.join(
@@ -99,7 +99,7 @@ def register_advanced_routes(app):
             # Inventory — newly expired (expiration within last 7 days or already expired)
             expired = db.execute(
                 "SELECT name, quantity, unit, expiration FROM inventory "
-                "WHERE expiration != '' AND expiration <= date('now') ORDER BY expiration"
+                "WHERE expiration != '' AND expiration <= date('now') ORDER BY expiration LIMIT 50"
             ).fetchall()
             if expired:
                 ctx_parts.append('EXPIRED ITEMS:\n' + '\n'.join(
@@ -109,7 +109,7 @@ def register_advanced_routes(app):
             # Incidents in last 24h
             incidents = db.execute(
                 "SELECT severity, category, description, created_at FROM incidents "
-                "WHERE created_at >= datetime('now', '-24 hours') ORDER BY created_at DESC"
+                "WHERE created_at >= datetime('now', '-24 hours') ORDER BY created_at DESC LIMIT 50"
             ).fetchall()
             if incidents:
                 ctx_parts.append('INCIDENTS (24h):\n' + '\n'.join(
@@ -171,7 +171,7 @@ def register_advanced_routes(app):
 
             # Inventory summary by category
             inv_summary = db.execute(
-                'SELECT category, COUNT(*) as cnt, SUM(quantity) as total FROM inventory GROUP BY category'
+                'SELECT category, COUNT(*) as cnt, SUM(quantity) as total FROM inventory GROUP BY category LIMIT 50'
             ).fetchall()
             if inv_summary:
                 ctx_parts.append('INVENTORY SUMMARY: ' + ', '.join(
@@ -308,8 +308,11 @@ RULES:
         m = re.match(r'add\s+waypoint\s+(.+?)\s+at\s+([-\d.]+)\s*,\s*([-\d.]+)', action, re.IGNORECASE)
         if m:
             wp_name = m.group(1).strip()
-            lat = float(m.group(2))
-            lng = float(m.group(3))
+            try:
+                lat = float(m.group(2))
+                lng = float(m.group(3))
+            except ValueError:
+                return jsonify({'error': 'Invalid coordinates — lat and lng must be numbers'}), 400
             db = get_db()
             try:
                 db.execute(
@@ -1039,6 +1042,386 @@ SOI Generated {esc(now)} by N.O.M.A.D. &mdash; {esc(node_name)} ({esc(node_id)})
 
         return Response(html, mimetype='text/html')
 
+    # ─── Medical Reference Flipbook ─────────────────────────────────
+
+    @app.route('/api/print/medical-flipbook')
+    def api_print_medical_flipbook():
+        """Generate a printable pocket-sized medical reference flipbook."""
+        html = '''<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Medical Reference Flipbook — Project N.O.M.A.D.</title>
+<style>
+@page { size: 4in 6in; margin: 0.25in; }
+body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 9px; line-height: 1.4; margin: 0; padding: 0; color: #111; }
+.page { width: 3.5in; min-height: 5.5in; padding: 0.25in; page-break-after: always; border: 1px solid #ccc; margin: 4px auto; }
+@media print { .page { border: none; margin: 0; } }
+h1 { font-size: 14px; text-align: center; border-bottom: 2px solid #333; padding-bottom: 4px; margin: 0 0 8px 0; }
+h2 { font-size: 11px; color: #c00; border-bottom: 1px solid #c00; padding-bottom: 2px; margin: 8px 0 4px 0; }
+h3 { font-size: 10px; margin: 6px 0 2px 0; color: #333; }
+table { width: 100%; border-collapse: collapse; font-size: 8px; margin: 4px 0; }
+th, td { border: 1px solid #999; padding: 2px 4px; text-align: left; }
+th { background: #eee; font-weight: bold; }
+.warn { color: #c00; font-weight: bold; }
+.note { font-size: 8px; color: #555; font-style: italic; margin: 2px 0; }
+ul { margin: 2px 0; padding-left: 14px; }
+li { margin: 1px 0; }
+.footer { font-size: 7px; color: #999; text-align: center; margin-top: 8px; }
+</style></head><body>
+
+<!-- Page 1: Cover + Vital Sign Ranges -->
+<div class="page">
+<h1>MEDICAL REFERENCE<br>POCKET FLIPBOOK</h1>
+<p style="text-align:center;font-size:10px;margin:12px 0;">Project N.O.M.A.D. — Offline Medical Quick Reference</p>
+
+<h2>Normal Vital Sign Ranges</h2>
+<table>
+<tr><th>Parameter</th><th>Adult</th><th>Child (1-10y)</th><th>Infant (&lt;1y)</th></tr>
+<tr><td>Heart Rate</td><td>60-100</td><td>70-120</td><td>100-160</td></tr>
+<tr><td>Respiratory Rate</td><td>12-20</td><td>18-30</td><td>30-60</td></tr>
+<tr><td>Systolic BP</td><td>90-140</td><td>80-110</td><td>70-90</td></tr>
+<tr><td>SpO2</td><td>95-100%</td><td>95-100%</td><td>95-100%</td></tr>
+<tr><td>Temperature</td><td>97.8-99.1°F</td><td>97.4-99.6°F</td><td>97.4-99.6°F</td></tr>
+<tr><td>GCS</td><td colspan="3">15 (normal), &lt;8 = coma, intubate</td></tr>
+</table>
+
+<h2>Glasgow Coma Scale (GCS)</h2>
+<table>
+<tr><th>Response</th><th>Score</th><th>Description</th></tr>
+<tr><td rowspan="4">Eye (E)</td><td>4</td><td>Spontaneous</td></tr>
+<tr><td>3</td><td>To voice</td></tr>
+<tr><td>2</td><td>To pain</td></tr>
+<tr><td>1</td><td>None</td></tr>
+<tr><td rowspan="5">Verbal (V)</td><td>5</td><td>Oriented</td></tr>
+<tr><td>4</td><td>Confused</td></tr>
+<tr><td>3</td><td>Inappropriate words</td></tr>
+<tr><td>2</td><td>Incomprehensible sounds</td></tr>
+<tr><td>1</td><td>None</td></tr>
+<tr><td rowspan="6">Motor (M)</td><td>6</td><td>Obeys commands</td></tr>
+<tr><td>5</td><td>Localizes pain</td></tr>
+<tr><td>4</td><td>Withdraws from pain</td></tr>
+<tr><td>3</td><td>Abnormal flexion</td></tr>
+<tr><td>2</td><td>Extension</td></tr>
+<tr><td>1</td><td>None</td></tr>
+</table>
+<div class="footer">Page 1 of 8</div>
+</div>
+
+<!-- Page 2: TCCC MARCH Protocol -->
+<div class="page">
+<h2>TCCC MARCH Protocol</h2>
+<h3>M — Massive Hemorrhage</h3>
+<ul>
+<li>Apply tourniquet HIGH and TIGHT for life-threatening limb bleeding</li>
+<li>Note time of application — do NOT remove</li>
+<li>Pack junctional wounds with hemostatic gauze</li>
+</ul>
+<h3>A — Airway</h3>
+<ul>
+<li>Conscious: let patient assume position of comfort</li>
+<li>Unconscious: chin-lift/jaw-thrust, NPA (28Fr), recovery position</li>
+<li>Do NOT hyperextend neck if spinal injury suspected</li>
+</ul>
+<h3>R — Respiration</h3>
+<ul>
+<li>Expose chest — check for wounds, equal rise</li>
+<li>Sucking chest wound → vented chest seal (3 sides taped)</li>
+<li>Tension pneumothorax → needle decompression (2nd ICS, MCL)</li>
+</ul>
+<h3>C — Circulation</h3>
+<ul>
+<li>Reassess tourniquets</li>
+<li>IV/IO access if trained — TXA 1g IV over 10 min</li>
+<li>Treat for shock: elevate legs, keep warm, minimize movement</li>
+</ul>
+<h3>H — Hypothermia / Head Injury</h3>
+<ul>
+<li>Prevent heat loss — wrap in blankets, remove wet clothing</li>
+<li>Head injury: elevate head 30°, monitor GCS q15min</li>
+<li>Document all treatments on TCCC card with times</li>
+</ul>
+
+<h2>START Triage</h2>
+<table>
+<tr><th>Category</th><th>Color</th><th>Criteria</th></tr>
+<tr><td class="warn">Immediate</td><td style="background:#ff0000;color:white;">RED</td><td>RR &gt;30, no radial pulse, can't follow commands</td></tr>
+<tr><td>Delayed</td><td style="background:#ff0;">YELLOW</td><td>Walking: No. Breathing, pulse, follows commands</td></tr>
+<tr><td>Minor</td><td style="background:#0f0;">GREEN</td><td>Walking wounded — can walk to treatment area</td></tr>
+<tr><td>Expectant</td><td style="background:#333;color:white;">BLACK</td><td>Not breathing after airway opened</td></tr>
+</table>
+<div class="footer">Page 2 of 8</div>
+</div>
+
+<!-- Page 3: Common Drug Dosages -->
+<div class="page">
+<h2>Common Drug Dosages</h2>
+<table>
+<tr><th>Drug</th><th>Adult Dose</th><th>Pediatric</th><th>Max/Day</th></tr>
+<tr><td>Ibuprofen</td><td>200-400mg q4-6h</td><td>10mg/kg q6-8h</td><td>1200mg</td></tr>
+<tr><td>Acetaminophen</td><td>500-1000mg q4-6h</td><td>15mg/kg q4-6h</td><td>3000mg</td></tr>
+<tr><td>Diphenhydramine</td><td>25-50mg q4-6h</td><td>1.25mg/kg q6h</td><td>300mg</td></tr>
+<tr><td>Amoxicillin</td><td>500mg q8h</td><td>25mg/kg/day ÷3</td><td>3000mg</td></tr>
+<tr><td>Loperamide</td><td>4mg then 2mg prn</td><td>See age chart</td><td>16mg</td></tr>
+<tr><td>Aspirin</td><td>325-650mg q4h</td><td>NOT &lt;18yo</td><td>4000mg</td></tr>
+<tr><td>Prednisone</td><td>5-60mg/day</td><td>1-2mg/kg/day</td><td>60mg</td></tr>
+</table>
+<p class="warn">ALWAYS check allergies before administering ANY medication!</p>
+
+<h2>Critical Drug Interactions</h2>
+<table>
+<tr><th>Combination</th><th>Risk</th></tr>
+<tr><td>Opioid + Benzo</td><td class="warn">FATAL respiratory depression</td></tr>
+<tr><td>Opioid + Alcohol</td><td class="warn">FATAL respiratory depression</td></tr>
+<tr><td>SSRI + MAOI</td><td class="warn">Serotonin syndrome — FATAL</td></tr>
+<tr><td>Warfarin + NSAIDs</td><td class="warn">Major bleeding risk</td></tr>
+<tr><td>ACE inhibitor + K+</td><td class="warn">Hyperkalemia — cardiac arrest</td></tr>
+<tr><td>Metformin + Alcohol</td><td>Lactic acidosis risk</td></tr>
+<tr><td>Ciprofloxacin + Antacids</td><td>Reduced absorption — separate 2h</td></tr>
+</table>
+
+<h2>Pediatric Weight Estimation</h2>
+<p><strong>Broselow formula:</strong> Weight (kg) = (Age × 2) + 8<br>
+<strong>Example:</strong> 5-year-old ≈ 18 kg</p>
+<div class="footer">Page 3 of 8</div>
+</div>
+
+<!-- Page 4: Wound Care -->
+<div class="page">
+<h2>Wound Care Quick Reference</h2>
+<h3>Wound Cleaning</h3>
+<ul>
+<li>Irrigate with clean water — min 250ml under pressure (syringe)</li>
+<li>Remove visible debris with tweezers</li>
+<li>Do NOT remove embedded objects — stabilize in place</li>
+<li>Apply povidone-iodine or dilute betadine around (not in) wound</li>
+</ul>
+
+<h3>Wound Closure Decision</h3>
+<table>
+<tr><th>Close (suture/strips)</th><th>Leave Open</th></tr>
+<tr><td>Clean, &lt;6h old</td><td>Contaminated / animal bite</td></tr>
+<tr><td>Sharp edge, face</td><td>&gt;6h old (12h face)</td></tr>
+<tr><td>Low infection risk</td><td>Crush / devitalized tissue</td></tr>
+</table>
+
+<h3>Infection Signs (watch for)</h3>
+<ul>
+<li>Increasing redness spreading from wound (cellulitis)</li>
+<li>Warmth, swelling, purulent drainage</li>
+<li>Red streaks (lymphangitis) — <span class="warn">URGENT — start antibiotics</span></li>
+<li>Fever &gt;100.4°F with wound — systemic infection</li>
+</ul>
+
+<h3>Burn Classification</h3>
+<table>
+<tr><th>Degree</th><th>Appearance</th><th>Treatment</th></tr>
+<tr><td>1st (Superficial)</td><td>Red, painful, no blisters</td><td>Cool water, aloe, ibuprofen</td></tr>
+<tr><td>2nd (Partial)</td><td>Blisters, very painful</td><td>Do NOT pop blisters, loose dressing</td></tr>
+<tr><td>3rd (Full)</td><td>White/charred, painless</td><td class="warn">Evac — needs grafting</td></tr>
+</table>
+<p class="note">Rule of 9s (BSA): Head 9%, each arm 9%, chest 18%, back 18%, each leg 18%, groin 1%</p>
+
+<h3>Tourniquet Rules</h3>
+<ul>
+<li>Apply 2-3 inches above wound, NEVER on joint</li>
+<li>Tighten until bleeding stops — it WILL hurt</li>
+<li>Write "T" and TIME on forehead or tourniquet</li>
+<li class="warn">Do NOT remove in field — leave for surgeon</li>
+</ul>
+<div class="footer">Page 4 of 8</div>
+</div>
+
+<!-- Page 5: Allergic Reactions & Anaphylaxis -->
+<div class="page">
+<h2>Anaphylaxis Protocol</h2>
+<h3>Signs (any 2+ systems = anaphylaxis)</h3>
+<ul>
+<li><strong>Skin:</strong> Hives, flushing, itching, swelling</li>
+<li><strong>Respiratory:</strong> Wheezing, stridor, throat tightness, SOB</li>
+<li><strong>Cardiovascular:</strong> Hypotension, tachycardia, pale, dizzy</li>
+<li><strong>GI:</strong> Nausea, vomiting, cramping, diarrhea</li>
+</ul>
+<h3>Treatment — IMMEDIATE</h3>
+<ol>
+<li><strong>Epinephrine IM</strong> — lateral thigh<br>
+Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
+<li>Call for evacuation — this is life-threatening</li>
+<li>Position: supine with legs elevated (sitting if breathing difficulty)</li>
+<li>Diphenhydramine 50mg PO/IM (adult) — secondary, NOT a substitute for epi</li>
+<li>Monitor airway, repeat epi q5-15min if no improvement</li>
+<li>After epi — observe min 4 hours (biphasic reaction risk)</li>
+</ol>
+
+<h2>Choking (Heimlich / BLS)</h2>
+<h3>Conscious Adult/Child</h3>
+<ul>
+<li>Encourage coughing if partial obstruction</li>
+<li>Complete obstruction: 5 back blows → 5 abdominal thrusts, repeat</li>
+<li>Pregnant/obese: chest thrusts instead of abdominal</li>
+</ul>
+<h3>Infant (&lt;1 year)</h3>
+<ul>
+<li>5 back slaps (face down, head lower) → 5 chest thrusts (face up)</li>
+<li class="warn">NO abdominal thrusts on infants</li>
+</ul>
+<h3>Unconscious</h3>
+<ul>
+<li>Begin CPR — 30 compressions : 2 breaths</li>
+<li>Check mouth for visible object before each breath</li>
+</ul>
+
+<h2>CPR Quick Reference</h2>
+<table>
+<tr><th></th><th>Adult</th><th>Child</th><th>Infant</th></tr>
+<tr><td>Rate</td><td colspan="3">100-120/min</td></tr>
+<tr><td>Depth</td><td>2-2.4 in</td><td>2 in (~1/3 chest)</td><td>1.5 in</td></tr>
+<tr><td>Ratio</td><td colspan="3">30:2 (1 rescuer) / 15:2 (2 rescuer child/infant)</td></tr>
+<tr><td>Hands</td><td>2 hands</td><td>1-2 hands</td><td>2 fingers</td></tr>
+</table>
+<div class="footer">Page 5 of 8</div>
+</div>
+
+<!-- Page 6: Fractures, Splinting, Spine -->
+<div class="page">
+<h2>Fracture & Splinting</h2>
+<h3>Assessment</h3>
+<ul>
+<li>Check <strong>CSM</strong> distal to injury: Circulation (pulse, color), Sensation, Movement</li>
+<li>Deformity, swelling, crepitus, point tenderness</li>
+<li>Open fracture (bone visible) = <span class="warn">HIGH infection risk — cover, do NOT push back</span></li>
+</ul>
+<h3>Splinting Principles</h3>
+<ul>
+<li>Splint in position found — do NOT straighten angulated fractures</li>
+<li>Immobilize joint ABOVE and BELOW fracture</li>
+<li>Pad all bony prominences</li>
+<li>Check CSM before AND after splinting</li>
+<li>Elevate if possible, ice 20 min on / 20 off</li>
+</ul>
+
+<h2>Spinal Motion Restriction</h2>
+<h3>Suspect if:</h3>
+<ul>
+<li>Fall &gt;3× body height, diving injury, high-speed MVC</li>
+<li>Neck pain, numbness/tingling in extremities</li>
+<li>Altered mental status with trauma mechanism</li>
+</ul>
+<h3>Management:</h3>
+<ul>
+<li>Manual in-line stabilization — hold head in neutral</li>
+<li>Log-roll with 3+ people</li>
+<li>Improvised collar: SAM splint + tape, towel rolls + tape</li>
+</ul>
+
+<h2>Hypothermia Staging</h2>
+<table>
+<tr><th>Stage</th><th>Temp</th><th>Signs</th><th>Treatment</th></tr>
+<tr><td>Mild</td><td>90-95°F</td><td>Shivering, cold</td><td>Warm drinks, blankets, active movement</td></tr>
+<tr><td>Moderate</td><td>82-90°F</td><td>Shivering stops, confused</td><td>Gentle warming, warm IV, no active movement</td></tr>
+<tr><td>Severe</td><td>&lt;82°F</td><td>Unconscious, barely alive</td><td class="warn">Handle GENTLY — evac. No rough movement</td></tr>
+</table>
+<p class="warn">Cold patients are NOT dead until warm and dead. Continue CPR.</p>
+
+<h2>Heat Emergencies</h2>
+<table>
+<tr><th>Condition</th><th>Signs</th><th>Treatment</th></tr>
+<tr><td>Heat Exhaustion</td><td>Heavy sweat, weak, nausea, temp &lt;104°F</td><td>Cool, rest, ORS, fans, remove clothing</td></tr>
+<tr><td class="warn">Heat Stroke</td><td>Hot/dry skin, AMS, temp &gt;104°F</td><td class="warn">EMERGENCY — ice packs (neck/groin/axilla), cold water immersion, evac</td></tr>
+</table>
+<div class="footer">Page 6 of 8</div>
+</div>
+
+<!-- Page 7: Envenomation & Environmental -->
+<div class="page">
+<h2>Snake Bite Protocol</h2>
+<ul>
+<li>Keep calm, immobilize limb below heart level</li>
+<li>Mark edge of swelling with pen + time</li>
+<li>Remove rings/jewelry before swelling</li>
+<li>Do NOT: tourniquet, cut, suck, ice, or apply electricity</li>
+<li>Photograph the snake if safe to do so</li>
+<li><span class="warn">Evacuate for antivenom — time is critical</span></li>
+</ul>
+
+<h2>Insect Stings</h2>
+<ul>
+<li>Remove stinger by scraping (don't squeeze)</li>
+<li>Clean, ice, diphenhydramine for reaction</li>
+<li>Watch for anaphylaxis (see page 5)</li>
+</ul>
+
+<h2>Drowning / Submersion</h2>
+<ul>
+<li>Remove from water — protect YOUR safety first</li>
+<li>Assume spinal injury if diving/unknown</li>
+<li>Begin CPR immediately — even if water in lungs</li>
+<li>5 rescue breaths first (drowning = respiratory arrest)</li>
+<li>Do NOT attempt abdominal thrusts to clear water</li>
+</ul>
+
+<h2>Chest Pain / Suspected MI</h2>
+<ul>
+<li>Aspirin 325mg chewed (if no allergy/bleeding)</li>
+<li>Position of comfort (usually sitting up)</li>
+<li>Loosen clothing, reassure</li>
+<li>Nitroglycerin if prescribed (NOT with ED meds in past 48h)</li>
+<li>Prepare for CPR — cardiac arrest common</li>
+</ul>
+
+<h2>Seizure Management</h2>
+<ul>
+<li>Protect from injury — clear area, pad head</li>
+<li>Turn on side (recovery position) after seizure</li>
+<li>Time the seizure — <span class="warn">&gt;5 min = status epilepticus = EMERGENCY</span></li>
+<li>Do NOT restrain or put anything in mouth</li>
+</ul>
+
+<h2>Diabetic Emergencies</h2>
+<table>
+<tr><th></th><th>Hypoglycemia (Low)</th><th>Hyperglycemia (High)</th></tr>
+<tr><td>Onset</td><td>Rapid (minutes)</td><td>Gradual (hours/days)</td></tr>
+<tr><td>Signs</td><td>Shaky, sweaty, confused, seizure</td><td>Thirsty, frequent urination, fruity breath</td></tr>
+<tr><td>Treatment</td><td class="warn">Sugar NOW — glucose tabs, juice, candy</td><td>Fluids, insulin if available, evac</td></tr>
+</table>
+<p class="note">When in doubt between high/low sugar, GIVE SUGAR — low sugar kills faster.</p>
+<div class="footer">Page 7 of 8</div>
+</div>
+
+<!-- Page 8: SBAR + Notes -->
+<div class="page">
+<h2>SBAR Handoff Format</h2>
+<table>
+<tr><th>S</th><td><strong>Situation</strong> — "I'm calling about [patient]. They are [current state]."</td></tr>
+<tr><th>B</th><td><strong>Background</strong> — Age, conditions, allergies, medications, events leading here</td></tr>
+<tr><th>A</th><td><strong>Assessment</strong> — "I think the problem is..." Vitals, exam findings</td></tr>
+<tr><th>R</th><td><strong>Recommendation</strong> — "I need you to..." What you want done</td></tr>
+</table>
+
+<h2>9-Line MEDEVAC Request</h2>
+<table>
+<tr><td>Line 1</td><td>Location (grid/GPS)</td></tr>
+<tr><td>Line 2</td><td>Radio frequency + call sign</td></tr>
+<tr><td>Line 3</td><td># patients by precedence (A=Urgent, B=Priority, C=Routine)</td></tr>
+<tr><td>Line 4</td><td>Special equipment (A=None, B=Hoist, C=Extraction, D=Ventilator)</td></tr>
+<tr><td>Line 5</td><td># patients by type (L=Litter, A=Ambulatory)</td></tr>
+<tr><td>Line 6</td><td>Security at pickup (N=No enemy, P=Possible, E=Enemy, X=Armed escort)</td></tr>
+<tr><td>Line 7</td><td>Method of marking (A=Panels, B=Pyro, C=Smoke, D=None, E=Other)</td></tr>
+<tr><td>Line 8</td><td>Patient nationality + status</td></tr>
+<tr><td>Line 9</td><td>Terrain / obstacles (NBC contamination if applicable)</td></tr>
+</table>
+
+<h2>Personal Notes</h2>
+<div style="min-height:120px;border:1px dashed #999;padding:4px;margin:4px 0;">
+<!-- Blank space for handwritten notes -->
+</div>
+
+<div class="footer" style="margin-top:16px;">
+<strong>Project N.O.M.A.D.</strong> — Offline Medical Reference Flipbook<br>
+''' + f'Generated {__import__("time").strftime("%Y-%m-%d %H:%M")}' + '''<br>
+<em>This is a reference guide, not a substitute for medical training. Seek professional care when available.</em>
+</div>
+</div>
+
+</body></html>'''
+        return Response(html, mimetype='text/html')
+
     # ═════════════════════════════════════════════════════════════════
     # PHASE 19 — Database Integrity, Self-Test, Undo
     # ═════════════════════════════════════════════════════════════════
@@ -1213,11 +1596,18 @@ SOI Generated {esc(now)} by N.O.M.A.D. &mdash; {esc(node_name)} ({esc(node_id)})
         if table not in _UNDO_VALID_TABLES:
             return jsonify({'error': f'Undo refused: invalid table "{table}"'}), 400
 
+        # Validate column names against actual table schema to prevent SQL injection
         db = get_db()
         try:
+            valid_cols = {r['name'] for r in db.execute(f"PRAGMA table_info({table})").fetchall()}
+            if not valid_cols:
+                return jsonify({'error': 'Undo failed: unknown table schema'}), 400
+
             if entry['action_type'] == 'delete':
-                # Re-insert the deleted row
-                cols = list(row_data.keys())
+                # Re-insert the deleted row — only use columns that exist in the table
+                cols = [c for c in row_data.keys() if c in valid_cols]
+                if not cols:
+                    return jsonify({'error': 'Undo failed: no valid columns'}), 400
                 placeholders = ', '.join(['?'] * len(cols))
                 col_names = ', '.join(cols)
                 db.execute(
@@ -1225,17 +1615,20 @@ SOI Generated {esc(now)} by N.O.M.A.D. &mdash; {esc(node_name)} ({esc(node_id)})
                     [row_data[c] for c in cols])
                 db.commit()
             elif entry['action_type'] == 'update':
-                # Restore previous values
+                # Restore previous values — only use columns that exist in the table
                 row_id = row_data.get('id')
                 if row_id is not None:
-                    sets = ', '.join(f'{k} = ?' for k in row_data if k != 'id')
-                    vals = [row_data[k] for k in row_data if k != 'id']
+                    safe_keys = [k for k in row_data if k != 'id' and k in valid_cols]
+                    if not safe_keys:
+                        return jsonify({'error': 'Undo failed: no valid columns'}), 400
+                    sets = ', '.join(f'{k} = ?' for k in safe_keys)
+                    vals = [row_data[k] for k in safe_keys]
                     vals.append(row_id)
                     db.execute(f'UPDATE {table} SET {sets} WHERE id = ?', vals)
                     db.commit()
             log_activity('undo', 'system', entry['description'])
         except Exception as e:
-            return jsonify({'error': f'Undo failed: {str(e)}'}), 500
+            return jsonify({'error': 'Undo failed'}), 500
         finally:
             db.close()
 

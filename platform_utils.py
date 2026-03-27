@@ -486,3 +486,43 @@ def get_webview_gui() -> str | None:
         return 'edgechromium'
     # macOS and Linux: let pywebview auto-detect (uses WebKit on macOS, GTK/Qt on Linux)
     return None
+
+
+# ─── USB Portable Mode Detection ─────────────────────────────────────
+
+def is_portable_mode() -> bool:
+    """Detect if running from a removable/USB drive (portable mode).
+
+    Checks:
+    1. Presence of 'portable.marker' file next to the executable/script
+    2. Whether the drive is removable (Windows) or mounted under /media (Linux)
+    """
+    app_dir = os.path.dirname(os.path.abspath(sys.argv[0] if sys.argv[0] else __file__))
+
+    # Explicit marker file — most reliable method
+    if os.path.isfile(os.path.join(app_dir, 'portable.marker')):
+        return True
+    if os.path.isfile(os.path.join(app_dir, 'PORTABLE')):
+        return True
+
+    if IS_WINDOWS:
+        try:
+            import ctypes
+            drive = os.path.splitdrive(app_dir)[0] + '\\'
+            DRIVE_REMOVABLE = 2
+            return ctypes.windll.kernel32.GetDriveTypeW(drive) == DRIVE_REMOVABLE
+        except Exception:
+            return False
+    elif IS_LINUX:
+        return '/media/' in app_dir or '/mnt/usb' in app_dir
+    elif IS_MACOS:
+        return '/Volumes/' in app_dir and app_dir.count('/') >= 2
+    return False
+
+
+def get_portable_data_dir() -> str:
+    """Get data directory for portable mode — same directory as the app."""
+    app_dir = os.path.dirname(os.path.abspath(sys.argv[0] if sys.argv[0] else __file__))
+    data_dir = os.path.join(app_dir, 'nomad_data')
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir

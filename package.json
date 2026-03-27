@@ -1,0 +1,11 @@
+{
+  "name": "project-nomad-desktop",
+  "private": true,
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "dev": "echo 'Dev mode: using raw ES modules'"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0"
+  }
+}

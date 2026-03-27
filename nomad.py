@@ -55,7 +55,7 @@ from config import get_data_dir
 from web.app import create_app, set_version
 from db import init_db, get_db, log_activity, backup_db
 
-VERSION = '4.1.0'
+VERSION = '5.4.0'
 PORT = 8080
 
 _tray_icon = None
@@ -158,8 +158,10 @@ def auto_start_services():
     """Start all installed services on launch (turnkey behavior)."""
     mods = _get_service_modules()
     db = get_db()
-    rows = db.execute('SELECT id FROM services WHERE installed = 1').fetchall()
-    db.close()
+    try:
+        rows = db.execute('SELECT id FROM services WHERE installed = 1').fetchall()
+    finally:
+        db.close()
 
     for row in rows:
         sid = row['id']
