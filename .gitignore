@@ -8,3 +8,5 @@ screenshot*.png
 .env
 ProjectNOMAD-Setup.exe
 .qdrant-initialized
+node_modules/
+web/static/dist/

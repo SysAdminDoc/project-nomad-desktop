@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+  nomad:
+    build: .
+    container_name: nomad-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - nomad-data:/data
+    environment:
+      - NOMAD_DATA_DIR=/data
+      - NOMAD_HEADLESS=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Optional: Ollama AI backend
+  ollama:
+    image: ollama/ollama:latest
+    container_name: nomad-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+    profiles:
+      - ai
+
+volumes:
+  nomad-data:
+  ollama-models:

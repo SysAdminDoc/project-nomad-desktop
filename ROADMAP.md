@@ -1,6 +1,6 @@
 # Project N.O.M.A.D. Desktop — Implementation Roadmap
 
-> **Current**: v3.3.0 — 372 routes, 57 tables, 8 managed services, 25 prep sub-tabs, 21 decision guides, 41 calculators, 56 quick reference cards, 4 themes, 3 dashboard modes, full cross-platform support (Windows/Linux/macOS)
+> **Current**: v5.3.0 — 566 routes, 89 tables, 8 managed services, 25 prep sub-tabs, 21 decision guides, 42 calculators, 56 quick reference cards, 5 themes, 3 dashboard modes, full cross-platform support (Windows/Linux/macOS/Docker), mobile-responsive bottom nav, barcode scanner, AI vision inventory, contour maps, motion detection, solar forecast, auto-backups, analytics dashboards, a11y/WCAG improvements, theme-aware map tiles, customizable dashboard widgets, SSE real-time events, i18n (10 languages)
 
 ---
 
@@ -15,7 +15,7 @@
 - [x] AI-generated natural language situation summaries via Ollama
 - [x] Alert history table in DB with dismissal tracking + 24h dedup + 7-day auto-prune
 - [x] Browser notification + alert sound on new critical alerts
-- [ ] SSE endpoint for instant push (currently polls every 60s — good enough for now)
+- [x] **SSE endpoint** — `/api/alerts/stream` with per-client queues, 30s heartbeat, auto-fallback to polling
 </details>
 
 <details>
@@ -26,7 +26,7 @@
 - [x] Decision tree UI — card-based step-by-step with back/forward, breadcrumb trail, severity-colored results
 - [x] AI enhancement: "Ask AI" button at any step sends context to Ollama for deeper guidance
 - [x] Print current decision path as a printable procedure card
-- [ ] Context-aware: tree can reference inventory ("You have [X] water filters") and contacts ("Your medic is [name]")
+- [x] **Context-aware** — `/api/guides/context` endpoint, `enrichGuideText()` with `{inv:category}`, `{medic_name}`, `{contact:role}` placeholders, context strip in guide UI
 </details>
 
 <details>
@@ -41,9 +41,9 @@
 - [x] Triage board — MCI 4-column Kanban (Immediate/Delayed/Minor/Deceased)
 - [x] SBAR handoff report generator with print
 - [x] Printable patient care cards
-- [ ] Allergy-aware dosage calculator (enhancement)
-- [ ] Wound photo upload with side-by-side comparison (enhancement)
-- [ ] Medical bag inventory template (enhancement)
+- [x] **Allergy-aware dosage calculator** — `/api/medical/dosage-calculator` with 8 drugs, patient allergy cross-check, weight-based pediatric dosing, drug interaction warnings
+- [x] Wound photo upload with side-by-side comparison (enhancement)
+- [x] Medical bag inventory template (enhancement)
 </details>
 
 <details>
@@ -68,7 +68,7 @@
 - [x] Planting calendar — 31 zone 7 entries with yield/sqft and calories/lb
 - [x] Yield/caloric analysis — person-days of food production
 - [x] Preservation log — canned/dried/frozen tracking
-- [ ] Garden map overlay — plot boundaries on offline map (enhancement)
+- [x] **Garden map overlay** — GeoJSON plot boundaries on offline MapLibre map, polygon drawing tool, popup with plot info, toggle button
 </details>
 
 <details>
@@ -81,9 +81,9 @@
 - [x] 50+ map sources (Protomaps, Geofabrik, BBBike, Natural Earth, USGS, SRTM, NOAA, FAA, Sentinel-2)
 - [x] Route CRUD with waypoint support
 - [x] Annotations with 12 icon types and elevation
-- [ ] Elevation profiles on routes (requires DEM data)
-- [ ] Offline geocoding (requires index extraction)
-- [ ] Contour line layer (requires DEM processing)
+- [x] Elevation profiles on routes (uses waypoint elevations)
+- [x] Offline geocoding (from stored waypoints/annotations)
+- [x] Contour line layer (IDW interpolation + marching squares)
 </details>
 
 <details>
@@ -94,8 +94,8 @@
 - [x] One-click LAN sync — push/receive/pull over HTTP (merge mode)
 - [x] Sync log with direction, peer identity, IP, table counts
 - [x] Federation v2 — trust levels (observer/member/trusted/admin), resource marketplace, SITBOARD
-- [ ] Vector clocks for conflict detection (enhancement)
-- [ ] Three-way merge UI for conflicts (enhancement)
+- [x] Vector clocks for conflict detection (enhancement)
+- [x] Three-way merge UI for conflicts (enhancement)
 </details>
 
 <details>
@@ -116,8 +116,8 @@
 - [x] Camera registry with common camera URL examples
 - [x] Access log — entry/exit/patrol with timestamps
 - [x] Security dashboard — threat level, active cameras, 24h/48h counts
-- [ ] Motion detection alerts (stretch — requires OpenCV)
-- [ ] Perimeter zones linked to cameras (enhancement)
+- [x] Motion detection alerts (OpenCV frame differencing)
+- [x] Perimeter zones linked to cameras (enhancement)
 </details>
 
 <details>
@@ -128,7 +128,7 @@
 - [x] Document summary — 2-3 sentence AI summaries
 - [x] Cross-reference — extracted names matched against contacts DB
 - [x] Analyze All for bulk analysis
-- [ ] Auto-populate — extracted entities written back to structured tables (enhancement)
+- [x] **Entity auto-populate** — `POST /api/kb/documents/<id>/import-entities` imports person→contacts, medication→inventory, coordinates→waypoints; "Import Entities" button in KB document UI
 </details>
 
 <details>
@@ -188,7 +188,7 @@ All 10 phases of the optimal vision have been implemented. The app has been tran
 - [ ] Full Meshtastic Web Serial API integration (requires hardware)
 - [ ] JS8Call / Winlink / APRS integration (requires radio software)
 - [ ] Federation over mesh (requires Meshtastic hardware)
-- [ ] Dead drop encrypted USB messaging (enhancement)
+- [x] Dead drop encrypted USB messaging (enhancement)
 </details>
 
 <details>
@@ -200,8 +200,8 @@ All 10 phases of the optimal vision have been implemented. The app has been tran
 - [x] **Task manager UI** — Settings tab with create/complete/delete, color-coded due dates, category badges, recurrence icons
 - [x] **Sun widget** — Live dashboard widget showing sunrise/sunset/day length
 - [x] **Predictive alerts UI** — Integrated into alert bar with "PREDICTED" badge
-- [ ] Weather-triggered actions (enhancement — requires weather station data)
-- [ ] Shift/watch planner with rotation schedules (enhancement)
+- [x] **Weather-triggered action rules** — `weather_action_rules` table, `/api/weather/action-rules` CRUD + `/api/weather/action-rules/evaluate`, 6 condition types (temp_above/below, wind_above, pressure_below, humidity_above, precip_above), seed rules on first load
+- [x] **Shift/watch rotation planner** — `watch_schedules` table, `/api/watch-schedules` CRUD with auto-rotation generation, printable HTML output
 </details>
 
 <details>
@@ -212,9 +212,9 @@ All 10 phases of the optimal vision have been implemented. The app has been tran
 - [x] **AI memory** — `/api/ai/memory` GET/POST/DELETE; persistent key facts across conversations stored in settings as JSON; injected into system prompt
 - [x] **SITREP button** — Command Post sub-tab with modal display
 - [x] **Memory panel** — AI Chat header dropdown with fact list, add/delete
-- [ ] Multi-document RAG with citations (enhancement)
-- [ ] Conversation branching (enhancement)
-- [ ] Model fine-tuning pipeline (enhancement)
+- [x] Multi-document RAG with citations (enhancement)
+- [x] **Conversation branching** — "What If?" fork button on AI responses, branch panel with visual indicators, `forkWhatIf()`, `switchToBranch()`, `returnToMainConversation()`, branch count in conversation list
+- [x] Model fine-tuning pipeline (enhancement)
 </details>
 
 <details>
@@ -225,9 +225,9 @@ All 10 phases of the optimal vision have been implemented. The app has been tran
 - [x] **QR code generation** — `/api/qr/generate` produces SVG QR codes (qrcode library with fallback)
 - [x] **CSV import modal** — Settings tab with file upload, table selector, column mapping UI, preview, import execution
 - [x] **Template dropdown** — Inventory sub-tab quick template selector
-- [ ] Barcode/UPC scanning with offline database (enhancement)
-- [ ] Photo inventory via AI vision model (enhancement)
-- [ ] Voice inventory parsing (enhancement)
+- [x] Barcode/UPC scanning with offline database (enhancement)
+- [x] Photo inventory via AI vision model (enhancement)
+- [x] Voice inventory parsing (enhancement)
 </details>
 
 <details>
@@ -237,8 +237,8 @@ All 10 phases of the optimal vision have been implemented. The app has been tran
 - [x] **Wallet cards** — `/api/print/wallet-cards` generates 5 lamination-ready 3.375"×2.125" cards: ICE, blood type, medications, rally points, frequency quick-ref
 - [x] **SOI generator** — `/api/print/soi` classified-style Signal Operating Instructions with frequency assignments, call sign matrix, radio profiles, net schedule, authentication
 - [x] **Print buttons** — Settings tab with one-click open for all 3 documents (9 total printable documents now)
-- [ ] PDF generation engine (ReportLab/WeasyPrint — enhancement over HTML print)
-- [ ] Map atlas pages at multiple zoom levels (enhancement)
+- [x] PDF generation engine (ReportLab/WeasyPrint — enhancement over HTML print)
+- [x] Map atlas pages at multiple zoom levels (enhancement)
 </details>
 
 <details>
@@ -250,9 +250,9 @@ All 10 phases of the optimal vision have been implemented. The app has been tran
 - [x] **Undo system** — `/api/undo` GET/POST with 10-entry deque and 30-second TTL; reverses delete/update operations
 - [x] **System health panel** — Settings tab with Run Self-Test, Check Database, Optimize Database buttons and results display
 - [x] **Service worker** — Offline-first caching for static assets via PWA
-- [ ] Full crash recovery with form state persistence (enhancement)
-- [ ] E-ink display mode (enhancement)
-- [ ] Battery-aware polling reduction (enhancement)
+- [x] **Crash recovery** — `FormStateRecovery` localStorage auto-save on inventory/contact/patient forms, 24h staleness, recovery toast
+- [x] E-ink display mode (enhancement)
+- [x] Battery-aware polling reduction (enhancement)
 </details>
 
 <details>
@@ -261,9 +261,9 @@ All 10 phases of the optimal vision have been implemented. The app has been tran
 - [x] **Community readiness dashboard** — `/api/federation/community-readiness` aggregates per-node readiness across 7 categories (water/food/medical/shelter/security/comms/power) with network-wide averages
 - [x] **Skill matching** — `/api/federation/skill-search` searches local contacts, federation sitboard, and community_resources for matching skills
 - [x] **Distributed alert relay** — `/api/federation/relay-alert` POSTs critical alerts to all trusted/admin/member federation peers
-- [ ] Supply chain mapping on network map (enhancement)
-- [ ] Mutual aid agreements (enhancement)
-- [ ] Group scenario training across nodes (enhancement)
+- [x] Supply chain mapping on network map (enhancement)
+- [x] Mutual aid agreements (enhancement)
+- [x] Group scenario training across nodes (enhancement)
 </details>
 
 <details>
@@ -274,13 +274,13 @@ All 10 phases of the optimal vision have been implemented. The app has been tran
 - [x] **Service worker route** — `/sw.js` endpoint for proper scope
 - [x] **Meta tags** — `<meta name="theme-color">` + `<link rel="manifest">` for mobile Chrome/Safari
 - [x] **Service worker registration** — Auto-registers on page load
-- [ ] Mobile-optimized layout with bottom tab bar (enhancement)
-- [ ] IndexedDB offline sync for critical data (enhancement)
-- [ ] Push notifications (enhancement)
+- [x] Mobile-optimized layout with bottom tab bar (enhancement)
+- [x] IndexedDB offline sync for critical data (enhancement)
+- [x] Push notifications (enhancement)
 - [ ] Linux .deb/.rpm/AppImage/Flatpak packages (enhancement)
 - [ ] Signed macOS DMG (enhancement)
 - [ ] ARM64 builds for Raspberry Pi + Apple Silicon (enhancement)
-- [ ] Docker headless image (enhancement)
+- [x] Docker headless image (enhancement)
 </details>
 
 ---
@@ -299,61 +299,73 @@ These items are deferred enhancements that would further improve the platform:
 - [ ] Full Meshtastic Web Serial API
 - [ ] JS8Call / Winlink / APRS integration
 - [ ] Federation sync over mesh radio
-- [ ] Dead drop encrypted USB messaging
+- [x] Dead drop encrypted USB messaging
 
 ### Scheduling (Phase 15 stretch)
-- [ ] Weather-triggered actions
-- [ ] Shift/watch rotation planner with print
+- [x] Weather-triggered action rules (6 condition types, seed rules, evaluate endpoint)
+- [x] Shift/watch rotation planner with print
 
 ### AI (Phase 16 stretch)
-- [ ] Multi-document RAG with clickable citations
-- [ ] Conversation branching for "what if" scenarios
-- [ ] LoRA fine-tuning pipeline for custom models
+- [x] Multi-document RAG with clickable citations
+- [x] Conversation branching for "what if" scenarios
+- [x] LoRA fine-tuning pipeline for custom models
 
 ### Data Import (Phase 17 stretch)
-- [ ] Camera barcode scanning with offline UPC database
-- [ ] AI vision inventory (LLaVA/Moondream)
-- [ ] Voice-to-inventory natural language parsing
-- [ ] Receipt scanner with OCR price extraction
+- [x] Camera barcode scanning with offline UPC database
+- [x] AI vision inventory (LLaVA/Moondream)
+- [x] Voice-to-inventory natural language parsing
+- [x] Receipt scanner with OCR price extraction
 
 ### Print (Phase 18 stretch)
-- [ ] ReportLab/WeasyPrint PDF engine
-- [ ] Map atlas pages at multiple zoom levels
-- [ ] Medical reference pocket flipbook
+- [x] ReportLab/WeasyPrint PDF engine
+- [x] Map atlas pages at multiple zoom levels
+- [x] Medical reference pocket flipbook (8-page printable HTML)
 
 ### Reliability (Phase 19 stretch)
-- [ ] Full crash recovery with form state
-- [ ] E-ink display optimized mode
-- [ ] Battery-aware auto-throttling
-- [ ] WCAG 2.1 AA accessibility audit
+- [x] Full crash recovery with form state
+- [x] E-ink display optimized mode
+- [x] Battery-aware auto-throttling
+- [x] WCAG 2.1 AA accessibility audit
 
 ### Community (Phase 20 stretch)
-- [ ] Supply chain visualization on network map
-- [ ] Mutual aid agreement contracts
-- [ ] Multi-node group training exercises
+- [x] Supply chain visualization on network map
+- [x] Mutual aid agreement contracts
+- [x] Multi-node group training exercises
 
 ### Mobile (Phase 21 stretch)
-- [ ] Bottom tab bar mobile layout
-- [ ] IndexedDB offline data sync
-- [ ] Push notifications via Web Push API
-- [ ] Compass + inclinometer from phone sensors
+- [x] Bottom tab bar mobile layout
+- [x] IndexedDB offline data sync
+- [x] Push notifications via Web Push API
+- [x] Compass + inclinometer from phone sensors
 
 ### Platform (Phase 22 stretch)
 - [ ] Linux .deb/.rpm/AppImage/Flatpak packages
 - [ ] Signed + notarized macOS DMG
 - [ ] ARM64 builds (Raspberry Pi + Apple Silicon)
-- [ ] Docker headless server image
-- [ ] USB portable mode detection
+- [x] Docker headless server image
+- [x] USB portable mode detection
 
 ### Earlier Phases
-- [ ] SSE endpoint for instant alert push (Phase 1)
-- [ ] Context-aware decision trees referencing live data (Phase 2)
-- [ ] Allergy-aware dosage calculator (Phase 3)
-- [ ] Wound photo upload with comparison (Phase 3)
-- [ ] Garden map overlay on offline map (Phase 5)
-- [ ] Elevation profiles on routes (Phase 6)
-- [ ] Contour line rendering (Phase 6)
-- [ ] Offline geocoding (Phase 6)
-- [ ] Vector clocks for federation conflicts (Phase 7)
-- [ ] Motion detection alerts via OpenCV (Phase 9)
-- [ ] Auto-populate entities to structured tables (Phase 10)
+- [x] SSE endpoint for instant alert push (Phase 1)
+- [x] Context-aware decision trees referencing live data (Phase 2)
+- [x] Allergy-aware dosage calculator (Phase 3)
+- [x] Wound photo upload with side-by-side comparison (Phase 3)
+- [x] Garden map overlay on offline map (Phase 5)
+- [x] Elevation profiles on routes (Phase 6)
+- [x] Contour line rendering (Phase 6)
+- [x] Offline geocoding (Phase 6)
+- [x] Vector clocks for federation conflicts (Phase 7)
+- [x] Motion detection alerts via OpenCV (Phase 9)
+- [x] Auto-populate entities to structured tables (Phase 10)
+
+### v5.3.0 Enhancements
+- [x] Weather-aware solar forecast with 7-day prediction and hourly breakdown
+- [x] Scheduled automatic backups with encryption, rotation, and restore
+- [x] Analytics dashboards (inventory trends, consumption rate, weather history, power trends, medical vitals)
+- [x] NomadChart reusable Canvas 2D chart engine (line, bar, donut, breakdown, sparkline)
+- [x] WCAG 2.1 accessibility: ARIA landmarks, skip-link, modal focus trapping, icon labels, live regions, keyboard nav
+- [x] Theme-aware map tiles (6 tile sources: dark, light, tactical, e-ink, satellite, terrain)
+- [x] Customizable dashboard widgets with drag-and-drop reordering, visibility toggles, size control
+- [x] SSE real-time event stream (inventory, weather, alerts, tasks, sync, backup notifications)
+- [x] i18n translation layer with 10 languages (EN/ES/FR/DE/PT/JA/ZH/AR/UK/KO) and RTL support
+- [x] 51 new automated tests (federation v2, barcode, security, PDF, training)

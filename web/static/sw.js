@@ -79,3 +79,30 @@ self.addEventListener('fetch', event => {
     fetch(event.request).catch(() => caches.match(event.request))
   );
 });
+
+// Handle push-alert messages from the main page for background notifications
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'push-alert') {
+    self.registration.showNotification(event.data.title || 'N.O.M.A.D. Alert', {
+      body: event.data.body || 'New alert received',
+      icon: '/static/logo.png',
+      badge: '/static/logo.png',
+      tag: 'nomad-alert',
+      renotify: true,
+      requireInteraction: true,
+    });
+  }
+});
+
+// Handle notification click — focus the app window
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({type: 'window', includeUncontrolled: true}).then(clients => {
+      if (clients.length > 0) {
+        return clients[0].focus();
+      }
+      return self.clients.openWindow('/');
+    })
+  );
+});
