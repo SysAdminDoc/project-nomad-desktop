@@ -1,11 +1,11 @@
 # Project N.O.M.A.D.
 
 ## Overview
-Cross-platform edition of [Project N.O.M.A.D.](https://github.com/Crosstalk-Solutions/project-nomad) — the most comprehensive offline survival command center available. Runs on Windows, Linux, and macOS. No Docker required. 8 managed services (incl. FlatNotes), proactive + predictive AI alerts, AI SITREP generator + action execution + persistent memory, 21 interactive decision guides, 41 calculators, 56 quick reference cards, medical module (TCCC/triage/SBAR), training scenarios, food production, multi-node federation with community readiness + skill matching, power management with sensor charts, security cameras, AI document intelligence, built-in BitTorrent client, media library with 210 survival channels, 41-section user guide, task scheduler, 9 printable field documents (operations binder, wallet cards, SOI), serial hardware bridge, mesh radio support, CSV import wizard with 5 inventory templates (155 items), PWA with offline caching, UI zoom control, sidebar sub-menus, and a premium dark dashboard with 4 themes.
+Cross-platform edition of [Project N.O.M.A.D.](https://github.com/Crosstalk-Solutions/project-nomad) — the most comprehensive offline survival command center available. Runs on Windows, Linux, and macOS. No Docker required. 8 managed services (incl. FlatNotes), proactive + predictive AI alerts, AI SITREP generator + action execution + persistent memory, 21 interactive decision guides, 41 calculators, 56 quick reference cards, medical module (TCCC/triage/SBAR), training scenarios, food production, multi-node federation with community readiness + skill matching, power management with sensor charts, security cameras, AI document intelligence, built-in BitTorrent client, media library with 210 survival channels, 41-section user guide, task scheduler, 9 printable field documents (operations binder, wallet cards, SOI), serial hardware bridge, mesh radio support, CSV import wizard with 5 inventory templates (155 items), PWA with offline caching, UI zoom control, sidebar sub-menus, and a premium dark dashboard with 5 themes (incl. E-Ink).
 
 ## Tech Stack
 - **Python 3** — Flask web server + pywebview (WebView2 on Windows, WebKit on macOS, GTK on Linux)
-- **SQLite** — 59 tables, WAL mode, 30s timeout, FK enforcement, SQLite backup API, 81 performance indexes
+- **SQLite** — 89 tables, WAL mode, 30s timeout, FK enforcement, SQLite backup API, 120 performance indexes
 - **CSS** — External files: `web/static/css/app.css` (base) + `web/static/css/premium.css` (polish layer)
 - **Native process management** — subprocess for Ollama, kiwix-serve, Kolibri; threading HTTP server for CyberChef
 - **pystray** — system tray icon for background operation
@@ -21,7 +21,7 @@ Cross-platform edition of [Project N.O.M.A.D.](https://github.com/Crosstalk-Solu
 ```
 nomad.py              # Entry point — Flask + pywebview + tray + health monitor + service autostart
 platform_utils.py     # Cross-platform abstraction — subprocess flags, paths, GPU detection, URLs, process management
-db.py                 # SQLite init (59 tables), indexes, migrations (migrations BEFORE indexes), db_session() context manager
+db.py                 # SQLite init (89 tables), indexes, migrations (migrations BEFORE indexes), db_session() context manager
 config.py             # Data directory management (atomic writes via tmp+replace, XDG-aware paths, mtime-cached reads)
 build.spec            # PyInstaller spec for portable exe
 icon.ico              # App icon (multi-size, 16-256px)
@@ -30,11 +30,12 @@ ROADMAP.md            # 22-phase implementation plan (all complete)
 .github/workflows/
   build.yml           # CI/CD — PyInstaller + Inno Setup, dual artifact release on tag push
 web/
-  app.py              # Flask routes (~420 endpoints) — ~10,800 lines
+  app.py              # Flask routes (~566 endpoints) — ~17,500 lines
+  translations.py     # i18n translations (10 languages, 56 keys per language)
   catalog.py          # Content catalogs (books, videos, audio, torrents)
   static/
     css/
-      app.css         # Base styles (~1460 lines) — 4 themes, design system tokens, layout, components, responsive breakpoints (480/768/900/1280/1440/2560px), UI zoom levels
+      app.css         # Base styles (~2392 lines) — 5 themes (incl. E-Ink), design system tokens, layout, components, responsive breakpoints (480/768/900/1280/1440/2560px), UI zoom levels, battery saver, mobile bottom nav, RTL support, widget config styles
       premium.css     # Premium polish (~584 lines) — tactical typography, hazard stripes, micro-interactions
     logo.png          # App logo
     maplibre-gl.js    # Map renderer (bundled)
@@ -44,8 +45,39 @@ web/
       epub.min.js     # EPUB reader library (bundled)
   routes_advanced.py  # Advanced routes (phases 16-20): AI SITREP, actions, memory, print binder/wallet/SOI, system health, undo, federation community
   templates/
-    index.html        # HTML + inline theme vars + JS (~22,100 lines)
+    index.html        # HTML + inline theme vars + JS (~28,500 lines)
   nukemap/            # NukeMap v3.2.0 — index.html, 18 JS modules, CSS, data/, lib/leaflet
+tests/
+  conftest.py           # pytest fixtures — Flask test_client with isolated tmp_path SQLite DB
+  test_inventory.py     # 18 tests — CRUD, search, filter, summary, shopping list, checkout
+  test_notes.py         # 14 tests — CRUD, pin, tags, journal, markdown export
+  test_contacts.py      # 8 tests — CRUD, search by name/callsign/role
+  test_conversations.py # 14 tests — CRUD, rename, delete-all, search, branching, export
+  test_weather.py       # 9 tests — weather log CRUD, readings, trend, Zambretti predict
+  test_medical.py       # 14 tests — patients CRUD, vitals, wounds, drug interactions, triage, TCCC
+  test_checklists.py    # 8 tests — CRUD, templates, summary counts
+  test_core.py          # 11 tests — services, alerts, activity, version, 404, settings
+  test_radio.py         # 8 tests — frequencies CRUD, radio profiles, propagation
+  test_maps.py          # 11 tests — waypoints CRUD, routes, elevation profile
+  test_garden.py        # 18 tests — zone, plots, seeds, harvests, companions, calendar, pests
+  test_supplies.py      # 14 tests — fuel, equipment, ammo CRUD + summaries
+  test_benchmark.py     # 6 tests — status, history, results, storage benchmark
+  test_kb.py            # 7 tests — KB documents, status, search, CSV import
+  test_medical_reference.py # 11 tests — 15 reference categories, search endpoint
+  test_skills.py        # 7 tests — skills CRUD + validation + seed defaults
+  test_community.py     # 8 tests — community resources CRUD, float validation
+  test_radiation.py     # 5 tests — radiation CRUD, cumulative tracking, clear
+  test_ocr_pipeline.py  # 8 tests — OCR pipeline status/start/stop/scan, KB workspaces
+  test_validation.py    # 5 tests — fuel/equipment validation, CSV injection, upload limit
+  test_incidents.py     # 11 tests — incidents CRUD, filter, clear
+  test_tasks.py         # 14 tests — scheduled tasks CRUD, complete, recurrence, due
+  test_vault.py         # 12 tests — encrypted vault CRUD, crypto field validation
+  test_livestock.py     # 8 tests — livestock CRUD, health log
+  test_scenarios.py     # 8 tests — scenarios CRUD, complication fallback, AAR
+  test_timers.py        # 7 tests — timers CRUD, remaining/done computation
+  test_power.py         # 14 tests — power devices, log, dashboard, history, autonomy
+  test_cameras.py       # 5 tests — security cameras CRUD
+  test_data_summary.py  # 8 tests — data summary, global search across entities
 services/
   manager.py          # Process manager — download (with resume), start, stop, track, uninstall; register_process() for thread-safe tracking; stdout/stderr log capture per service; wait_for_port(), is_healthy() with HTTP probing, SERVICE_HEALTH_URLS
   ollama.py           # Ollama AI
@@ -59,9 +91,9 @@ services/
 ```
 
 ## Version
-v4.1.0 — ~120,000 lines, 467 API routes, 76 DB tables (111 indexes), 8 managed services, 25 prep sub-tabs, 38-section user guide, 21 decision guides, 42 calculators, 56 quick reference cards, 3 dashboard modes, 13 live widgets, persistent AI copilot dock (all tabs) with model cards, 9 survival need categories with progress bars, 9 printable field documents, weather-triggered + predictive alerts, Zambretti offline weather prediction with pressure graphing, inventory barcode/QR + lot tracking + check-in/out + photo attachments + auto-shopping list, DTMF tone generator + NATO phonetic trainer, wiki-links + backlinks + templates + attachments in notes, media resume playback + playlists + metadata editor, KB workspaces, companion planting (20 pairs) + pest guide (10 entries) + seed inventory, vital signs trending charts, expiring meds tracker, map measurement + print + style switcher + GPX, AI inference + storage + network benchmarks, LAN chat channels + presence, antenna calculator, bento grid home + sidebar labels + status pills + customize panel, full UI customization with localStorage persistence
+v5.4.0 — ~51,300 lines across 6 core files (app.py ~17,500 + index.html ~28,500 + app.css 2,392 + premium.css 717 + db.py 1,455 + translations.py 368), 566 API routes, 89 DB tables (120 indexes), ~340 seeded radio frequencies, 8 managed services, 25 prep sub-tabs, 42 calculators, 56 reference cards, 21 decision guides, 38-section user guide, 850+ JS functions, 338 automated pytest tests (34 test files), 10 supported languages, persistent AI copilot dock (all tabs) with model cards + multimodal image input + conversation branching + source citations, SSE real-time alert push (/api/alerts/stream) with polling fallback, context-aware decision trees with live inventory/contacts data, allergy-aware dosage calculator (8 drugs, patient cross-check, pediatric dosing), watch/shift rotation planner with printable schedules, 6 inventory templates (185 items), Zambretti offline weather prediction with pressure graphing + weather-triggered alerts, inventory barcode/QR + lot tracking + check-in/out + photo attachments + auto-shopping list, DTMF tone generator + NATO phonetic trainer + antenna calculator + HF propagation prediction, wiki-links + backlinks + templates + attachments + daily journal in notes, media resume playback + chapter navigation + playlists + auto-thumbnails + subtitle support + metadata editor + Continue Watching, interactive TCCC MARCH flowchart + vital signs trending + expiring meds tracker + 15-category searchable medical reference, KB workspaces, companion planting (20 pairs) + pest guide (10 entries) + seed inventory, map measurement + print + style switcher + GPX + elevation profile graph + saved routes panel, AI inference + storage + network benchmarks, LAN chat channels + AES-GCM encryption + presence indicators + peer file transfer, mesh node map overlay, bento grid home + sidebar group labels + status pills + customize panel, v5.0 roadmap 98% complete (65/66 features)
 
-## Audit History (7 rounds)
+## Audit History (8 rounds)
 - **v1.8.0 — Security**: Auth deny-on-failure, thread-safe install lock, path traversal hardening (normpath+startswith on maps/ZIM delete), DB try-finally on all 7 services, stirling stderr crash fix, race conditions (window handler before thread, health monitor MAX_RESTARTS), Flask startup error feedback
 - **v1.9.0 — Frontend+DB**: resp.ok on AI warmup, debounced media/channel filters (200ms), try-catch loadNotes, SQLite backup API (WAL-safe), 30s connection timeout, FK enforcement, 10 new indexes, division-by-zero guard on critical_burn
 - **v2.0.0 — Performance**: requestAnimationFrame debounce on streaming chat rendering, insertAdjacentHTML for mesh/LAN log (O(1) vs O(n^2)), content-summary 4 queries→1, fetch error handlers on map/vault delete, notes CRUD try-finally
@@ -88,7 +120,7 @@ v4.1.0 — ~120,000 lines, 467 API routes, 76 DB tables (111 indexes), 8 managed
   - **Phase 14 (Mesh)**: Meshtastic bridge stub (`/api/mesh/status`, messages, nodes) with local message storage; comms status board (`/api/comms/status-board`) aggregating LAN/mesh/federation/radio; `mesh_messages` table added; comms status board UI in Radio sub-tab
   - **Phase 15 (Scheduling)**: Task scheduler engine (`/api/tasks` CRUD + `/api/tasks/<id>/complete` with auto-recurrence + `/api/tasks/due`); sunrise/sunset NOAA calculator (`/api/sun`); predictive alerts (`/api/alerts/predictive`) analyzing burn rates, expiry, overdue maintenance; `scheduled_tasks` table added; task manager UI in Settings; sun widget in live dashboard; predictive alerts integrated into alert bar
   - **Phase 16 (Advanced AI)**: AI SITREP generator (`/api/ai/sitrep`) queries 24h data and generates military-format report; AI action execution (`/api/ai/execute-action`) parses natural language commands; AI memory (`/api/ai/memory`) persists key facts across conversations; SITREP button in Command Post; memory panel in AI Chat header
-  - **Phase 17 (Data Import)**: CSV import wizard (`/api/import/csv` + `/api/import/csv/execute`) with column mapping UI and 7 target tables; 5 inventory templates (`/api/templates/inventory`) with 155 realistic prepper items (72hr Kit, Family 30-Day, Bug-Out Bag, First Aid, Vehicle Emergency); QR code generation (`/api/qr/generate`); CSV import modal in Settings; template dropdown in Inventory
+  - **Phase 17 (Data Import)**: CSV import wizard (`/api/import/csv` + `/api/import/csv/execute`) with column mapping UI and 7 target tables; 6 inventory templates (`/api/templates/inventory`) with 185 realistic prepper items (72hr Kit, Family 30-Day, Bug-Out Bag, First Aid, Vehicle Emergency, Medical Bag); QR code generation (`/api/qr/generate`); CSV import modal in Settings; template dropdown in Inventory
   - **Phase 18 (Print)**: Operations binder (`/api/print/operations-binder`) — complete multi-page HTML document with TOC, contacts, frequencies, medical cards, inventory, checklists, waypoints, procedures; wallet cards (`/api/print/wallet-cards`) — 5 lamination-ready cards (ICE, blood type, medications, rally points, frequencies); SOI generator (`/api/print/soi`) — classified-style signal operating instructions; print buttons in Settings
   - **Phase 19 (Reliability)**: Database integrity check (`/api/system/db-check`) runs PRAGMA integrity_check + foreign_key_check; vacuum/reindex (`/api/system/db-vacuum`); startup self-test (`/api/system/self-test`) checks DB, disk, services, ports, Python, critical tables; undo system (`/api/undo` GET/POST) with 10-entry deque and 30s TTL; system health panel in Settings
   - **Phase 20 (Community)**: Community readiness dashboard (`/api/federation/community-readiness`) aggregates per-node readiness across 7 categories; skill matching (`/api/federation/skill-search`) searches contacts+federation+community; distributed alert relay (`/api/federation/relay-alert`) POSTs to all trusted peers
@@ -141,6 +173,96 @@ v4.1.0 — ~120,000 lines, 467 API routes, 76 DB tables (111 indexes), 8 managed
   - **Audit fixes (135+ issues)**: 19 hardcoded `'Cascadia Code'` fonts → `var(--font-data)`. 9 inline section headers → `.section-header-label` CSS class. 2 `onmouseover/onmouseout` → `.hover-reveal` CSS class. 10 list item paddings standardized (convo/note/prep/activity/incident/check/catalog/media items all +2-4px). 11 CSS utility classes added (`.mb-12` through `.mb-24`, `.gap-10/12/16`, `.p-12/16/20`). Smooth scroll (`scroll-behavior:smooth`). Focus ring consistency on all new components. Empty state polish (48px icons, centered text). Card entrance stagger (7-slot animation delay). Bento skeleton loader with shimmer
   - **New CSS components**: `.sidebar-group-label`, `.ss-pill`, `.bento-grid`, `.copilot-dock`, `.svc-running/stopped/not-installed`, `.need-progress`, `.section-collapse-btn`, `.hover-reveal`, `.customize-panel/overlay/section/row/theme-grid/theme-card/sortable-item`, `.toggle-switch/slider`, `.sidebar-customize-btn`, `.section-header-label`, `.bento-skeleton`
   - **ROADMAP-v5.md**: 12-phase feature expansion roadmap based on competitive analysis of 40+ open source projects. Covers AI (GPT4All-style LocalDocs, conversation branching), KB (LanceDB replacement, hybrid search), Inventory (barcode scanning, lot tracking), Maps (OSRM offline routing, GPX), Notes (wiki-links, tags), Media (resume playback, chapters), Medical (drug interactions, TCCC flowchart), Radio (Meshtastic serial, freq database), Weather (Zambretti prediction), LAN (file transfer, channels), Garden (planting calendar), Benchmark (AI inference speed)
+
+- **v4.4.0 — Feature Expansion & Bug Fixes**:
+  - **SSE real-time alerts** — `/api/alerts/stream` Server-Sent Events endpoint with per-client `queue.Queue(maxsize=50)`, 30s heartbeat, auto-cleanup on disconnect; `_notify_alert_subscribers()` fires on new alerts, dismiss, and dismiss-all; frontend `connectAlertSSE()` with automatic fallback to 60s polling on error
+  - **Context-aware decision trees** — `/api/guides/context` returns live inventory by category + contacts by role + summary (medic, comms officer auto-detect); `enrichGuideText()` replaces `{inv:category}`, `{medic_name}`, `{comms_officer}`, `{contact:role}`, `{water_count}` placeholders; context strip shows resources while navigating guides; water_purify + wound_assess guides updated with placeholders
+  - **Allergy-aware dosage calculator** — `DOSAGE_GUIDE` with 8 drugs (Ibuprofen, Acetaminophen, Diphenhydramine, Amoxicillin, Loperamide, Aspirin, ORS, Prednisone); `POST /api/medical/dosage-calculator` checks patient allergies against contraindications, current medications against DRUG_INTERACTIONS, validates minimum age, calculates weight-based pediatric doses; `GET /api/medical/dosage-drugs`; UI with drug/patient selectors, age/weight inputs, color-coded warnings
+  - **Watch/shift rotation planner** — `watch_schedules` table + `idx_watch_schedules_start` index; `/api/watch-schedules` CRUD with auto-rotation generation (configurable 1-24h shifts); `/api/watch-schedules/<id>/print` printable HTML; UI with form, schedule list, detail view, print button
+  - **Medical bag inventory template** — 30-item IFAK+ template (CAT tourniquets, chest seals, hemostatic gauze, NPAs, SAM splints, pulse oximeter, BP cuff, stethoscope, 8 medications); total 6 templates, 185 items
+  - **Bug fixes**: radiation cumulative tracking used `ORDER BY created_at DESC` which failed on rapid inserts with identical timestamps → fixed to `ORDER BY id DESC`; checklist test isolation fix (`data[0]` → filter by name)
+
+- **v4.5.0 — Feature Expansion (Batch 2)**:
+  - **Wound photo upload** — `POST /api/patients/<pid>/wounds/<wid>/photo` multipart file upload with path traversal protection; JSON array of photo paths per wound; side-by-side comparison modal in UI; camera icon badges on wound entries
+  - **Weather-triggered action rules** — `weather_action_rules` table + `idx_weather_action_rules_enabled` index; `/api/weather/action-rules` CRUD + `/api/weather/action-rules/evaluate`; `_evaluate_weather_action_rules(db)` internal helper with 6 condition types (temp_above/below, wind_above, pressure_below, humidity_above, precip_above); seed rules on first load; rule management UI with evaluate button
+  - **Entity auto-populate** — `POST /api/kb/documents/<id>/import-entities` imports extracted entities to structured tables: person→contacts, medication→inventory, coordinates→waypoints; "Import Entities to Database" button in KB document detail UI
+  - **Medical reference flipbook** — `/api/print/medical-flipbook` in `routes_advanced.py`; 8-page printable HTML field reference (vital signs, GCS scale, TCCC MARCH, drug dosages, wound care, burns, anaphylaxis, CPR, fractures, hypothermia, environmental emergencies, SBAR format, 9-line MEDEVAC); buttons on Home + Settings print sections
+  - **Conversation branching** — "What If?" fork button on AI responses; `forkWhatIf()`, `switchToBranch()`, `returnToMainConversation()` JS functions; branch panel with visual indicators; branch count in conversation list; `.whatif-btn`, `.branch-banner`, `.branch-panel`, `.convo-branch-badge` CSS
+  - **XSS fix**: patient care card allergies/medications/conditions escaped via `_esc()` helper
+  - **DB connection leak fix**: alert engine `get_db()` calls wrapped in try/finally with cleanup in except handler
+  - **Query limits**: Added LIMIT clauses to 10+ unbounded queries (burn_items 50, low_stock 50, wound_log 100, predictive alerts 200, guides context 500/200)
+
+- **v4.6.0 — Batch 3: UX, Accessibility, Map Overlays**:
+  - **WCAG 2.1 AA accessibility** — skip-nav link, `role="main"` on content area, `aria-live="polite"` on toast notifications, `focus-visible` outlines on all interactive elements, `prefers-reduced-motion` media query in base CSS
+  - **Crash recovery** — `FormStateRecovery` utility: auto-saves inventory/contact/patient form state to localStorage (500ms debounce), 24h staleness expiry, recovery toast on restore, auto-clear on submit/cancel
+  - **Mobile bottom tab bar** — `<nav id="mobile-tab-bar">` with 5 tabs (Home, Prep, Map, AI, More); "More" slide-up panel with 7 remaining sections in 3-column grid; `@media (max-width: 768px)` hides sidebar, shows bottom bar, adds safe-area padding
+  - **Garden map overlay** — `GET /api/garden/plots/geo` GeoJSON endpoint; `PUT /api/garden/plots/<id>` update route; `lat`/`lng`/`boundary_geojson` columns on `garden_plots`; MapLibre fill+outline+circle+label layers; polygon drawing tool (click to add vertices, double-click to finish); toggle button on map toolbar
+  - **Supply chain visualization** — `GET /api/federation/supply-chain` GeoJSON endpoint with peer nodes + trade route lines; `lat`/`lng` columns on `federation_peers`; peer circles color-coded by trust level (observer=gray, member=blue, trusted=green, admin=gold); trade route dashed lines between peers with matching offer↔request; popups with offers/requests detail; toggle button on map toolbar
+  - **Audit fixes** — SQL injection in undo system (column names now validated against `PRAGMA table_info`); XSS in wiki-link onclick (stripped `\\'"&<>` from titles); unescaped `d.speed`/`d.percent` in download queue HTML (now `escapeHtml()`); SITREP unbounded queries (added LIMIT 50 to low_stock, expired, inv_summary); error message no longer leaks exception details
+
+- **v4.7.0 — Batch 4: AI, Federation, Mobile Sensors, Notifications**:
+  - **Multi-document RAG with citations** — Enhanced KB RAG injection to track source documents (filename, doc_id, relevance score, excerpt); citations sent as first SSE chunk before streaming response; `formatRAGCitations()` renders clickable source badges with relevance percentage; `viewKBDocument()` navigates to Library→Documents; KB badge suppressed when citations already shown
+  - **Mutual aid agreements** — `mutual_aid_agreements` table (14 columns: peer info, commitments as JSON, status, signatures, dates); 5 CRUD endpoints (`/api/federation/mutual-aid` GET/POST, `/<id>` PUT/DELETE, `/<id>/sign` POST); dual-signature workflow (signed_by_us + signed_by_peer → auto-activate); activity logging on create/sign
+  - **Compass & inclinometer** — Tools tab card with CSS compass rose (needle, N/S/E/W labels), heading in degrees + 16-point cardinal direction, pitch/roll inclinometer; `DeviceOrientationEvent` API with iOS permission request; 3-second fallback message if no sensor data
+  - **Push notifications** — Enhanced SSE alert handler to fire notifications when page is hidden/backgrounded; service worker `message` listener for `push-alert` type with `showNotification()` (icon, badge, tag, renotify, requireInteraction); `notificationclick` handler focuses existing app window or opens new one
+
+- **v5.3.0 — Wave 1+2: Solar, Backups, Analytics, A11y, Widgets, SSE, i18n**:
+  - **Solar forecast** — `_calculate_solar()` helper with declination/air mass/cloud factor; `GET /api/power/solar-forecast` 7-day forecast with 24-hour hourly breakdown; `GET /api/power/solar-history` 30-day actual vs estimated comparison; solar forecast card with panel config and Canvas 2D 7-day chart
+  - **Automatic backups** — 6 endpoints (`/api/system/backup/create|list|restore|delete|configure|config`); SQLite backup API with optional Fernet encryption; configurable auto-backup thread (daily/weekly) with rotation; pre-restore safety copy; backup history list with per-backup restore/delete
+  - **Analytics dashboards** — 5 endpoints (`/api/analytics/inventory-trends|consumption-rate|weather-history|power-history|medical-vitals`); `NomadChart` reusable Canvas 2D engine (line, bar, donut, breakdown, sparkline); analytics tab with inventory trends, burn rate, weather, power, and medical charts; theme-aware via CSS variables
+  - **Accessibility (a11y)** — ARIA landmarks on all regions; skip-link; modal focus trapping (Tab/Shift+Tab cycle, Escape close, return focus); `aria-label` on 20+ icon-only buttons; `aria-label` on all form inputs; `aria-live="polite"` on status indicators; keyboard navigation for sidebar sub-items and customize panel; `tabindex="0"` + Enter/Space handlers
+  - **Theme-aware map tiles** — `MAP_TILE_THEMES` (6 sources: dark, light, tactical, e-ink, satellite, terrain); `THEME_TO_TILE` auto-mapping; map tile selector dropdown; `applyMapThemeTiles()` + `setMapTileSource()` with localStorage persistence; auto-switch on theme change; offline fallback
+  - **Customizable dashboard widgets** — `GET/POST /api/dashboard/widgets` + reset endpoint; 10 default widgets (weather, inventory, power, medical, comms, tasks, map, alerts, contacts, solar); drag-and-drop reordering via HTML5 DnD; visibility toggles; size control (normal/wide/full); widget manager modal; CSS grid layout
+  - **SSE real-time events** — `GET /api/events/stream` Server-Sent Events with 30s keepalive; `_broadcast_event()` thread-safe bus; broadcasts on inventory CRUD, weather update, alert dismiss, task complete, sync receive, backup complete; `NomadEvents` JS client with exponential backoff reconnect; auto-refresh handlers; RT status indicator dot
+  - **i18n translation layer** — `web/translations.py` with 10 languages (EN/ES/FR/DE/PT/JA/ZH/AR/UK/KO); 56 translation keys per language; 4 API endpoints (`/api/i18n/languages|translations/<lang>|language` GET/POST); `NomadI18n` JS engine with `data-i18n` attribute binding, fallback to English, RTL support for Arabic; language selector in Settings; RTL CSS rules
+  - **Test expansion** — 51 new tests across 5 files: `test_federation_v2.py` (15), `test_barcode.py` (10), `test_security_v2.py` (10), `test_print_pdf.py` (8), `test_training.py` (8); total 338 tests across 34 files
+
+- **v5.2.0 — Batch 9: Barcode Scanner, AI Vision, Contour Lines, Motion Detection, Security Audit**:
+  - **Barcode/UPC scanning** — `upc_database` table with ~84 seeded survival items across 6 categories (Food/Water/Medical/Batteries/Gear/Hygiene); BarcodeDetector API camera scanner with manual entry fallback; `GET /api/barcode/lookup/<upc>` + `POST /api/barcode/add` + `POST /api/barcode/scan-to-inventory` + `GET /api/barcode/database/stats`; auto-fill inventory with name/category/expiration from UPC; recent scans list
+  - **AI vision inventory** — Photo-to-inventory using Ollama vision models (llava/llava:13b/moondream/bakllava); `POST /api/inventory/vision-scan` with base64 image + structured JSON prompt for 14 categories; `POST /api/inventory/vision-import` bulk-add with condition tracking; canvas-based image resize (max 1024px); editable card grid with category/condition dropdowns
+  - **Contour line rendering** — `GET /api/maps/contours` generates GeoJSON contour lines from waypoint elevation data using IDW interpolation + marching squares algorithm; toggleable map layer with thin/thick lines (major contours every 500m); elevation labels on major contours; debounced reload on map move (>5km threshold)
+  - **Motion detection (OpenCV)** — `POST /api/security/motion/start/<camera_id>` launches background frame differencing thread; configurable threshold/interval/cooldown; `GET /api/security/motion/status` returns detector states; per-camera toggle buttons; status card with settings panel; 10s polling when security tab active; graceful fallback if cv2 not installed
+  - **Security audit (1 CRITICAL, 4 HIGH, 6 MEDIUM, 4 LOW fixed)**: SQL injection in conflict merge via table/column names (allowlist + regex); unauthenticated sync receive (require known peer); swallowed sync push errors (now logged); unbounded PDF/sync/import queries (LIMIT clauses); exception message leakage (generic errors); sync receive row cap (10k/table); receipt/vision import cap (500 items)
+
+- **v5.1.0 — Batch 8: Merge UI, PDF Engine, Mobile Layout, Receipt Scanner, Security Audit**:
+  - **Three-way merge UI** — `GET /api/node/conflicts` returns unresolved federation sync conflicts; `POST /api/node/conflicts/<id>/resolve` accepts local/remote/merged resolution with optional merged_data; sync_log migration adds `resolved`/`resolution` columns; Conflict Resolution card in Federation section with side-by-side LOCAL vs REMOTE display, Keep Local/Keep Remote/Manual Merge buttons, inline merge editor
+  - **PDF generation engine (ReportLab)** — `GET /api/print/pdf/operations-binder` generates full PDF with cover, TOC, contacts, frequencies, medical cards, inventory by category, checklists, waypoints; `GET /api/print/pdf/wallet-cards` generates ICE/rally/frequency wallet cards; `GET /api/print/pdf/soi` generates Signal Operating Instructions; all Courier monospace for tactical feel; graceful fallback if reportlab not installed
+  - **Mobile-optimized layout** — Bottom tab bar (`#mobile-bottom-nav`) for ≤768px with Home/Gear/Maps/AI/More tabs; slide-out sidebar drawer with overlay; touch-friendly 44px minimum targets; ≤480px font scaling (14px body, 16px inputs); full-width cards; safe-area padding for notched phones; E-ink theme mobile support
+  - **Receipt scanner** — `POST /api/inventory/receipt-scan` accepts image upload, tries Ollama vision (llava model) then Tesseract OCR fallback; regex price extraction ($X.XX patterns); `POST /api/inventory/receipt-import` bulk-adds parsed items to inventory; modal UI with drag-and-drop/camera capture, image preview, editable results table with checkboxes, select-all
+  - **Security audit (2 CRITICAL, 4 HIGH, 5 MEDIUM, 4 LOW fixed)**: Path traversal in training dataset/model names (regex sanitization); Modelfile injection via base_model (character allowlist); unbounded GeoJSON storage (500KB cap); race condition on training job run (status check); Docker runs as root (added USER nomad); zone_type/color validation (allowlists + hex regex); zone query LIMIT clauses; UnboundLocalError in train thread exception handler; internal path removed from API response
+
+- **v5.0.0 — Batch 7: AI Pipeline, Voice, Security Zones, Docker, Security Audit**:
+  - **LoRA fine-tuning pipeline** — `training_datasets`/`training_jobs` tables; endpoints for dataset creation from conversation history, job management, Ollama Modelfile generation; UI in AI settings for managing training datasets and jobs
+  - **Voice-to-inventory parsing** — `VoiceInput` JS module using Web Speech API (`SpeechRecognition`); `parseInventoryCommand()` NLP for quantity/unit/item extraction; `voiceAddInventory()` one-click voice add; `voiceInput(targetId)` generic voice-to-text for any input field; microphone buttons on inventory and copilot
+  - **Perimeter security zones** — `perimeter_zones` table with GeoJSON boundaries, linked cameras/waypoints, zone types (patrol/restricted/observation/buffer); CRUD endpoints + GeoJSON export for map overlay; UI card in security tab with create/delete/list
+  - **Docker headless server** — `Dockerfile` (Python 3.12-slim), `docker-compose.yml` (optional Ollama with --profile ai), `nomad_headless.py` entry point (NOMAD_HEADLESS=1, Flask on 0.0.0.0:8080), `requirements-docker.txt`, `.dockerignore`
+  - **Security audit (4 HIGH, 1 MEDIUM, 1 LOW fixed)**: SSRF protection on sync-push/sync-pull peer_ip (ipaddress validation); removed broken Fernet fallback in dead drop (key length mismatch); XSS protection in map atlas (html.escape on page_title + waypoint names); federation endpoint auth (blocked peer rejection on sync-receive, group exercises invite/sync-state); grid_size capped at 10 in atlas (DoS prevention); N+1 DB connection fix in atlas loop; BatteryManager throttle no longer triggers fullSync
+
+- **v5.4.0 — Audit Round 8: Connection Safety, Cascade Integrity, Frontend Hardening**:
+  - **69 DB connection leaks fixed in app.py** — converted all unprotected `db = get_db()` / `db.close()` patterns to `with db_session() as db:` context manager; eliminates connection exhaustion under error conditions
+  - **9 complex DB patterns fixed** — helper functions with early returns, alert engine, group exercises, readiness score all now use `db_session()`
+  - **Cascade deletes added** — notes (note_tags + note_links), inventory (photos + checkouts + shopping_list), medical (handoff_reports + wound_photos via subquery)
+  - **2 missing indexes** — `idx_shopping_list_inventory_id`, `idx_conversation_branches_parent`
+  - **Frontend fixes (8)** — JSON.parse try-catch on chat messages, 3 missing resp.ok checks (kiwix catalog, dashboard overview), XSS fix (parseInt on doc_id onclick), null guard on getElementById('aar-output'), RAF stacking fix in barcode scanner, wrong selector `.conv-item` → `.convo-item[data-convo-id=]`, division-by-zero guard on tok/s stats
+  - **routes_advanced.py fixes** — SITREP incidents query LIMIT 50, float() error handling on waypoint coordinates, removed duplicate `_esc()` definition
+  - **Input validation** — search strings capped at 200 chars, LIMIT params capped at 500, scheduled_tasks query bounded
+  - **Race condition fix** — `_alert_check_running` flag now uses `_state_lock` for thread-safe access
+  - **Alert engine cleanup** — dedup and prune queries converted to `db_session()`, removed bare `db.close()` in exception handler
+
+- **v4.9.0 — Batch 6: Training, Maps, Portability, Security Audit**:
+  - **Multi-node group training exercises** — `group_exercises` table (16 cols: exercise_id, participants JSON, shared_state, decisions_log); 8 API endpoints (list, create+broadcast, invite, join, participant-joined, update-state, sync-state); `_get_trusted_peers()` helper; exercises broadcast to federation peers on create; state changes synced to all participants in real-time; UI with exercise cards, join/advance/complete buttons, decision log display
+  - **Map atlas pages** — `POST /api/maps/atlas` generates printable multi-page HTML atlas with cover, TOC, grid-referenced pages at configurable zoom levels (default 10/13/15); per-page waypoint listings; `generateMapAtlas()` JS opens in new print window; Atlas button in map toolbar
+  - **USB portable mode detection** — `is_portable_mode()` in platform_utils.py checks for `portable.marker`/`PORTABLE` file, Windows `GetDriveTypeW` removable drive, Linux `/media/`, macOS `/Volumes/`; `get_portable_data_dir()` creates `nomad_data/` next to app; `config.py` `get_data_dir()` auto-detects portable mode; `GET /api/system/portable-mode` endpoint; header `USB` indicator
+  - **Elevation profile chart** — `showElevationProfile(routeId)` renders Canvas 2D chart from existing `/api/maps/elevation-profile/<id>` data; filled area under curve, waypoint dots with labels, Y-axis elevation + X-axis distance labels, grid lines; stats bar (ascent/descent/distance/min/max); Profile button on each route card; `hideElevationProfile()` toggle
+  - **Offline geocoding** — `GET /api/geocode/search` searches waypoints, annotations, garden plots, contacts by name with typeahead; `GET /api/geocode/reverse` finds nearest named features using Haversine distance within 5.5km radius; geocoding search bar with dropdown in map tab; `geocodeGo()` flies to result with popup; `reverseGeocode()` toast with nearest feature
+  - **Security audit (4 CRITICAL, 3 HIGH, 4 MEDIUM fixed)**: Dead drop encryption upgraded from XOR to AES-256-GCM with PBKDF2 key derivation (100k iterations) + v1 backward compatibility; SSRF protection on LAN transfer peer_ip (ipaddress validation); tarfile path traversal protection on pmtiles + FFmpeg extractors (normpath+startswith); SSRF protection on reference book downloads (_validate_download_url); timing-safe auth token comparison (hmac.compare_digest); error handler no longer leaks exception details for 5xx; LIMIT clauses added to notes (1000), map_routes (500), map_annotations (500), fuel/ammo in AI context (100)
+
+- **v4.8.0 — Batch 5: Federation, Offline, Resilience, Comms**:
+  - **Vector clocks for federation conflicts** — `vector_clocks` table (table_name, row_hash, clock JSON, last_node); `_vc_dominates()` helper for clock comparison; sync-push increments local clocks per row (SHA-256 hash), includes clocks in payload; sync-receive detects concurrent clocks (neither dominates), merges component-wise max, logs conflicts; `GET /api/node/vector-clock` returns clock state; `GET /api/node/vector-clock/conflicts` returns conflict history; `sync_log` extended with `conflicts_detected`/`conflict_details` columns
+  - **IndexedDB offline data sync** — `OfflineSync` JS module with `init()`, `fullSync()`, `incrementalSync()`, `getOfflineData()`, `getSyncStatus()`, `startAutoSync()`; caches 6 tables (inventory, contacts, patients, waypoints, checklists, freq_database) to IndexedDB; `GET /api/offline/snapshot` bulk export; `GET /api/offline/changes-since` incremental delta; 5-minute auto-sync interval; sync badge indicator; Settings card with Full Sync/Check Status/Clear Cache buttons
+  - **Battery-aware auto-throttling** — `BatteryManager` JS module using Battery Status API; monitors charge level and charging state; 20% low threshold reduces sync to 15min, disables CSS animations; 10% critical threshold increases sync to 30min, removes background patterns; `.battery-saver`/`.battery-critical` CSS classes; battery indicator in header; auto-restores when charging
+  - **E-ink display mode** — New `[data-theme="eink"]` CSS theme: pure black/white, no shadows/gradients/animations, 2px solid borders, grayscale images, 16px base font, high contrast; theme button added to all 3 theme switcher locations + customize panel
+  - **Dead drop encrypted USB messaging** — `dead_drop_messages` table; `POST /api/deaddrop/compose` encrypts message with XOR (SHA-256 derived key) + checksum verification; `POST /api/deaddrop/decrypt` decrypts with secret validation; `POST /api/deaddrop/import` stores encrypted messages; `GET /api/deaddrop/messages` lists received; compose UI with recipient/message/secret fields, download as JSON for USB transfer; import with inline decryption prompt
 
 ## Run / Build
 ```bash

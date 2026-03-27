@@ -1,14 +1,81 @@
-"""Centralized configuration — data directory management.
+"""Centralized configuration — data directory management and app settings.
 
 This module has ZERO internal imports to avoid circular dependency issues.
 Everything else imports get_data_dir() from here.
+
+The Config class provides environment-variable-overridable defaults for all
+hardcoded values used throughout the application.
 """
 
 import os
 import json
 import logging
+import secrets
+
+# Optional .env support — gracefully skip if python-dotenv is not installed
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 log = logging.getLogger('nomad.config')
+
+
+# ---------------------------------------------------------------------------
+# Application Settings (class-based, env-overridable)
+# ---------------------------------------------------------------------------
+
+class Config:
+    """Central configuration with environment variable overrides."""
+
+    # --- App Identity ---
+    VERSION = os.environ.get('NOMAD_VERSION', '5.4.0')
+
+    # --- Upload / Content Limits ---
+    MAX_CONTENT_LENGTH = int(os.environ.get('NOMAD_MAX_CONTENT_LENGTH', 100 * 1024 * 1024))  # 100 MB
+
+    # --- Knowledge Base / RAG ---
+    EMBED_MODEL = os.environ.get('NOMAD_EMBED_MODEL', 'nomic-embed-text:v1.5')
+    CHUNK_SIZE = int(os.environ.get('NOMAD_CHUNK_SIZE', 500))
+    CHUNK_OVERLAP = int(os.environ.get('NOMAD_CHUNK_OVERLAP', 50))
+
+    # --- SSE ---
+    MAX_SSE_CLIENTS = int(os.environ.get('NOMAD_MAX_SSE_CLIENTS', 20))
+
+    # --- Service Ports ---
+    APP_PORT = int(os.environ.get('NOMAD_PORT', 8080))
+    OLLAMA_PORT = int(os.environ.get('NOMAD_OLLAMA_PORT', 11434))
+    KIWIX_PORT = int(os.environ.get('NOMAD_KIWIX_PORT', 8888))
+    CYBERCHEF_PORT = int(os.environ.get('NOMAD_CYBERCHEF_PORT', 8889))
+    FLATNOTES_PORT = int(os.environ.get('NOMAD_FLATNOTES_PORT', 8890))
+    KOLIBRI_PORT = int(os.environ.get('NOMAD_KOLIBRI_PORT', 8300))
+    QDRANT_PORT = int(os.environ.get('NOMAD_QDRANT_PORT', 6333))
+    STIRLING_PORT = int(os.environ.get('NOMAD_STIRLING_PORT', 8443))
+    DISCOVERY_PORT = int(os.environ.get('NOMAD_DISCOVERY_PORT', 18080))
+
+    # --- Map Extensions ---
+    ALLOWED_MAP_EXTENSIONS = set(
+        os.environ.get('NOMAD_ALLOWED_MAP_EXTENSIONS', 'pmtiles,mbtiles').split(',')
+    )
+
+    # --- Security ---
+    SECRET_KEY = os.environ.get('NOMAD_SECRET_KEY', '')
+
+    # --- Rate Limiting ---
+    RATELIMIT_DEFAULT = os.environ.get('NOMAD_RATELIMIT_DEFAULT', '200/minute')
+    RATELIMIT_MUTATING = os.environ.get('NOMAD_RATELIMIT_MUTATING', '60/minute')
+
+    # --- Misc Magic Numbers ---
+    CPU_MONITOR_INTERVAL = int(os.environ.get('NOMAD_CPU_MONITOR_INTERVAL', 2))
+    OCR_PIPELINE_INTERVAL = int(os.environ.get('NOMAD_OCR_PIPELINE_INTERVAL', 60))
+
+    @classmethod
+    def secret_key(cls):
+        """Return a secret key, generating one if not configured."""
+        if not cls.SECRET_KEY:
+            cls.SECRET_KEY = secrets.token_hex(32)
+        return cls.SECRET_KEY
 
 # Config cache — avoids re-reading config.json from disk on every get_data_dir() call
 _config_cache = None
@@ -90,6 +157,11 @@ def save_config(data: dict):
 
 def get_data_dir() -> str:
     """Single source of truth for the N.O.M.A.D. data directory."""
+    # Portable mode — store data next to the executable
+    from platform_utils import is_portable_mode, get_portable_data_dir
+    if is_portable_mode():
+        return get_portable_data_dir()
+
     cfg = load_config()
     data_dir = cfg.get('data_dir', '')
     if data_dir and os.path.isabs(data_dir):
