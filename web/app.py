@@ -3614,6 +3614,19 @@ th {{ background: #eee; font-weight: 700; }}
 
     # [EXTRACTED to blueprint]
 
+    # Resolve nukemap directory — try multiple paths for robustness
+    _nukemap_candidates = []
+    if getattr(sys, 'frozen', False):
+        _nukemap_candidates.append(os.path.join(sys._MEIPASS, 'web', 'nukemap'))
+    _nukemap_candidates.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'nukemap'))
+    _nukemap_candidates.append(os.path.join(os.getcwd(), 'web', 'nukemap'))
+
+    _nukemap_dir = _nukemap_candidates[0]
+    for candidate in _nukemap_candidates:
+        if os.path.isdir(candidate) and os.path.isfile(os.path.join(candidate, 'index.html')):
+            _nukemap_dir = candidate
+            break
+
     @app.route('/nukemap')
     def nukemap_redirect():
         """Redirect /nukemap to /nukemap/ so relative CSS/JS paths resolve correctly."""
