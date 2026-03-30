@@ -76,6 +76,15 @@ function _sitroomRefreshPanels() {
   _loadCategoryCard('sitroom-space-news', 'Space');
   _loadCategoryCard('sitroom-maritime-news', 'Maritime');
   _loadCategoryCard('sitroom-nuclear-news', 'Nuclear');
+  _loadCategoryCard('sitroom-startups', 'Startups');
+  _loadCategoryCard('sitroom-good-news', 'Good News');
+  _loadCategoryCard('sitroom-conservation', 'Conservation');
+  _loadCategoryCard('sitroom-cloud-infra', 'Cloud');
+  _loadCategoryCard('sitroom-dev-community', 'Developer');
+  _loadKeywordCard('sitroom-ai-regulation', '/api/sitroom/ai-regulation', 'articles');
+  _loadKeywordCard('sitroom-rd-signal', '/api/sitroom/rd-signal', 'articles');
+  _loadKeywordCard('sitroom-chokepoints', '/api/sitroom/chokepoints', 'articles');
+  _loadKeywordCard('sitroom-fin-regulation', '/api/sitroom/fin-regulation', 'articles');
   loadSitroomLayoffs();
   loadSitroomAirline();
   loadSitroomSupplyChain();
@@ -1566,6 +1575,21 @@ async function _loadCategoryCard(elId, category) {
   if (!d || !d.articles?.length) { el.innerHTML = '<div class="sr-empty">No ' + category + ' data</div>'; return; }
   el.innerHTML = d.articles.map(a => `<div class="sitroom-news-item">
     <span class="sitroom-news-cat" data-cat="${escapeAttr(category)}">${escapeHtml(a.source_name || category)}</span>
+    <div class="sitroom-news-body">
+      <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
+    </div>
+  </div>`).join('');
+}
+
+/* ─── Generic Keyword Card Loader ─── */
+async function _loadKeywordCard(elId, apiUrl, dataKey) {
+  const d = await safeFetch(apiUrl, {}, null);
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const items = d ? (d[dataKey] || []) : [];
+  if (!items.length) { el.innerHTML = '<div class="sr-empty">No data available</div>'; return; }
+  el.innerHTML = items.map(a => `<div class="sitroom-news-item">
+    <span class="sitroom-news-cat" style="background:#1a1a2a;color:#8888cc">${escapeHtml(a.source_name || '')}</span>
     <div class="sitroom-news-body">
       <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
     </div>
