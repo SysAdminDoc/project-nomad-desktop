@@ -68,6 +68,7 @@ FETCH_COOLDOWN = {
     'internet_outages': 600,
     'radiation': 1800, 'gdelt_trending': 600, 'sanctions': 3600,
     'displacement': 7200, 'ucdp': 3600, 'cyber_threats': 1800,
+    'yield_curve': 3600, 'stablecoins': 600, 'correlation': 300,
 }
 
 # ─── Live YouTube Channels ────────────────────────────────────────────
@@ -1193,6 +1194,152 @@ def _fetch_cyber_threats():
     log.info(f"Situation Room: cached {len(items)} cyber threats")
 
 
+def _fetch_yield_curve():
+    """Fetch US Treasury yield curve data."""
+    if not _can_fetch('yield_curve'):
+        return
+    _set_last_fetch('yield_curve')
+    try:
+        resp = requests.get('https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/avg_interest_rates',
+                            params={'sort': '-record_date', 'page[size]': 20,
+                                    'filter': 'security_type_desc:eq:Treasury Bills,Treasury Notes,Treasury Bonds'},
+                            timeout=_REQ_TIMEOUT, headers=_REQ_HEADERS)
+        if not resp.ok:
+            return
+        data = resp.json().get('data', [])
+    except Exception as e:
+        log.debug(f"Yield curve fetch failed: {e}")
+        return
+
+    if not data:
+        return
+
+    with db_session() as db:
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'yield_curve'")
+        for item in data[:20]:
+            eid = hashlib.sha256(f"yc:{item.get('security_desc','')}:{item.get('record_date','')}".encode()).hexdigest()[:16]
+            db.execute('''INSERT OR IGNORE INTO sitroom_events
+                (event_id, event_type, title, magnitude, lat, lng, event_time, detail_json)
+                VALUES (?, ?, ?, ?, 0, 0, 0, ?)''',
+                (eid, 'yield_curve', item.get('security_desc', ''),
+                 float(item.get('avg_interest_rate_amt', 0)),
+                 json.dumps({'rate': item.get('avg_interest_rate_amt', ''),
+                             'security': item.get('security_desc', ''),
+                             'type': item.get('security_type_desc', ''),
+                             'date': item.get('record_date', '')})))
+        db.commit()
+    log.info(f"Situation Room: cached {len(data)} yield curve entries")
+
+
+def _fetch_stablecoins():
+    """Fetch stablecoin market cap data from CoinGecko."""
+    if not _can_fetch('stablecoins'):
+        return
+    _set_last_fetch('stablecoins')
+    try:
+        resp = requests.get('https://api.coingecko.com/api/v3/simple/price',
+                            params={'ids': 'tether,usd-coin,dai,first-digital-usd', 'vs_currencies': 'usd',
+                                    'include_market_cap': 'true', 'include_24hr_change': 'true'},
+                            timeout=_REQ_TIMEOUT, headers=_REQ_HEADERS)
+        if not resp.ok:
+            return
+        data = resp.json()
+    except Exception as e:
+        log.debug(f"Stablecoin fetch failed: {e}")
+        return
+
+    names = {'tether': 'USDT', 'usd-coin': 'USDC', 'dai': 'DAI', 'first-digital-usd': 'FDUSD'}
+    with db_session() as db:
+        for coin, vals in data.items():
+            symbol = names.get(coin, coin.upper())
+            price = vals.get('usd', 1.0)
+            mcap = vals.get('usd_market_cap', 0)
+            change = vals.get('usd_24h_change', 0)
+            # Store as market entry
+            db.execute('INSERT OR REPLACE INTO sitroom_markets (symbol, price, change_24h, market_type, label) VALUES (?, ?, ?, ?, ?)',
+                       (symbol, price, round(change or 0, 4), 'stablecoin',
+                        f"${mcap/1e9:.1f}B" if mcap else ''))
+        db.commit()
+    log.info(f"Situation Room: cached {len(data)} stablecoin entries")
+
+
+def _compute_correlations():
+    """Cross-domain correlation engine — detects convergent signals."""
+    if not _can_fetch('correlation'):
+        return
+    _set_last_fetch('correlation')
+
+    with db_session() as db:
+        # Count events by type in last fetch
+        counts = {}
+        for row in db.execute("SELECT event_type, COUNT(*) as cnt FROM sitroom_events GROUP BY event_type").fetchall():
+            counts[dict(row)['event_type']] = dict(row)['cnt']
+
+        # Count news by category
+        news_counts = {}
+        for row in db.execute("SELECT category, COUNT(*) as cnt FROM sitroom_news GROUP BY category").fetchall():
+            news_counts[dict(row)['category']] = dict(row)['cnt']
+
+        # Detect correlations
+        signals = []
+
+        # Military-Economic: conflicts + market drops
+        market_change = db.execute("SELECT AVG(change_24h) FROM sitroom_markets WHERE market_type = 'index'").fetchone()[0] or 0
+        conflict_count = counts.get('conflict', 0) + counts.get('ucdp_conflict', 0)
+        if conflict_count > 5 and market_change < -1:
+            signals.append({'type': 'military_economic', 'severity': 'high',
+                            'title': 'Military-Economic Convergence',
+                            'detail': f'{conflict_count} active conflicts coincide with market decline ({market_change:.1f}%)'})
+
+        # Disaster-Humanitarian: quakes/weather + displacement
+        disaster_count = counts.get('earthquake', 0) + counts.get('weather_alert', 0) + counts.get('fire', 0)
+        if disaster_count > 20:
+            signals.append({'type': 'disaster_cascade', 'severity': 'elevated',
+                            'title': 'Disaster Cascade Warning',
+                            'detail': f'{disaster_count} concurrent natural events detected across multiple regions'})
+
+        # Cyber-Infrastructure: cyber threats + internet outages
+        cyber_count = counts.get('cyber_threat', 0)
+        outage_count = counts.get('internet_outage', 0)
+        if cyber_count > 5 and outage_count > 2:
+            signals.append({'type': 'cyber_infrastructure', 'severity': 'high',
+                            'title': 'Cyber-Infrastructure Convergence',
+                            'detail': f'{cyber_count} cyber threats + {outage_count} internet outages — possible coordinated attack'})
+
+        # Escalation: high news volume in Defense + conflicts rising
+        defense_news = news_counts.get('Defense', 0)
+        if defense_news > 10 and conflict_count > 3:
+            signals.append({'type': 'escalation', 'severity': 'elevated',
+                            'title': 'Escalation Monitor',
+                            'detail': f'{defense_news} defense news items + {conflict_count} active conflicts'})
+
+        # Energy-Geopolitical: oil price + Middle East news
+        oil = db.execute("SELECT price FROM sitroom_markets WHERE symbol LIKE '%OIL%' OR symbol LIKE '%BRENT%'").fetchone()
+        me_news = news_counts.get('Middle East', 0)
+        if oil and me_news > 5:
+            signals.append({'type': 'energy_geopolitical', 'severity': 'normal',
+                            'title': 'Energy-Geopolitical Signal',
+                            'detail': f'Oil at ${dict(oil)["price"]:.2f} with {me_news} Middle East headlines'})
+
+        # Space Weather: high Kp index
+        if counts.get('radiation', 0) > 10:
+            signals.append({'type': 'radiation', 'severity': 'elevated',
+                            'title': 'Radiation Monitoring Alert',
+                            'detail': f'{counts["radiation"]} elevated radiation readings detected'})
+
+        # Store signals
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'correlation'")
+        for sig in signals:
+            eid = hashlib.sha256(sig['type'].encode()).hexdigest()[:16]
+            db.execute('''INSERT OR IGNORE INTO sitroom_events
+                (event_id, event_type, title, lat, lng, event_time, detail_json)
+                VALUES (?, ?, ?, 0, 0, 0, ?)''',
+                (eid, 'correlation', sig['title'],
+                 json.dumps({'type': sig['type'], 'severity': sig['severity'], 'detail': sig['detail']})))
+        db.commit()
+    log.info(f"Situation Room: computed {len(signals)} cross-domain correlations")
+
+
 def _fetch_displacement():
     """Fetch UNHCR displacement/refugee data."""
     if not _can_fetch('displacement'):
@@ -1279,6 +1426,9 @@ def refresh_all_feeds():
             _fetch_displacement()
             _fetch_ucdp_conflicts()
             _fetch_cyber_threats()
+            _fetch_yield_curve()
+            _fetch_stablecoins()
+            _compute_correlations()
         except Exception as e:
             log.exception(f"Situation Room refresh error: {e}")
         finally:
@@ -1587,6 +1737,30 @@ def api_sitroom_diseases():
     with db_session() as db:
         rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'disease' ORDER BY cached_at DESC LIMIT 30").fetchall()
     return jsonify({'outbreaks': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/correlations')
+def api_sitroom_correlations():
+    """Return cross-domain correlation signals."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'correlation' ORDER BY cached_at DESC").fetchall()
+    return jsonify({'signals': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/yield-curve')
+def api_sitroom_yield_curve():
+    """Return Treasury yield curve data."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'yield_curve' ORDER BY magnitude DESC LIMIT 20").fetchall()
+    return jsonify({'rates': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/stablecoins')
+def api_sitroom_stablecoins():
+    """Return stablecoin market data."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_markets WHERE market_type = 'stablecoin' ORDER BY symbol").fetchall()
+    return jsonify({'stablecoins': [dict(r) for r in rows], 'count': len(rows)})
 
 
 @situation_room_bp.route('/api/sitroom/ucdp')
