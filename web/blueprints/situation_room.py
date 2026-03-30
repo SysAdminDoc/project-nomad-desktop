@@ -70,6 +70,7 @@ FETCH_COOLDOWN = {
     'displacement': 7200, 'ucdp': 3600, 'cyber_threats': 1800,
     'yield_curve': 3600, 'stablecoins': 600, 'correlation': 300,
     'service_status': 300, 'social_velocity': 600,
+    'renewable': 3600, 'bigmac': 86400,
 }
 
 # ─── Live YouTube Channels ────────────────────────────────────────────
@@ -1341,6 +1342,92 @@ def _compute_correlations():
     log.info(f"Situation Room: computed {len(signals)} cross-domain correlations")
 
 
+def _fetch_renewable_energy():
+    """Fetch renewable energy news and data."""
+    if not _can_fetch('renewable'):
+        return
+    _set_last_fetch('renewable')
+    articles = []
+    renewable_feeds = [
+        {'name': 'CleanTechnica', 'url': 'https://cleantechnica.com/feed/', 'category': 'Renewable'},
+        {'name': 'Renewable Energy World', 'url': 'https://www.renewableenergyworld.com/feed/', 'category': 'Renewable'},
+        {'name': 'PV Magazine', 'url': 'https://www.pv-magazine.com/feed/', 'category': 'Renewable'},
+    ]
+    for feed in renewable_feeds:
+        items = _fetch_single_feed(feed)
+        articles.extend(items)
+
+    if articles:
+        with db_session() as db:
+            for a in articles[:15]:
+                content_hash = hashlib.sha256((a['title'] + a['link']).encode()).hexdigest()[:32]
+                db.execute('''INSERT OR REPLACE INTO sitroom_news
+                    (content_hash, title, link, description, published, source_name, category, source_type, cached_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'rss', CURRENT_TIMESTAMP)''',
+                    (content_hash, a['title'], a['link'], a['description'],
+                     a['published'], a['source'], 'Renewable'))
+            db.commit()
+        log.info(f"Situation Room: cached {len(articles)} renewable energy articles")
+
+
+def _fetch_bigmac_index():
+    """Fetch Big Mac Index from The Economist (cached, daily)."""
+    if not _can_fetch('bigmac'):
+        return
+    _set_last_fetch('bigmac')
+    # Big Mac Index from GitHub (The Economist publishes data there)
+    try:
+        resp = requests.get('https://raw.githubusercontent.com/TheEconomist/big-mac-data/master/output-data/big-mac-raw-index.csv',
+                            timeout=15, headers=_REQ_HEADERS)
+        if not resp.ok:
+            return
+    except Exception as e:
+        log.debug(f"Big Mac Index fetch failed: {e}")
+        return
+
+    lines = resp.text.strip().split('\n')
+    if len(lines) < 2:
+        return
+
+    # Parse CSV — get latest entries per country
+    header = lines[0].split(',')
+    try:
+        name_i = header.index('name')
+        price_i = header.index('dollar_price')
+        date_i = header.index('date')
+    except ValueError:
+        return
+
+    latest = {}
+    for line in lines[1:]:
+        cols = line.split(',')
+        if len(cols) <= max(name_i, price_i, date_i):
+            continue
+        country = cols[name_i].strip('"')
+        try:
+            price = float(cols[price_i])
+        except ValueError:
+            continue
+        date = cols[date_i].strip('"')
+        if country not in latest or date > latest[country]['date']:
+            latest[country] = {'price': price, 'date': date}
+
+    if not latest:
+        return
+
+    with db_session() as db:
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'bigmac'")
+        for country, data in list(latest.items())[:30]:
+            eid = hashlib.sha256(f"bm:{country}".encode()).hexdigest()[:16]
+            db.execute('''INSERT OR IGNORE INTO sitroom_events
+                (event_id, event_type, title, magnitude, lat, lng, event_time, detail_json)
+                VALUES (?, ?, ?, ?, 0, 0, 0, ?)''',
+                (eid, 'bigmac', country, data['price'],
+                 json.dumps({'country': country, 'dollar_price': data['price'], 'date': data['date']})))
+        db.commit()
+    log.info(f"Situation Room: cached {len(latest)} Big Mac Index entries")
+
+
 def _fetch_service_status():
     """Fetch cloud service status from public status pages."""
     if not _can_fetch('service_status'):
@@ -1498,6 +1585,8 @@ def refresh_all_feeds():
             _fetch_stablecoins()
             _fetch_service_status()
             _fetch_social_velocity()
+            _fetch_renewable_energy()
+            _fetch_bigmac_index()
             _compute_correlations()
         except Exception as e:
             log.exception(f"Situation Room refresh error: {e}")
@@ -1807,6 +1896,22 @@ def api_sitroom_diseases():
     with db_session() as db:
         rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'disease' ORDER BY cached_at DESC LIMIT 30").fetchall()
     return jsonify({'outbreaks': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/renewable')
+def api_sitroom_renewable():
+    """Return renewable energy news."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_news WHERE category = 'Renewable' ORDER BY cached_at DESC LIMIT 15").fetchall()
+    return jsonify({'articles': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/bigmac')
+def api_sitroom_bigmac():
+    """Return Big Mac Index data."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'bigmac' ORDER BY magnitude DESC LIMIT 30").fetchall()
+    return jsonify({'countries': [dict(r) for r in rows], 'count': len(rows)})
 
 
 @situation_room_bp.route('/api/sitroom/service-status')

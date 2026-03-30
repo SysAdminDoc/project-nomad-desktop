@@ -63,6 +63,8 @@ function _sitroomRefreshPanels() {
   loadSitroomStablecoins();
   loadSitroomVelocity();
   loadSitroomServiceStatus();
+  loadSitroomBigMac();
+  loadSitroomRenewable();
   _checkCriticalAlerts();
   loadSitroomLiveChannels();
 }
@@ -306,6 +308,7 @@ function initSitroomMap() {
 
 async function loadSitroomMapData() {
   if (!_sitroomMap || !_sitroomMap.loaded()) return;
+  _sitroomClusterGrid = {}; // Reset clustering grid
   const data = await safeFetch('/api/sitroom/events', {}, null);
   if (!data || !data.events) return;
   clearSitroomMarkers('earthquakes');
@@ -453,8 +456,23 @@ function clearSitroomMarkers(layerType) {
   if (arr) { arr.forEach(m => m.remove()); arr.length = 0; }
 }
 
+/* ─── Simple Marker Clustering ─── */
+let _sitroomClusterGrid = {};
+function _shouldCluster(lat, lng, layerType) {
+  if (!_sitroomMap) return false;
+  const zoom = _sitroomMap.getZoom();
+  if (zoom > 6) return false; // No clustering at high zoom
+  const gridSize = Math.max(1, 8 - zoom); // Larger grid at lower zoom
+  const key = `${layerType}:${Math.round(lat/gridSize)}:${Math.round(lng/gridSize)}`;
+  if (_sitroomClusterGrid[key]) return true;
+  _sitroomClusterGrid[key] = true;
+  return false;
+}
+
 function addSitroomMarker(ev, layerType) {
   if (!_sitroomMap) return;
+  // Skip if would cluster with existing marker at this zoom
+  if (_shouldCluster(ev.lat, ev.lng, layerType)) return;
   const colors = { earthquakes: '#ff4444', weather: '#ffaa00', conflicts: '#ff6600', aviation: '#44aaff', volcanoes: '#ff3366', fires: '#ff8800', nuclear: '#ffff00', bases: '#44ff88', cables: '#3388ff', datacenters: '#aa66ff', pipelines: '#cc8844', waterways: '#00ddff', spaceports: '#ff66ff', shipping: '#88ccaa', ucdp: '#dd2222', airports: '#cccccc', fincenters: '#44dd88' };
   const color = colors[layerType] || '#ffffff';
   let size = layerType === 'aviation' ? 5 : 8;
@@ -1443,6 +1461,40 @@ function _showSitroomAlert(type, message) {
   stack.appendChild(toast);
   // Auto-dismiss after 15s
   setTimeout(() => { if (toast.parentElement) toast.remove(); }, 15000);
+}
+
+/* ─── Big Mac Index ─── */
+async function loadSitroomBigMac() {
+  const d = await safeFetch('/api/sitroom/bigmac', {}, null);
+  const el = document.getElementById('sitroom-bigmac');
+  if (!el) return;
+  if (!d || !d.countries?.length) { el.innerHTML = '<div class="sr-empty">No Big Mac data</div>'; return; }
+  const usBM = d.countries.find(c => c.title === 'United States');
+  const usPrice = usBM ? usBM.magnitude : 5.69;
+  el.innerHTML = d.countries.map(c => {
+    const price = c.magnitude || 0;
+    const ppp = ((price - usPrice) / usPrice * 100).toFixed(0);
+    const color = ppp > 0 ? '#e05050' : '#4aedc4';
+    return `<div class="sr-cii-row">
+      <span class="sr-cii-country">${escapeHtml(c.title)}</span>
+      <span style="font-size:10px;color:#c8ccd0;width:50px;text-align:right">$${price.toFixed(2)}</span>
+      <span style="font-size:9px;font-weight:700;color:${color};width:40px;text-align:right">${ppp > 0 ? '+' : ''}${ppp}%</span>
+    </div>`;
+  }).join('');
+}
+
+/* ─── Renewable Energy ─── */
+async function loadSitroomRenewable() {
+  const d = await safeFetch('/api/sitroom/renewable', {}, null);
+  const el = document.getElementById('sitroom-renewable');
+  if (!el) return;
+  if (!d || !d.articles?.length) { el.innerHTML = '<div class="sr-empty">No renewable data</div>'; return; }
+  el.innerHTML = d.articles.map(a => `<div class="sitroom-news-item">
+    <span class="sitroom-news-cat" data-cat="Renewable" style="background:#0a3a1a;color:#44dd88">${escapeHtml(a.source_name || '')}</span>
+    <div class="sitroom-news-body">
+      <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
+    </div>
+  </div>`).join('');
 }
 
 /* ─── Social Velocity ─── */
