@@ -53,25 +53,43 @@
 
     <!-- Full-Width Map -->
     <div class="sr-map-wrap">
-      <div class="sr-map-toolbar">
-        <span class="sr-map-toolbar-label">LAYERS</span>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-quakes" checked data-sitroom-layer="earthquakes"> Quakes</label>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-weather" checked data-sitroom-layer="weather"> Weather</label>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-conflicts" checked data-sitroom-layer="conflicts"> Crises</label>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-aviation" data-sitroom-layer="aviation"> Aviation</label>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-volcanoes" data-sitroom-layer="volcanoes"> Volcanoes</label>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-fires" data-sitroom-layer="fires"> Fires</label>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-nuclear" data-sitroom-layer="nuclear"> Nuclear</label>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-bases" data-sitroom-layer="bases"> Mil. Bases</label>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-cables" data-sitroom-layer="cables"> Cables</label>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-datacenters" data-sitroom-layer="datacenters"> Data Ctrs</label>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-pipelines" data-sitroom-layer="pipelines"> Pipelines</label>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-waterways" data-sitroom-layer="waterways"> Waterways</label>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-spaceports" data-sitroom-layer="spaceports"> Space</label>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-shipping" data-sitroom-layer="shipping"> Shipping</label>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-daynight" data-sitroom-layer="daynight"> Day/Night</label>
-        <span class="sr-map-toolbar-sep"></span>
-        <button class="sr-btn sr-btn-globe" id="sr-globe-toggle" data-sitroom-action="toggle-globe" title="Toggle 2D/3D Globe">3D</button>
+      <!-- Layer Panel Toggle -->
+      <button class="sr-layer-toggle-btn" id="sr-layer-toggle" data-sitroom-action="toggle-layers" title="Toggle layer panel">LAYERS <span id="sr-active-layer-count">3</span></button>
+      <button class="sr-btn sr-btn-globe sr-globe-btn-float" id="sr-globe-toggle" data-sitroom-action="toggle-globe" title="Toggle 2D/3D Globe">3D</button>
+
+      <!-- Layer Panel (collapsible sidebar) -->
+      <div class="sr-layer-panel" id="sr-layer-panel">
+        <div class="sr-layer-panel-head">
+          <span>DATA LAYERS</span>
+          <button class="sr-btn sr-btn-ghost" data-sitroom-action="toggle-layers" style="font-size:12px">&#10005;</button>
+        </div>
+        <div class="sr-layer-group">
+          <div class="sr-layer-group-title">LIVE DATA</div>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-quakes" checked data-sitroom-layer="earthquakes"><span class="sr-layer-dot" style="background:#ff4444"></span> Earthquakes</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-weather" checked data-sitroom-layer="weather"><span class="sr-layer-dot" style="background:#ffaa00"></span> Weather Alerts</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-conflicts" checked data-sitroom-layer="conflicts"><span class="sr-layer-dot" style="background:#ff6600"></span> Crisis Events</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-aviation" data-sitroom-layer="aviation"><span class="sr-layer-dot" style="background:#44aaff"></span> Aircraft (ADS-B)</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-volcanoes" data-sitroom-layer="volcanoes"><span class="sr-layer-dot" style="background:#ff3366"></span> Volcanoes</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-fires" data-sitroom-layer="fires"><span class="sr-layer-dot" style="background:#ff8800"></span> Fires (VIIRS)</label>
+        </div>
+        <div class="sr-layer-group">
+          <div class="sr-layer-group-title">INFRASTRUCTURE</div>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-nuclear" data-sitroom-layer="nuclear"><span class="sr-layer-dot" style="background:#ffff00"></span> Nuclear Sites</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-bases" data-sitroom-layer="bases"><span class="sr-layer-dot" style="background:#44ff88"></span> Military Bases</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-cables" data-sitroom-layer="cables"><span class="sr-layer-dot" style="background:#3388ff"></span> Undersea Cables</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-datacenters" data-sitroom-layer="datacenters"><span class="sr-layer-dot" style="background:#aa66ff"></span> Data Centers</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-pipelines" data-sitroom-layer="pipelines"><span class="sr-layer-dot" style="background:#cc8844"></span> Pipelines</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-spaceports" data-sitroom-layer="spaceports"><span class="sr-layer-dot" style="background:#ff66ff"></span> Spaceports</label>
+        </div>
+        <div class="sr-layer-group">
+          <div class="sr-layer-group-title">MARITIME</div>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-waterways" data-sitroom-layer="waterways"><span class="sr-layer-dot" style="background:#00ddff"></span> Strategic Waterways</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-shipping" data-sitroom-layer="shipping"><span class="sr-layer-dot" style="background:#88ccaa"></span> Shipping Hubs</label>
+        </div>
+        <div class="sr-layer-group">
+          <div class="sr-layer-group-title">OVERLAYS</div>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-daynight" data-sitroom-layer="daynight"><span class="sr-layer-dot" style="background:#4466aa"></span> Day/Night Terminator</label>
+        </div>
       </div>
       <button class="sr-map-fullscreen-btn" id="sr-map-fullscreen" data-sitroom-action="toggle-map-fullscreen" title="Toggle fullscreen map (F)">&#x26F6;</button>
       <!-- Map Legend -->
