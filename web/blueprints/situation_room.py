@@ -5225,3 +5225,141 @@ def api_sitroom_mcp_capabilities():
             'geojson': '/api/sitroom/events-geojson',
         },
     })
+
+
+@situation_room_bp.route('/api/sitroom/conflict-intensity')
+def api_sitroom_conflict_intensity():
+    """Conflict intensity scoring per active conflict zone."""
+    with db_session() as db:
+        conflicts = db.execute(
+            "SELECT title, magnitude, lat, lng, detail_json FROM sitroom_events "
+            "WHERE event_type = 'ucdp_conflict' ORDER BY magnitude DESC LIMIT 30"
+        ).fetchall()
+    zones = {}
+    for r in conflicts:
+        d = dict(r)
+        # Group by approximate region (round to 2 degrees)
+        key = f"{round(d.get('lat', 0) / 2) * 2},{round(d.get('lng', 0) / 2) * 2}"
+        if key not in zones:
+            zones[key] = {'title': d['title'], 'lat': d.get('lat'), 'lng': d.get('lng'),
+                          'events': 0, 'total_magnitude': 0}
+        zones[key]['events'] += 1
+        zones[key]['total_magnitude'] += d.get('magnitude', 0) or 0
+    ranked = sorted(zones.values(), key=lambda z: z['total_magnitude'], reverse=True)
+    for z in ranked:
+        z['intensity'] = 'critical' if z['total_magnitude'] > 50 else 'high' if z['total_magnitude'] > 20 else 'medium' if z['total_magnitude'] > 5 else 'low'
+    return jsonify({'zones': ranked[:15], 'count': len(ranked)})
+
+
+@situation_room_bp.route('/api/sitroom/media-bias')
+def api_sitroom_media_bias():
+    """Analyze source diversity — how many unique sources cover each topic."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT category, COUNT(DISTINCT source_name) as source_count, COUNT(*) as article_count "
+            "FROM sitroom_news GROUP BY category ORDER BY source_count DESC"
+        ).fetchall()
+    return jsonify({'diversity': [dict(r) for r in rows]})
+
+
+@situation_room_bp.route('/api/sitroom/language-coverage')
+def api_sitroom_language_coverage():
+    """Return news coverage by language/region source."""
+    regions = {'World': 0, 'Europe': 0, 'Asia-Pacific': 0, 'Middle East': 0,
+               'Latin America': 0, 'Africa': 0, 'OSINT': 0, 'Think Tanks': 0}
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT category, COUNT(*) as c FROM sitroom_news GROUP BY category"
+        ).fetchall()
+    for r in rows:
+        d = dict(r)
+        cat = d.get('category', '')
+        if cat in regions:
+            regions[cat] = d['c']
+    return jsonify({'coverage': regions, 'total': sum(regions.values())})
+
+
+@situation_room_bp.route('/api/sitroom/escalation-tracker')
+def api_sitroom_escalation_tracker():
+    """Track escalation/de-escalation signals in active conflicts."""
+    escalation_words = ['escalat', 'mobiliz', 'deploy', 'launch', 'invad', 'annex', 'nuclear',
+                        'ultimatum', 'threat', 'sanction', 'blockade', 'siege']
+    deescalation_words = ['ceasefire', 'negotiate', 'peace', 'withdraw', 'truce', 'de-escalat',
+                          'diplomatic', 'agreement', 'compromise', 'humanitarian corridor']
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title FROM sitroom_news WHERE cached_at > datetime('now', '-24 hours')"
+        ).fetchall()
+    esc_count = 0
+    deesc_count = 0
+    for r in rows:
+        title_l = dict(r)['title'].lower()
+        if any(w in title_l for w in escalation_words): esc_count += 1
+        if any(w in title_l for w in deescalation_words): deesc_count += 1
+    direction = 'escalating' if esc_count > deesc_count * 1.5 else 'de-escalating' if deesc_count > esc_count * 1.5 else 'stable'
+    return jsonify({
+        'direction': direction,
+        'escalation_signals': esc_count,
+        'deescalation_signals': deesc_count,
+        'ratio': round(esc_count / max(1, deesc_count), 2),
+    })
+
+
+@situation_room_bp.route('/api/sitroom/food-security')
+def api_sitroom_food_security():
+    """Food security assessment from commodity + news data."""
+    with db_session() as db:
+        grain_news = db.execute(
+            "SELECT COUNT(*) FROM sitroom_news WHERE LOWER(title) LIKE '%wheat%' OR LOWER(title) LIKE '%grain%' "
+            "OR LOWER(title) LIKE '%famine%' OR LOWER(title) LIKE '%food crisis%' OR LOWER(title) LIKE '%hunger%'"
+        ).fetchone()[0]
+        commodity_prices = db.execute(
+            "SELECT symbol, price, change_24h FROM sitroom_markets WHERE LOWER(symbol) LIKE '%wheat%' "
+            "OR LOWER(symbol) LIKE '%corn%' OR LOWER(symbol) LIKE '%soybean%'"
+        ).fetchall()
+        food_headlines = db.execute(
+            "SELECT title, source_name FROM sitroom_news WHERE LOWER(title) LIKE '%food%' "
+            "OR LOWER(title) LIKE '%wheat%' OR LOWER(title) LIKE '%grain%' OR LOWER(title) LIKE '%famine%' "
+            "ORDER BY cached_at DESC LIMIT 10"
+        ).fetchall()
+    risk = 'elevated' if grain_news > 5 else 'normal'
+    return jsonify({
+        'risk_level': risk, 'food_mentions': grain_news,
+        'commodity_prices': [dict(r) for r in commodity_prices],
+        'headlines': [dict(r) for r in food_headlines],
+    })
+
+
+@situation_room_bp.route('/api/sitroom/water-stress')
+def api_sitroom_water_stress():
+    """Water stress assessment from drought/flood/dam news."""
+    with db_session() as db:
+        water_news = db.execute(
+            "SELECT title, source_name FROM sitroom_news WHERE LOWER(title) LIKE '%drought%' "
+            "OR LOWER(title) LIKE '%flood%' OR LOWER(title) LIKE '%water crisis%' "
+            "OR LOWER(title) LIKE '%dam %' OR LOWER(title) LIKE '%reservoir%' "
+            "OR LOWER(title) LIKE '%desalination%' ORDER BY cached_at DESC LIMIT 15"
+        ).fetchall()
+    return jsonify({'news': [dict(r) for r in water_news], 'count': len(list(water_news))})
+
+
+@situation_room_bp.route('/api/sitroom/climate-signals')
+def api_sitroom_climate_signals():
+    """Climate change signal detection from environmental news + data."""
+    with db_session() as db:
+        climate_news = db.execute(
+            "SELECT title, source_name, category FROM sitroom_news WHERE "
+            "LOWER(title) LIKE '%climate%' OR LOWER(title) LIKE '%global warming%' "
+            "OR LOWER(title) LIKE '%carbon%emission%' OR LOWER(title) LIKE '%glacier%' "
+            "OR LOWER(title) LIKE '%sea level%' OR LOWER(title) LIKE '%extreme weather%' "
+            "OR LOWER(title) LIKE '%record temperature%' OR LOWER(title) LIKE '%wildfire%' "
+            "ORDER BY cached_at DESC LIMIT 20"
+        ).fetchall()
+        fire_count = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'fire'").fetchone()[0]
+        weather_count = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'weather_alert'").fetchone()[0]
+    return jsonify({
+        'climate_news': [dict(r) for r in climate_news],
+        'active_fires': fire_count,
+        'weather_alerts': weather_count,
+        'signal_strength': 'strong' if len(list(climate_news)) > 10 else 'moderate' if len(list(climate_news)) > 5 else 'weak',
+    })

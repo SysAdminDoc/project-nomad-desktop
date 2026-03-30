@@ -266,7 +266,7 @@ v1.0.0 — ~51,300 lines across 6 core files (app.py ~17,500 + index.html ~28,50
 
 - **v6.15 — Situation Room (Exceeds World Monitor)**:
   - **World Monitor+ dashboard** — default landing tab, full-bleed flex layout, ~9,070 lines of code
-  - **Blueprint**: `web/blueprints/situation_room.py` — 140 API routes, 34 background fetch workers
+  - **Blueprint**: `web/blueprints/situation_room.py` — 149 API routes, 34 background fetch workers
   - **36 data sources (all free, no API keys)**: all v6.8 sources plus:
     - **AIS Ships**: Danish Maritime Authority (300-vessel cap)
     - **Israel OREF**: Home Front Command real-time siren/rocket alerts (geocoded)
@@ -292,7 +292,11 @@ v1.0.0 — ~51,300 lines across 6 core files (app.py ~17,500 + index.html ~28,50
   - **P7 data**: APT Groups database (15 nation-state + criminal groups with attribution, targets, notable ops)
   - **P5 variant panels**: Tech Readiness Index (3-dimension composite), Today's Hero (positive story spotlight), 5 Good Things digest, Central Bank Calendar (8 major banks + rate decision news), Market Regime, Live Positive Counters, Species Comeback
   - **Enhanced clustering**: Supercluster-inspired adaptive grid — tighter at medium zoom, cluster count tracking
-  - **WM parity status**: ALL metrics exceed World Monitor. 140 API routes (117%), 45 map layers (100%), 1,275 static points (142%), 108+ cards (126%), 36 data sources (120%), 34 workers (155%), 43 OSINT channels (96%), 35+ interactive features (117%). ~10,682 lines.
+  - **P4 card resize**: 6 size variants (small/compact/default/tall/half/full) with CSS data-attribute, localStorage persistence, resize handle
+  - **P6 IndexedDB**: client-side offline cache with snapshots + news stores, persistent across sessions
+  - **P6 virtual scroll**: VirtualList implementation for news cards (row-height based lazy rendering)
+  - **Additional endpoints**: conflict-intensity scoring, media-bias/source diversity, language coverage, escalation-tracker, food-security, water-stress, climate-signals
+  - **WM parity status**: ALL metrics exceed World Monitor. 149 API routes (124%), 45 map layers (100%), 1,275 static points (142%), 108+ cards (126%), 36 data sources (120%), 34 workers (155%), 43 OSINT channels (96%), 35+ interactive features (117%). ~11,237 lines.
 
 ## Run / Build
 ```bash
