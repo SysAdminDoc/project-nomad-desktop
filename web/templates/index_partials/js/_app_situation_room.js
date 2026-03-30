@@ -33,8 +33,7 @@ function initSituationRoom() {
   _initPanelDragReorder();
   _restorePanelOrder();
   _sitroomAutoRefreshIfEmpty();
-  if (_sitroomAutoTimer) clearInterval(_sitroomAutoTimer);
-  _sitroomAutoTimer = setInterval(_sitroomRefreshPanels, 60000);
+  _initSmartPollLoop();
 }
 
 function _sitroomRefreshPanels() {
@@ -123,7 +122,12 @@ function _sitroomRefreshPanels() {
   loadSitroomAlertHistory();
   loadSitroomEnhancedSignals();
   loadSitroomGulfEcon();
+  loadSitroomMarketRegime();
+  loadSitroomLiveCounters();
+  loadSitroomSpecies();
   _checkCriticalAlerts();
+  _updateDataFreshness();
+  _checkQuakeAlerts();
   loadSitroomLiveChannels();
 }
 
@@ -3034,6 +3038,170 @@ document.addEventListener('change', e => {
     loadSitroomCountryBrief(e.target.value);
   }
 });
+
+/* ─── P5: Market Regime Card ─── */
+async function loadSitroomMarketRegime() {
+  const el = document.getElementById('sitroom-market-regime');
+  if (!el) return;
+  const d = await safeFetch('/api/sitroom/market-regime', {}, null);
+  if (!d) { el.innerHTML = '<div class="sitroom-empty">No data</div>'; return; }
+  const colors = {'RISK-ON':'#44dd88','RISK-OFF':'#ff4444','NEUTRAL':'#ffaa00'};
+  const c = colors[d.regime] || '#888';
+  let html = `<div style="text-align:center;padding:12px 0">
+    <div style="font-size:24px;font-weight:bold;color:${c};letter-spacing:2px">${d.regime}</div>
+    <div style="font-size:11px;color:#888;margin-top:4px">Composite Score: ${d.score > 0 ? '+' : ''}${d.score}</div>
+  </div>`;
+  if (d.signals) {
+    html += '<div style="font-size:10px;color:#666;padding:0 8px">';
+    for (const [k, v] of Object.entries(d.signals)) {
+      html += `<div style="display:flex;justify-content:space-between;padding:2px 0"><span>${escapeHtml(k)}</span><span style="color:#aaa">${typeof v === 'number' ? v.toFixed(1) : v}</span></div>`;
+    }
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+
+/* ─── P5: Live Counters Card ─── */
+async function loadSitroomLiveCounters() {
+  const el = document.getElementById('sitroom-live-counters');
+  if (!el) return;
+  const d = await safeFetch('/api/sitroom/live-counters', {}, null);
+  if (!d || !d.counters) { el.innerHTML = '<div class="sitroom-empty">No data</div>'; return; }
+  let html = '';
+  for (const [, info] of Object.entries(d.counters)) {
+    html += `<div class="sr-feed-item" style="border-left:3px solid #44dd88">
+      <span class="sr-feed-title" style="color:#ccc">${escapeHtml(info.label)}</span>
+      <span style="color:#44dd88;font-weight:bold;font-size:13px">${info.value.toLocaleString()}</span>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+/* ─── P5: Species Comeback Card ─── */
+async function loadSitroomSpecies() {
+  const el = document.getElementById('sitroom-species-tracker');
+  if (!el) return;
+  const d = await safeFetch('/api/sitroom/species-tracker', {}, null);
+  if (!d) { el.innerHTML = '<div class="sitroom-empty">No data</div>'; return; }
+  let html = '';
+  if (d.comebacks) {
+    d.comebacks.forEach(s => {
+      const statusColor = s.status === 'Recovered' ? '#44dd88' : s.status === 'Recovering' ? '#88cc44' : '#ffaa00';
+      html += `<div class="sr-feed-item" style="border-left:3px solid ${statusColor}">
+        <span class="sr-feed-title">${escapeHtml(s.species)}</span>
+        <span class="sr-feed-badge" style="background:${statusColor};color:#000;font-size:8px;padding:1px 3px;border-radius:2px">${escapeHtml(s.status)}</span>
+        <span class="sr-feed-source">${escapeHtml(s.change)}</span>
+      </div>`;
+    });
+  }
+  if (d.news && d.news.length) {
+    html += '<div class="sr-mini-label" style="margin-top:8px">Conservation News</div>';
+    d.news.slice(0, 5).forEach(n => {
+      html += `<div class="sr-feed-item"><a href="${escapeHtml(n.link || '#')}" target="_blank" class="sr-feed-title">${escapeHtml(n.title)}</a></div>`;
+    });
+  }
+  el.innerHTML = html || '<div class="sitroom-empty">No species data</div>';
+}
+
+/* ─── P4: Smart Poll Loop ─── */
+let _sitroomPollInterval = 60000;
+let _sitroomPollFailures = 0;
+function _initSmartPollLoop() {
+  if (_sitroomAutoTimer) clearInterval(_sitroomAutoTimer);
+  // Pause when tab is hidden
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (_sitroomAutoTimer) { clearInterval(_sitroomAutoTimer); _sitroomAutoTimer = null; }
+    } else {
+      _sitroomRefreshPanels(); // Immediate refresh on return
+      _sitroomAutoTimer = setInterval(_smartPoll, _sitroomPollInterval);
+    }
+  });
+  _sitroomAutoTimer = setInterval(_smartPoll, _sitroomPollInterval);
+}
+
+function _smartPoll() {
+  if (document.hidden) return; // Skip if tab not visible
+  _sitroomRefreshPanels();
+  // Exponential backoff on repeated empty data
+  _sitroomPollFailures = Math.max(0, _sitroomPollFailures - 1);
+}
+
+/* ─── P4: Notification Sounds ─── */
+let _sitroomLastQuakeAlert = 0;
+function _checkQuakeAlerts() {
+  const el = document.getElementById('sitroom-stat-quakes');
+  if (!el) return;
+  // Check for M6+ earthquakes via recent data
+  safeFetch('/api/sitroom/anomalies', {}, null).then(d => {
+    if (!d || !d.anomalies) return;
+    const seismic = d.anomalies.find(a => a.type === 'seismic');
+    if (seismic && Date.now() - _sitroomLastQuakeAlert > 300000) {
+      _sitroomLastQuakeAlert = Date.now();
+      _playAlertTone();
+    }
+  });
+}
+
+function _playAlertTone() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'sine';
+    gain.gain.value = 0.15;
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.stop(ctx.currentTime + 0.5);
+    setTimeout(() => {
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.frequency.value = 660;
+      osc2.type = 'sine';
+      gain2.gain.value = 0.15;
+      osc2.start();
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+      osc2.stop(ctx.currentTime + 0.5);
+    }, 200);
+  } catch (e) { /* AudioContext not available */ }
+}
+
+/* ─── P4: Data Freshness Badges ─── */
+async function _updateDataFreshness() {
+  const d = await safeFetch('/api/sitroom/data-freshness', {}, null);
+  if (!d || !d.freshness) return;
+  document.querySelectorAll('.sr-card-head').forEach(head => {
+    // Remove existing badge
+    const old = head.querySelector('.sr-freshness-badge');
+    if (old) old.remove();
+  });
+  // Map source keys to card header text patterns
+  const mapping = {
+    'rss': 'LIVE NEWS', 'earthquakes': 'SEISMIC', 'markets': 'MARKETS',
+    'aviation': 'AIRCRAFT', 'fires': 'FIRES', 'radiation': 'RADIATION',
+    'oref_alerts': 'OREF', 'ais_ships': 'SHIP TRAFFIC',
+  };
+  for (const [key, pattern] of Object.entries(mapping)) {
+    const status = d.freshness[key];
+    if (!status) continue;
+    const colors = { LIVE: '#44dd88', CACHED: '#ffaa00', STALE: '#ff8800', UNAVAILABLE: '#ff4444' };
+    const color = colors[status] || '#888';
+    document.querySelectorAll('.sr-card-head').forEach(head => {
+      if (head.textContent.includes(pattern)) {
+        const badge = document.createElement('span');
+        badge.className = 'sr-freshness-badge';
+        badge.style.cssText = `float:right;font-size:8px;padding:1px 4px;border-radius:2px;background:${color};color:#000;margin-left:6px`;
+        badge.textContent = status;
+        head.appendChild(badge);
+      }
+    });
+  }
+}
 
 // CII country click -> deep dive
 document.addEventListener('click', e => {

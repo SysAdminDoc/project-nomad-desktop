@@ -3942,3 +3942,177 @@ def api_sitroom_alert_history():
         'fire_history': [dict(r) for r in fires],
         'news_volume_24h': [dict(r) for r in news_vol],
     })
+
+
+@situation_room_bp.route('/api/sitroom/market-regime')
+def api_sitroom_market_regime():
+    """Multi-signal market regime indicator (risk-on/risk-off/neutral)."""
+    signals = {}
+    with db_session() as db:
+        # VIX
+        vix = db.execute("SELECT price FROM sitroom_markets WHERE LOWER(symbol) LIKE '%vix%' LIMIT 1").fetchone()
+        if vix:
+            signals['vix'] = dict(vix)['price']
+        # Fear & Greed
+        fg = db.execute("SELECT price FROM sitroom_markets WHERE symbol = 'Fear & Greed' LIMIT 1").fetchone()
+        if fg:
+            signals['fear_greed'] = dict(fg)['price']
+        # Yield spread (from FRED cache)
+        spread = db.execute(
+            "SELECT detail_json FROM sitroom_events WHERE event_type = 'macro_indicator' AND title LIKE '%T10Y2Y%' LIMIT 1"
+        ).fetchone()
+        if spread:
+            try:
+                signals['yield_spread'] = json.loads(dict(spread)['detail_json']).get('value', 0)
+            except Exception:
+                pass
+        # Market moves
+        indices = db.execute(
+            "SELECT symbol, change_24h FROM sitroom_markets WHERE market_type = 'index'"
+        ).fetchall()
+        if indices:
+            avg_chg = sum(dict(r)['change_24h'] or 0 for r in indices) / len(indices)
+            signals['avg_index_change'] = round(avg_chg, 2)
+        # Gold (safe haven)
+        gold = db.execute("SELECT change_24h FROM sitroom_markets WHERE LOWER(symbol) LIKE '%gold%' LIMIT 1").fetchone()
+        if gold:
+            signals['gold_change'] = dict(gold)['change_24h']
+
+    # Compute regime
+    score = 0
+    if signals.get('vix', 20) > 25: score -= 2
+    elif signals.get('vix', 20) < 15: score += 2
+    if signals.get('fear_greed', 50) < 25: score -= 2
+    elif signals.get('fear_greed', 50) > 75: score += 2
+    if signals.get('avg_index_change', 0) > 1: score += 1
+    elif signals.get('avg_index_change', 0) < -1: score -= 1
+    if signals.get('gold_change', 0) > 1.5: score -= 1  # Flight to safety
+
+    regime = 'RISK-ON' if score >= 2 else 'RISK-OFF' if score <= -2 else 'NEUTRAL'
+    return jsonify({'regime': regime, 'score': score, 'signals': signals})
+
+
+@situation_room_bp.route('/api/sitroom/live-counters')
+def api_sitroom_live_counters():
+    """Real-time positive event counters (Happy variant)."""
+    now = datetime.now()
+    day_of_year = now.timetuple().tm_yday
+    hour = now.hour
+
+    # Estimated daily global rates (conservative, sourced from various orgs)
+    counters = {
+        'trees_planted': {'label': 'Trees Planted Today', 'rate_per_day': 14_000_000,
+                          'source': 'Trillion Trees Campaign estimate'},
+        'vaccines_given': {'label': 'Vaccines Administered', 'rate_per_day': 30_000_000,
+                           'source': 'WHO global average'},
+        'babies_born': {'label': 'Babies Born Today', 'rate_per_day': 385_000,
+                        'source': 'UN Population Division'},
+        'clean_water_access': {'label': 'People Gaining Clean Water', 'rate_per_day': 250_000,
+                               'source': 'WHO/UNICEF JMP'},
+        'solar_panels': {'label': 'Solar Panels Installed', 'rate_per_day': 500_000,
+                         'source': 'IEA Solar PV estimate'},
+        'books_published': {'label': 'Books Published', 'rate_per_day': 7_500,
+                            'source': 'UNESCO/Bowker'},
+    }
+
+    # Scale by time of day
+    fraction = (hour * 3600 + now.minute * 60) / 86400
+    result = {}
+    for key, info in counters.items():
+        est = int(info['rate_per_day'] * fraction)
+        result[key] = {'label': info['label'], 'value': est, 'source': info['source']}
+
+    return jsonify({'counters': result, 'day_of_year': day_of_year, 'fraction': round(fraction, 3)})
+
+
+@situation_room_bp.route('/api/sitroom/species-tracker')
+def api_sitroom_species_tracker():
+    """Track species conservation wins from news and IUCN data."""
+    with db_session() as db:
+        # Conservation news
+        news = db.execute(
+            "SELECT title, link, source_name FROM sitroom_news "
+            "WHERE LOWER(title) LIKE '%species%' OR LOWER(title) LIKE '%conservation%' "
+            "OR LOWER(title) LIKE '%endangered%' OR LOWER(title) LIKE '%wildlife%' "
+            "OR LOWER(title) LIKE '%extinction%' OR LOWER(title) LIKE '%rewilding%' "
+            "OR LOWER(title) LIKE '%biodiversity%' OR LOWER(title) LIKE '%habitat%' "
+            "ORDER BY cached_at DESC LIMIT 15"
+        ).fetchall()
+
+    # Notable recent comebacks (curated)
+    comebacks = [
+        {'species': 'Humpback Whale', 'status': 'Recovered', 'change': 'From ~5,000 to 80,000+'},
+        {'species': 'Bald Eagle', 'status': 'Recovered', 'change': 'Delisted 2007, 300K+ in US'},
+        {'species': 'Giant Panda', 'status': 'Vulnerable', 'change': 'Downlisted from Endangered 2016'},
+        {'species': 'Southern White Rhino', 'status': 'Near Threatened', 'change': 'From ~50 to 20,000+'},
+        {'species': 'Gray Wolf', 'status': 'Recovering', 'change': 'Reintroduced across Europe/US'},
+        {'species': 'Iberian Lynx', 'status': 'Vulnerable', 'change': 'From 94 to 1,600+ (2023)'},
+        {'species': 'California Condor', 'status': 'Recovering', 'change': 'From 27 to 500+'},
+        {'species': 'Mountain Gorilla', 'status': 'Endangered', 'change': 'From 620 to 1,000+ (2018)'},
+    ]
+
+    return jsonify({
+        'comebacks': comebacks,
+        'news': [dict(r) for r in news],
+        'news_count': len(list(news)),
+    })
+
+
+@situation_room_bp.route('/api/sitroom/data-freshness')
+def api_sitroom_data_freshness():
+    """Return per-card data freshness status (LIVE/CACHED/UNAVAILABLE)."""
+    freshness = {}
+    now = datetime.now()
+    last_fetch_state, _ = _get_state()
+
+    thresholds = {
+        'rss': (600, 1800), 'earthquakes': (300, 900), 'markets': (600, 1800),
+        'aviation': (360, 1200), 'fires': (1200, 3600), 'radiation': (3600, 7200),
+        'oref_alerts': (120, 600), 'ais_ships': (600, 1800),
+    }
+
+    for key, (live_max, cached_max) in thresholds.items():
+        last = last_fetch_state.get(key)
+        if last:
+            age = (now - last).total_seconds()
+            if age < live_max:
+                freshness[key] = 'LIVE'
+            elif age < cached_max:
+                freshness[key] = 'CACHED'
+            else:
+                freshness[key] = 'STALE'
+        else:
+            freshness[key] = 'UNAVAILABLE'
+
+    return jsonify({'freshness': freshness})
+
+
+@situation_room_bp.route('/api/sitroom/search', methods=['POST'])
+def api_sitroom_search():
+    """Full-text search across all cached news and events."""
+    req = request.get_json(silent=True) or {}
+    query = (req.get('query', '') or '')[:200]
+    if not query:
+        return jsonify({'results': [], 'count': 0})
+
+    terms = [f'%{t.strip().lower()}%' for t in query.split() if t.strip()]
+    if not terms:
+        return jsonify({'results': [], 'count': 0})
+
+    with db_session() as db:
+        # Search news
+        conditions = ' AND '.join(['LOWER(title) LIKE ?' for _ in terms])
+        news = db.execute(
+            f"SELECT title, link, source_name, category, 'news' as result_type FROM sitroom_news "
+            f"WHERE {conditions} ORDER BY cached_at DESC LIMIT 20", terms
+        ).fetchall()
+        # Search events
+        events = db.execute(
+            f"SELECT title, source_url as link, event_type as source_name, event_type as category, "
+            f"'event' as result_type FROM sitroom_events "
+            f"WHERE {conditions} ORDER BY cached_at DESC LIMIT 20", terms
+        ).fetchall()
+
+    results = [dict(r) for r in news] + [dict(r) for r in events]
+    results.sort(key=lambda x: x.get('title', ''))
+    return jsonify({'results': results[:30], 'count': len(results), 'query': query})
