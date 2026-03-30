@@ -72,6 +72,7 @@ FETCH_COOLDOWN = {
     'service_status': 300, 'social_velocity': 600,
     'renewable': 3600, 'bigmac': 86400,
     'github_trending': 3600, 'fuel_prices': 7200,
+    'product_hunt': 3600,
 }
 
 # ─── Live YouTube Channels ────────────────────────────────────────────
@@ -1429,6 +1430,29 @@ def _fetch_bigmac_index():
     log.info(f"Situation Room: cached {len(latest)} Big Mac Index entries")
 
 
+def _fetch_product_hunt():
+    """Fetch Product Hunt trending products via RSS."""
+    if not _can_fetch('product_hunt'):
+        return
+    _set_last_fetch('product_hunt')
+    try:
+        items = _fetch_single_feed({'name': 'Product Hunt', 'url': 'https://www.producthunt.com/feed', 'category': 'Product Hunt'})
+        if not items:
+            return
+        with db_session() as db:
+            for a in items[:10]:
+                content_hash = hashlib.sha256((a['title'] + a['link']).encode()).hexdigest()[:32]
+                db.execute('''INSERT OR REPLACE INTO sitroom_news
+                    (content_hash, title, link, description, published, source_name, category, source_type, cached_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'rss', CURRENT_TIMESTAMP)''',
+                    (content_hash, a['title'], a['link'], a['description'],
+                     a['published'], 'Product Hunt', 'Product Hunt'))
+            db.commit()
+        log.info(f"Situation Room: cached {len(items)} Product Hunt items")
+    except Exception as e:
+        log.debug(f"Product Hunt fetch failed: {e}")
+
+
 def _fetch_github_trending():
     """Fetch GitHub trending repositories."""
     if not _can_fetch('github_trending'):
@@ -1659,6 +1683,7 @@ def refresh_all_feeds():
             _fetch_bigmac_index()
             _fetch_github_trending()
             _fetch_fuel_prices()
+            _fetch_product_hunt()
             _compute_correlations()
         except Exception as e:
             log.exception(f"Situation Room refresh error: {e}")
@@ -1968,6 +1993,24 @@ def api_sitroom_diseases():
     with db_session() as db:
         rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'disease' ORDER BY cached_at DESC LIMIT 30").fetchall()
     return jsonify({'outbreaks': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/product-hunt')
+def api_sitroom_product_hunt():
+    """Return Product Hunt trending products."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_news WHERE category = 'Product Hunt' ORDER BY cached_at DESC LIMIT 10").fetchall()
+    return jsonify({'products': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/earnings')
+def api_sitroom_earnings():
+    """Return upcoming earnings from news headlines."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title, link, source_name FROM sitroom_news WHERE LOWER(title) LIKE '%earnings%' OR LOWER(title) LIKE '%quarterly%' OR LOWER(title) LIKE '%revenue%' OR LOWER(title) LIKE '%profit%' ORDER BY cached_at DESC LIMIT 15"
+        ).fetchall()
+    return jsonify({'earnings': [dict(r) for r in rows], 'count': len(rows)})
 
 
 @situation_room_bp.route('/api/sitroom/github-trending')
