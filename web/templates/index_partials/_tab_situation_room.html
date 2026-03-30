@@ -97,6 +97,12 @@
       <div class="sr-map-legend" id="sr-map-legend"></div>
       <div id="sitroom-map" class="sr-map" role="img" aria-label="Global event map"></div>
       <div class="sr-map-resize" id="sr-map-resize" title="Drag to resize map"></div>
+      <!-- Playback Control -->
+      <div class="sr-playback" id="sr-playback">
+        <button class="sr-playback-btn sr-playback-live active" id="sr-playback-live" data-sitroom-action="playback-live">LIVE</button>
+        <input type="range" class="sr-playback-slider" id="sr-playback-slider" min="0" max="24" value="24" step="1">
+        <span class="sr-playback-time" id="sr-playback-time">NOW</span>
+      </div>
     </div>
 
     <!-- Card Grid -->
@@ -178,6 +184,24 @@
       <div class="sr-card">
         <div class="sr-card-head">DISEASE OUTBREAKS (WHO)</div>
         <div id="sitroom-diseases-list" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
+      </div>
+
+      <!-- Cross-Domain Correlations -->
+      <div class="sr-card">
+        <div class="sr-card-head">CROSS-SOURCE SIGNALS</div>
+        <div id="sitroom-correlations" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
+      </div>
+
+      <!-- Yield Curve -->
+      <div class="sr-card">
+        <div class="sr-card-head">YIELD CURVE (US TREASURY)</div>
+        <div id="sitroom-yield" class="sr-card-body"><div class="sr-empty">Loading...</div></div>
+      </div>
+
+      <!-- Stablecoins -->
+      <div class="sr-card">
+        <div class="sr-card-head">STABLECOINS</div>
+        <div id="sitroom-stablecoins" class="sr-card-body sr-market-grid"><div class="sr-empty">Loading...</div></div>
       </div>
 
       <!-- Armed Conflicts (UCDP) -->

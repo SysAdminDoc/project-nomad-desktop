@@ -515,6 +515,35 @@
 .sitroom-custom-feed-name { font-weight: 600; color: #c8ccd0; }
 .sr-feed-stats { font-size: 8px; color: #333; padding: 3px 12px 6px; }
 
+/* ─── Correlation Signals ─── */
+.sr-corr-signal {
+  padding: 8px 12px; border-bottom: 1px solid #1e1e1e; border-left: 3px solid;
+}
+.sr-corr-signal[data-sev="high"] { border-left-color: #e05050; }
+.sr-corr-signal[data-sev="elevated"] { border-left-color: #d4a017; }
+.sr-corr-signal[data-sev="normal"] { border-left-color: #2aad94; }
+.sr-corr-title { font-size: 11px; font-weight: 700; color: #e0e4e8; }
+.sr-corr-detail { font-size: 9px; color: #888; margin-top: 2px; line-height: 1.4; }
+.sr-corr-type { font-size: 7px; font-weight: 700; letter-spacing: 0.08em; color: #555; margin-top: 3px; text-transform: uppercase; }
+
+/* ─── Yield Curve ─── */
+.sr-yield-bars { display: flex; align-items: flex-end; gap: 2px; padding: 12px; height: 100%; }
+.sr-yield-bar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.sr-yield-bar-fill { width: 100%; background: #0f5040; border-radius: 2px 2px 0 0; min-height: 2px; transition: height 0.3s; }
+.sr-yield-bar-label { font-size: 6px; color: #555; text-align: center; white-space: nowrap; overflow: hidden; }
+.sr-yield-bar-rate { font-size: 8px; font-weight: 700; color: #4aedc4; }
+
+/* ─── Playback Control ─── */
+.sr-playback {
+  display: flex; align-items: center; gap: 8px; padding: 4px 12px;
+  background: #0a0a0a; border-top: 1px solid #2a2a2a; flex-shrink: 0; height: 28px;
+}
+.sr-playback-btn { font-family: inherit; font-size: 8px; font-weight: 800; letter-spacing: 0.1em;
+  padding: 2px 8px; border: 1px solid #2a2a2a; border-radius: 2px; background: #141414; color: #888; cursor: pointer; }
+.sr-playback-live.active { background: #0f5040; border-color: #4aedc4; color: #4aedc4; }
+.sr-playback-slider { flex: 1; height: 3px; accent-color: #0f5040; }
+.sr-playback-time { font-size: 9px; color: #888; font-weight: 600; min-width: 40px; text-align: right; }
+
 /* ─── Story Detail Modal ─── */
 .sr-story-modal {
   position: absolute; inset: 0; z-index: 400;

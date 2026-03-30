@@ -58,6 +58,9 @@ function _sitroomRefreshPanels() {
   loadSitroomMonitors();
   loadSitroomEconCal();
   loadSitroomDebt();
+  loadSitroomCorrelations();
+  loadSitroomYieldCurve();
+  loadSitroomStablecoins();
   _checkCriticalAlerts();
   loadSitroomLiveChannels();
 }
@@ -1405,6 +1408,74 @@ function _showSitroomAlert(type, message) {
   setTimeout(() => { if (toast.parentElement) toast.remove(); }, 15000);
 }
 
+/* ─── Cross-Domain Correlations ─── */
+async function loadSitroomCorrelations() {
+  const d = await safeFetch('/api/sitroom/correlations', {}, null);
+  const el = document.getElementById('sitroom-correlations');
+  if (!el) return;
+  if (!d || !d.signals?.length) { el.innerHTML = '<div class="sr-empty">No cross-domain signals detected</div>'; return; }
+  el.innerHTML = d.signals.map(s => {
+    let det = {}; try { det = s.detail_json ? JSON.parse(s.detail_json) : {}; } catch(e) {}
+    return `<div class="sr-corr-signal" data-sev="${escapeAttr(det.severity || 'normal')}">
+      <div class="sr-corr-title">${escapeHtml(s.title || '')}</div>
+      <div class="sr-corr-detail">${escapeHtml(det.detail || '')}</div>
+      <div class="sr-corr-type">${escapeHtml(det.type || '')}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ─── Yield Curve ─── */
+async function loadSitroomYieldCurve() {
+  const d = await safeFetch('/api/sitroom/yield-curve', {}, null);
+  const el = document.getElementById('sitroom-yield');
+  if (!el) return;
+  if (!d || !d.rates?.length) { el.innerHTML = '<div class="sr-empty">No yield data</div>'; return; }
+  const maxRate = Math.max(...d.rates.map(r => r.magnitude || 0), 1);
+  el.innerHTML = '<div class="sr-yield-bars">' + d.rates.slice(0, 12).map(r => {
+    let det = {}; try { det = r.detail_json ? JSON.parse(r.detail_json) : {}; } catch(e) {}
+    const rate = r.magnitude || 0;
+    const pct = (rate / maxRate * 100).toFixed(0);
+    const label = (det.security || r.title || '').replace('Treasury ', '').substring(0, 8);
+    return `<div class="sr-yield-bar">
+      <div class="sr-yield-bar-rate">${rate.toFixed(2)}%</div>
+      <div class="sr-yield-bar-fill" style="height:${pct}%"></div>
+      <div class="sr-yield-bar-label">${escapeHtml(label)}</div>
+    </div>`;
+  }).join('') + '</div>';
+}
+
+/* ─── Stablecoins ─── */
+async function loadSitroomStablecoins() {
+  const d = await safeFetch('/api/sitroom/stablecoins', {}, null);
+  const el = document.getElementById('sitroom-stablecoins');
+  if (!el) return;
+  if (!d || !d.stablecoins?.length) { el.innerHTML = '<div class="sr-empty">No stablecoin data</div>'; return; }
+  el.innerHTML = d.stablecoins.map(s => {
+    const depeg = Math.abs(s.price - 1.0);
+    const color = depeg > 0.01 ? '#e05050' : depeg > 0.003 ? '#d4a017' : '#4aedc4';
+    return `<div class="sitroom-market-card" style="border-bottom:2px solid ${color}">
+      <div class="sitroom-market-symbol">${escapeHtml(s.symbol)}</div>
+      <div class="sitroom-market-price" style="color:${color}">$${s.price.toFixed(4)}</div>
+      <div class="sitroom-market-change" style="font-size:7px;color:#555">${escapeHtml(s.label || '')}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ─── Playback Control ─── */
+document.getElementById('sr-playback-slider')?.addEventListener('input', e => {
+  const val = parseInt(e.target.value);
+  const timeEl = document.getElementById('sr-playback-time');
+  const liveBtn = document.getElementById('sr-playback-live');
+  if (val >= 24) {
+    if (timeEl) timeEl.textContent = 'NOW';
+    if (liveBtn) liveBtn.classList.add('active');
+  } else {
+    const hoursAgo = 24 - val;
+    if (timeEl) timeEl.textContent = `-${hoursAgo}h`;
+    if (liveBtn) liveBtn.classList.remove('active');
+  }
+});
+
 /* ─── AI Strategic Briefing ─── */
 async function _generateAiBriefing() {
   const el = document.getElementById('sitroom-ai-briefing');
@@ -1701,6 +1772,10 @@ document.addEventListener('click', e => {
   if (a === 'generate-briefing') _generateAiBriefing();
   if (a === 'add-monitor') _promptAddMonitor();
   if (a === 'delete-monitor') _deleteMonitor(ctrl.dataset.monitorId);
+  if (a === 'playback-live') {
+    const slider = document.getElementById('sr-playback-slider');
+    if (slider) { slider.value = 24; slider.dispatchEvent(new Event('input')); }
+  }
   if (a === 'toggle-layers') {
     const lp = document.getElementById('sr-layer-panel');
     if (lp) lp.classList.toggle('open');
