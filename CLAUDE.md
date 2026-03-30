@@ -1,7 +1,7 @@
 # Project N.O.M.A.D.
 
 ## Overview
-Cross-platform edition of [Project N.O.M.A.D.](https://github.com/Crosstalk-Solutions/project-nomad) — the most comprehensive offline survival command center available. Runs on Windows, Linux, and macOS. No Docker required. 8 managed services (incl. FlatNotes), proactive + predictive AI alerts, AI SITREP generator + action execution + persistent memory, 21 interactive decision guides, 41 calculators, 56 quick reference cards, medical module (TCCC/triage/SBAR), training scenarios, food production, multi-node federation with community readiness + skill matching, power management with sensor charts, security cameras, AI document intelligence, built-in BitTorrent client, media library with 210 survival channels, 41-section user guide, task scheduler, 9 printable field documents (operations binder, wallet cards, SOI), serial hardware bridge, mesh radio support, CSV import wizard with 5 inventory templates (155 items), PWA with offline caching, UI zoom control, sidebar sub-menus, and a premium dark dashboard with 5 themes (incl. E-Ink).
+Cross-platform edition of [Project N.O.M.A.D.](https://github.com/Crosstalk-Solutions/project-nomad) — the most comprehensive offline survival command center available. Runs on Windows, Linux, and macOS. No Docker required. 8 managed services (incl. FlatNotes), **Situation Room** (World Monitor-inspired global intelligence dashboard with RSS news feeds, USGS earthquakes, NWS severe weather, GDACS crisis events, crypto/commodity markets, AI briefings — all cached for offline), proactive + predictive AI alerts, AI SITREP generator + action execution + persistent memory, 21 interactive decision guides, 41 calculators, 56 quick reference cards, medical module (TCCC/triage/SBAR), training scenarios, food production, multi-node federation with community readiness + skill matching, power management with sensor charts, security cameras, AI document intelligence, built-in BitTorrent client, media library with 210 survival channels, 41-section user guide, task scheduler, 9 printable field documents (operations binder, wallet cards, SOI), serial hardware bridge, mesh radio support, CSV import wizard with 5 inventory templates (155 items), PWA with offline caching, UI zoom control, sidebar sub-menus, and a premium dark dashboard with 5 themes (incl. E-Ink).
 
 ## Tech Stack
 - **Python 3** — Flask web server + pywebview (WebView2 on Windows, WebKit on macOS, GTK on Linux)
@@ -264,6 +264,23 @@ v1.0.0 — ~51,300 lines across 6 core files (app.py ~17,500 + index.html ~28,50
   - **E-ink display mode** — New `[data-theme="eink"]` CSS theme: pure black/white, no shadows/gradients/animations, 2px solid borders, grayscale images, 16px base font, high contrast; theme button added to all 3 theme switcher locations + customize panel
   - **Dead drop encrypted USB messaging** — `dead_drop_messages` table; `POST /api/deaddrop/compose` encrypts message with XOR (SHA-256 derived key) + checksum verification; `POST /api/deaddrop/decrypt` decrypts with secret validation; `POST /api/deaddrop/import` stores encrypted messages; `GET /api/deaddrop/messages` lists received; compose UI with recipient/message/secret fields, download as JSON for USB transfer; import with inline decryption prompt
 
+- **v5.5.0 — Situation Room (World Monitor-inspired)**:
+  - **New default landing tab** — "Situation Room" replaces Home as the primary dashboard; Home moves to secondary position in sidebar
+  - **Blueprint**: `web/blueprints/situation_room.py` — 13 API routes for RSS news, earthquakes, weather alerts, markets, conflicts, AI briefings, custom feed management
+  - **RSS feed aggregation** — 25+ curated feeds across 11 categories (World, US, Tech, Science, Cyber, Defense, Disaster, Finance, Energy, Health); XML parser handles RSS 2.0 + Atom; custom feed management (add/delete)
+  - **USGS earthquake monitoring** — Fetches M2.5+ earthquakes from USGS GeoJSON feed; magnitude/depth/location/alert level; filterable by magnitude
+  - **NWS severe weather** — Extreme/Severe weather alerts from weather.gov API with polygon geometry for map plotting
+  - **GDACS crisis events** — Global disaster alerts (earthquakes, tropical cyclones, floods, volcanoes, droughts) at Orange/Red alert level
+  - **Market data** — CoinGecko crypto prices (BTC/ETH) + Fear & Greed Index from alternative.me
+  - **Interactive globe map** — MapLibre GL with dark CartoDB tiles, toggleable layers (quakes/weather/crises), color-coded markers with magnitude-scaled sizing, popups with event details; PMTiles offline fallback
+  - **AI intelligence briefing** — One-click generation using local Ollama; aggregates top 30 headlines + M4+ earthquakes + weather alerts + market data into military-format SITREP; cached to DB
+  - **SQLite caching** — 5 new tables (sitroom_news, sitroom_events, sitroom_markets, sitroom_custom_feeds, sitroom_briefings) with 8 performance indexes; all external data cached for offline access
+  - **Background fetch** — Thread-safe background worker with per-source cooldown timers (2-10 min); non-blocking UI refresh
+  - **CSS**: `web/static/css/app/45_situation_room.css` — Full responsive layout (3fr/2fr grid), dark-themed map popups, market cards with up/down coloring, severity-coded event items, collapsible feed manager
+  - **JS**: `web/templates/index_partials/js/_app_situation_room.js` — Map initialization, marker management, status polling, news pagination, feed CRUD, AI briefing generation
+  - **Template**: `web/templates/index_partials/_tab_situation_room.html` — Status strip, event map, seismic panel, weather panel, market ticker, AI briefing panel, news feed, feed manager
+  - **DB migration**: `db_migrations/002_situation_room_tables.sql`
+
 ## Run / Build
 ```bash
 python nomad.py                    # Run from source (any platform)
@@ -322,8 +339,8 @@ gh release create v4.1.0 dist/ProjectNOMAD-Portable.exe ProjectNOMAD-Setup.exe -
 ## Service Ports
 Dashboard: 8080, Ollama: 11434, Kiwix: 8888, CyberChef: 8889, FlatNotes: 8890, Kolibri: 8300, Qdrant: 6333, Stirling: 8443, Node Discovery: UDP 18080
 
-## 11 Main Tabs
-Services, AI Chat, Library, Maps, Notes, Media, Tools, Preparedness, Benchmark, Settings (+ NukeMap opens in-app frame)
+## 12 Main Tabs
+Situation Room (default landing), Home/Services, AI Chat, Library, Maps, Notes, Media, Tools, Preparedness, Benchmark, Settings (+ NukeMap opens in-app frame)
 
 ## Home Tab Layout (6 sections, top to bottom)
 1. **Welcome / Getting Started** — first-run only, onboarding checklist

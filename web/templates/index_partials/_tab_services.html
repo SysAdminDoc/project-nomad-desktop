@@ -1,0 +1,236 @@
+  <!-- Services Tab (Command Center) -->
+  <div id="tab-services" class="tab-content">
+    <div class="lan-banner is-hidden" id="lan-banner"></div>
+
+    <!-- Welcome Banner (first-run only) -->
+    <div class="welcome-banner is-hidden" id="welcome-banner">
+      <div class="welcome-banner-copy">
+        <div class="section-header-label welcome-kicker">Offline Ready</div>
+        <h3 class="shimmer-text">Welcome to NOMAD</h3>
+        <p>A desktop field desk for preparedness planning, field reference, and local operations. Start by turning on the offline capabilities you want available first.</p>
+      </div>
+      <div class="welcome-banner-actions">
+        <button class="btn btn-primary welcome-banner-primary-action" data-install-service="ollama" title="A private AI you can ask questions — no internet needed (~310 MB)">Install Local AI (~310 MB)</button>
+        <button class="btn" data-install-service="kiwix" title="Wikipedia, medical guides, and survival references — all offline (~60 MB)">Install Offline Library (~60 MB)</button>
+        <button class="btn" data-install-service="cyberchef" title="Encryption, encoding, and data analysis tools (~30 MB)">Install Data Tools (~30 MB)</button>
+      </div>
+    </div>
+
+    <!-- Getting Started Checklist (hidden once all steps complete) -->
+    <div id="getting-started-panel" class="onboarding-panel home-panel-shell is-hidden">
+      <div class="onboarding-panel-accent home-panel-accent"></div>
+      <div class="onboarding-panel-header home-panel-header">
+        <div class="onboarding-panel-copy">
+          <div class="section-header-label onboarding-panel-kicker home-panel-kicker">GETTING STARTED</div>
+          <div class="onboarding-panel-progress" id="gs-progress-text"></div>
+        </div>
+        <button class="btn btn-sm btn-ghost home-panel-compact-btn" data-hide-target="getting-started-panel">DISMISS</button>
+      </div>
+      <div id="gs-steps" class="onboarding-steps home-auto-grid"></div>
+    </div>
+
+    <!-- Active Downloads Banner (unified queue) -->
+    <div id="download-queue-banner" class="download-banner home-panel-shell is-hidden">
+      <div class="download-banner-header home-panel-header">
+        <span class="section-header-label download-banner-kicker home-panel-kicker">ACTIVE DOWNLOADS</span>
+        <button class="btn btn-sm btn-ghost home-panel-compact-btn home-panel-compact-btn-tight" data-hide-target="download-queue-banner">HIDE</button>
+      </div>
+      <div id="download-queue-items" class="download-banner-items home-panel-list"></div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         SEARCH BAR
+         ════════════════════════════════════════════════════════════ -->
+    <div class="search-bar home-search-shell home-search-shell-wide">
+      <span class="search-icon">&#128269;</span>
+      <input id="unified-search" type="search" name="unified_search" autocomplete="off" aria-label="Search supplies, contacts, notes, and checklists" data-input-action="debounce-search" placeholder="Search supplies, contacts, notes, checklists…">
+      <div class="search-results" id="search-results"></div>
+    </div>
+
+    <div class="home-mode-rail home-surface-panel">
+      <div class="section-header home-section-header home-toolbar">
+        <span class="section-header-label">WORK MODES</span>
+        <div class="section-divider section-divider-grow"></div>
+        <div class="home-mode-rail-copy">Jump into the lane that matches what you need to do next.</div>
+      </div>
+      <div class="home-mode-grid">
+        <button type="button" class="home-mode-card" data-tab-target="readiness">
+          <span class="home-mode-icon" aria-hidden="true">&#128202;</span>
+          <span class="home-mode-body">
+            <span class="home-mode-title">Briefing</span>
+            <span class="home-mode-copy">Check readiness, scan priorities, and see what changed.</span>
+          </span>
+        </button>
+        <button type="button" class="home-mode-card" data-tab-target="preparedness" data-prep-sub="checklists">
+          <span class="home-mode-icon" aria-hidden="true">&#9878;</span>
+          <span class="home-mode-body">
+            <span class="home-mode-title">Operations</span>
+            <span class="home-mode-copy">Work checklists, incident logs, and field workflows.</span>
+          </span>
+        </button>
+        <button type="button" class="home-mode-card" data-tab-target="kiwix-library">
+          <span class="home-mode-icon" aria-hidden="true">&#128214;</span>
+          <span class="home-mode-body">
+            <span class="home-mode-title">Knowledge</span>
+            <span class="home-mode-copy">Open offline reference, notes, and media resources.</span>
+          </span>
+        </button>
+        <button type="button" class="home-mode-card" data-tab-target="ai-chat">
+          <span class="home-mode-icon" aria-hidden="true">&#129302;</span>
+          <span class="home-mode-body">
+            <span class="home-mode-title">Copilot</span>
+            <span class="home-mode-copy">Ask for synthesis, drafting, or the next best action.</span>
+          </span>
+        </button>
+        <button type="button" class="home-mode-card" data-tab-target="settings">
+          <span class="home-mode-icon" aria-hidden="true">&#9881;</span>
+          <span class="home-mode-body">
+            <span class="home-mode-title">System</span>
+            <span class="home-mode-copy">Tune models, tasks, backups, and platform behavior.</span>
+          </span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         BENTO ROW 1: LIVE STATUS + NEEDS OVERVIEW
+         ════════════════════════════════════════════════════════════ -->
+    <div class="bento-grid">
+      <div class="home-panel-group">
+        <div class="section-header home-section-header home-toolbar">
+          <span class="section-header-label">SITUATION DASHBOARD</span>
+          <div class="section-divider section-divider-grow"></div>
+          <button class="btn btn-sm btn-ghost section-header-action compact-action-btn" data-shell-action="open-widget-manager" title="Configure dashboard widgets">&#9881; Widgets</button>
+        </div>
+        <div id="live-dashboard" class="dashboard-grid home-surface-grid"></div>
+      </div>
+      <div id="needs-overview" class="home-panel-group home-needs-overview">
+        <div class="section-header home-section-header home-toolbar">
+          <span class="section-header-label">PREPAREDNESS BY NEED</span>
+          <div class="section-divider section-divider-grow"></div>
+          <button class="btn btn-sm section-header-action compact-action-btn" data-tab-target="readiness">Score</button>
+        </div>
+        <div id="needs-grid" class="home-surface-grid home-needs-grid"></div>
+      </div>
+    </div>
+
+    <!-- Needs Detail Modal -->
+    <div id="needs-detail-modal" class="modal-overlay home-modal-shell home-modal-overlay-blur is-hidden" data-backdrop-close="needs-detail">
+      <div class="modal-card home-modal-card">
+        <div id="needs-detail-header" class="modal-header home-modal-header">
+          <span class="home-modal-title" id="needs-detail-title"></span>
+          <button class="btn btn-sm btn-ghost home-modal-close-btn" type="button" data-shell-action="close-needs-detail" aria-label="Close preparedness needs detail">&#10005;</button>
+        </div>
+        <div id="needs-detail-body" class="modal-body home-modal-body"></div>
+      </div>
+    </div>
+
+    <!-- Widget Configuration Modal -->
+    <div id="widget-config-modal" class="modal-overlay home-modal-shell home-modal-overlay-blur is-hidden" data-backdrop-close="widget-config">
+      <div class="modal-card home-modal-card home-modal-card-compact">
+        <div class="modal-header home-modal-header">
+          <span class="home-modal-title">&#9881; Configure Widgets</span>
+          <button class="btn btn-sm btn-ghost home-modal-close-btn" type="button" data-shell-action="close-widget-manager" aria-label="Close widget configuration">&#10005;</button>
+        </div>
+        <div id="widget-config-list" class="modal-body home-modal-body home-modal-list"></div>
+        <div class="modal-footer home-modal-footer">
+          <button class="btn btn-sm btn-danger" data-shell-action="reset-widget-config">Reset to Default</button>
+          <div class="home-modal-footer-actions">
+            <button class="btn btn-sm btn-ghost" data-shell-action="close-widget-manager">Cancel</button>
+            <button class="btn btn-sm btn-primary" data-shell-action="save-widget-config">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         SERVICES & TOOLS
+         ════════════════════════════════════════════════════════════ -->
+    <div class="section-header services-toolbar home-toolbar">
+      <span class="section-header-label">SERVICES</span>
+      <div class="section-divider section-divider-grow"></div>
+      <div class="services-toolbar-actions home-toolbar-actions">
+        <button class="btn btn-sm btn-primary compact-action-btn" data-shell-action="start-all-services" title="Start AI Chat, Library, and all installed services">Start All</button>
+        <button class="btn btn-sm btn-danger compact-action-btn" data-shell-action="stop-all-services" title="Stop all running services to save resources">Stop All</button>
+      </div>
+    </div>
+    <div id="svc-quicklinks" class="service-quicklinks"></div>
+    <div class="services-grid" id="services-grid"></div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         BENTO ROW 3: FIELD DOCUMENTS + ACTIVITY LOG (side by side)
+         ════════════════════════════════════════════════════════════ -->
+    <div class="bento-grid home-support-grid home-section-stack">
+      <!-- Left: Field Documents -->
+      <div id="home-quick-nav" class="home-support-panel home-documents-panel home-surface-panel">
+        <div class="section-header home-section-header home-toolbar">
+          <span class="section-header-label">PRINTABLE FIELD DOCUMENTS</span>
+          <div class="section-divider section-divider-grow"></div>
+        </div>
+        <div class="home-doc-grid">
+          <a class="cc-card home-doc-card" href="/api/print/operations-binder" target="_blank" rel="noopener noreferrer">
+            <div class="cc-icon">&#128214;</div>
+            <div class="cc-title">Operations Binder</div>
+            <div class="cc-sub">Complete field reference</div>
+          </a>
+          <a class="cc-card home-doc-card" href="/api/print/wallet-cards" target="_blank" rel="noopener noreferrer">
+            <div class="cc-icon">&#128179;</div>
+            <div class="cc-title">Wallet Cards</div>
+            <div class="cc-sub">ICE, meds, rally points</div>
+          </a>
+          <a class="cc-card home-doc-card" href="/api/print/soi" target="_blank" rel="noopener noreferrer">
+            <div class="cc-icon">&#128225;</div>
+            <div class="cc-title">SOI / Freq Card</div>
+            <div class="cc-sub">Signal operating instructions</div>
+          </a>
+          <a class="cc-card home-doc-card" href="/api/print/medical-flipbook" target="_blank" rel="noopener noreferrer">
+            <div class="cc-icon">&#129657;</div>
+            <div class="cc-title">Medical Flipbook</div>
+            <div class="cc-sub">Pocket medical reference</div>
+          </a>
+          <button type="button" class="cc-card home-doc-card" data-app-frame-title="Emergency Sheet" data-app-frame-url="/api/emergency-sheet">
+            <div class="cc-icon">&#128196;</div>
+            <div class="cc-title">Emergency Sheet</div>
+            <div class="cc-sub">One-page critical data</div>
+          </button>
+          <button type="button" class="cc-card home-doc-card" data-app-frame-title="Medical Cards" data-app-frame-url="/api/print/medical-cards">
+            <div class="cc-icon">&#129658;</div>
+            <div class="cc-title">Medical Cards</div>
+            <div class="cc-sub">Patient care cards</div>
+          </button>
+          <button type="button" class="cc-card home-doc-card" data-app-frame-title="Bug-Out Checklist" data-app-frame-url="/api/print/bug-out-checklist">
+            <div class="cc-icon">&#127939;</div>
+            <div class="cc-title">Bug-Out List</div>
+            <div class="cc-sub">Grab-and-go checklist</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Right: Activity Log -->
+      <div id="home-activity" class="home-support-panel home-activity-panel home-surface-panel">
+        <div class="section-header activity-header home-toolbar">
+          <span class="section-header-label">ACTIVITY LOG</span>
+          <div class="section-divider section-divider-grow"></div>
+          <div class="activity-toolbar">
+            <select id="activity-filter" name="activity_filter" class="activity-filter-select" data-change-action="load-activity" aria-label="Filter activity log">
+              <option value="">All</option>
+              <option value="service">Services</option>
+              <option value="inventory">Inventory</option>
+              <option value="medical">Medical</option>
+              <option value="sync">Sync</option>
+            </select>
+            <button class="btn btn-sm compact-action-btn" data-shell-action="refresh-activity">Refresh</button>
+          </div>
+        </div>
+        <div id="activity-feed" class="activity-feed-shell"><div class="activity-feed-empty">Loading activity...</div></div>
+      </div>
+    </div>
+
+    <!-- Hidden legacy containers for backward compat -->
+<div id="cmd-dashboard" class="prep-dashboard-grid utility-summary-grid is-hidden"></div>
+    <div id="cmd-checklists" class="is-hidden"></div>
+    <div id="readiness-bar" class="is-hidden"></div>
+    <div class="content-summary is-hidden" id="content-summary"></div>
+    <div id="getting-started" class="is-hidden"><div id="gs-items"></div></div>
+  </div>
+
