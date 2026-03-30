@@ -1,7 +1,8 @@
 /* ─── Situation Room v4 — World Monitor Intelligence Dashboard ─── */
 
 let _sitroomMap = null;
-let _sitroomMarkers = { earthquakes: [], weather: [], conflicts: [], aviation: [], volcanoes: [], fires: [], nuclear: [], bases: [], cables: [], datacenters: [], pipelines: [], waterways: [], spaceports: [], shipping: [], ucdp: [], airports: [], fincenters: [], mining: [], techHQs: [] };
+let _sitroomMarkers = { earthquakes: [], weather: [], conflicts: [], aviation: [], volcanoes: [], fires: [], nuclear: [], bases: [], cables: [], datacenters: [], pipelines: [], waterways: [], spaceports: [], shipping: [], ucdp: [], airports: [], fincenters: [], mining: [], techHQs: [], diseases: [], radiation: [], protests: [], ships: [], cloudRegions: [], exchanges: [], commodityHubs: [] };
+let _sitroomRadarLayer = null; // RainViewer radar tile layer state
 let _sitroomNewsOffset = 0;
 const SITROOM_NEWS_PAGE = 50;
 let _sitroomAutoTimer = null;
@@ -181,63 +182,154 @@ function _initSitroomMapResize() {
 
 /* ─── Static Map Data: Nuclear Sites & Military Bases ─── */
 const _NUCLEAR_SITES = [
-  {lat:51.39,lng:-1.32,name:'Aldermaston, UK'},{lat:48.86,lng:2.35,name:'CEA, France'},
-  {lat:38.46,lng:-105.0,name:'NORAD, US'},{lat:35.74,lng:139.72,name:'Tokai, Japan'},
-  {lat:55.75,lng:37.62,name:'Kurchatov Inst, Russia'},{lat:39.91,lng:116.39,name:'CIAE, China'},
-  {lat:33.73,lng:73.05,name:'PAEC, Pakistan'},{lat:28.61,lng:77.21,name:'BARC, India'},
-  {lat:32.07,lng:34.78,name:'Dimona, Israel'},{lat:35.37,lng:51.42,name:'Tehran NRC, Iran'},
-  {lat:39.03,lng:125.75,name:'Yongbyon, DPRK'},{lat:47.62,lng:-122.35,name:'Hanford, US'},
-  {lat:35.89,lng:-84.31,name:'Oak Ridge, US'},{lat:33.68,lng:-106.47,name:'White Sands, US'},
-  {lat:36.95,lng:-116.05,name:'Nevada Test Site, US'},{lat:50.10,lng:36.23,name:'Kharkiv NPI, Ukraine'},
+  // Weapons Research & Labs
+  {lat:51.39,lng:-1.32,name:'AWE Aldermaston, UK'},{lat:48.86,lng:2.35,name:'CEA Saclay, France'},
+  {lat:38.46,lng:-105.0,name:'NORAD Cheyenne Mtn, US'},{lat:55.75,lng:37.62,name:'Kurchatov Inst, Russia'},
+  {lat:39.91,lng:116.39,name:'CIAE, China'},{lat:33.73,lng:73.05,name:'PAEC Kahuta, Pakistan'},
+  {lat:28.61,lng:77.21,name:'BARC, India'},{lat:32.07,lng:34.78,name:'Dimona, Israel'},
+  {lat:35.37,lng:51.42,name:'Tehran NRC, Iran'},{lat:39.03,lng:125.75,name:'Yongbyon, DPRK'},
+  {lat:47.62,lng:-122.35,name:'Hanford, US'},{lat:35.89,lng:-84.31,name:'Oak Ridge, US'},
+  {lat:33.68,lng:-106.47,name:'White Sands, US'},{lat:36.95,lng:-116.05,name:'Nevada NTS, US'},
+  {lat:35.10,lng:-106.62,name:'Sandia Labs, US'},{lat:37.69,lng:-121.70,name:'LLNL, US'},
+  {lat:43.59,lng:-116.05,name:'INL Idaho, US'},{lat:34.80,lng:-114.60,name:'Yucca Mountain, US'},
+  {lat:51.56,lng:-0.73,name:'AWE Burghfield, UK'},{lat:51.82,lng:-1.31,name:'Harwell, UK'},
+  {lat:54.43,lng:-3.50,name:'Sellafield, UK'},{lat:46.20,lng:6.04,name:'CERN, Switzerland'},
+  {lat:43.71,lng:7.27,name:'ITER, France'},{lat:44.14,lng:20.65,name:'Vinca, Serbia'},
   {lat:57.74,lng:59.98,name:'Mayak, Russia'},{lat:61.26,lng:73.36,name:'Seversk, Russia'},
-  {lat:41.18,lng:69.24,name:'Tashkent, Uzbekistan'},{lat:45.94,lng:-119.04,name:'Columbia Gen, US'},
-  {lat:51.56,lng:-0.73,name:'Burghfield, UK'},{lat:44.26,lng:26.06,name:'Cernavoda, Romania'},
-  {lat:46.46,lng:30.66,name:'Odesa NPP, Ukraine'},{lat:51.39,lng:30.10,name:'Chernobyl, Ukraine'},
-  {lat:47.51,lng:34.59,name:'Zaporizhzhia NPP, Ukraine'},
-  {lat:46.21,lng:-119.27,name:'Hanford Site B, US'},{lat:43.78,lng:-79.19,name:'Pickering, Canada'},
+  {lat:54.84,lng:20.20,name:'Kaliningrad Storage, Russia'},{lat:56.30,lng:43.97,name:'Sarov/Arzamas-16, Russia'},
+  {lat:41.18,lng:69.24,name:'Tashkent Research, Uzbekistan'},
+  // Active NPPs — Americas
+  {lat:45.94,lng:-119.04,name:'Columbia Gen, US'},{lat:46.21,lng:-119.27,name:'Hanford Site B, US'},
+  {lat:44.93,lng:-93.16,name:'Prairie Island, US'},{lat:41.24,lng:-73.95,name:'Indian Point, US'},
+  {lat:29.79,lng:-83.51,name:'Crystal River, US'},{lat:33.37,lng:-80.16,name:'VC Summer, US'},
+  {lat:30.04,lng:-81.38,name:'St Lucie, US'},{lat:25.44,lng:-80.33,name:'Turkey Point, US'},
+  {lat:33.95,lng:-81.32,name:'Vogtle, US'},{lat:35.21,lng:-85.09,name:'Watts Bar, US'},
+  {lat:41.60,lng:-81.15,name:'Perry, US'},{lat:43.27,lng:-77.31,name:'Ginna, US'},
+  {lat:42.80,lng:-70.79,name:'Seabrook, US'},{lat:39.46,lng:-75.54,name:'Salem/Hope Creek, US'},
+  {lat:43.78,lng:-79.19,name:'Pickering, Canada'},{lat:44.34,lng:-81.60,name:'Bruce, Canada'},
+  {lat:46.50,lng:-66.45,name:'Point Lepreau, Canada'},{lat:-38.25,lng:-57.88,name:'Atucha, Argentina'},
+  {lat:-23.00,lng:-44.46,name:'Angra, Brazil'},
+  // Active NPPs — Europe
   {lat:47.38,lng:0.70,name:'Chinon, France'},{lat:49.54,lng:1.88,name:'Paluel, France'},
-  {lat:48.52,lng:10.43,name:'Gundremmingen, Germany'},{lat:42.86,lng:141.64,name:'Tomari, Japan'},
-  {lat:37.42,lng:126.99,name:'Wolsong, South Korea'},{lat:21.67,lng:69.33,name:'Kakrapar, India'},
-  {lat:-34.00,lng:18.72,name:'Koeberg, South Africa'},{lat:30.44,lng:30.05,name:'El Dabaa, Egypt'},
-  {lat:44.93,lng:-93.16,name:'Prairie Island, US'},{lat:43.59,lng:-116.05,name:'INL Idaho, US'},
-  {lat:35.10,lng:-106.62,name:'Sandia Labs, US'},{lat:34.35,lng:-118.02,name:'LLNL, US'},
-  {lat:51.82,lng:-1.31,name:'Harwell, UK'},{lat:54.43,lng:-3.50,name:'Sellafield, UK'},
-  {lat:46.20,lng:6.04,name:'CERN, Switzerland'},{lat:43.71,lng:7.27,name:'ITER, France'},
-  {lat:37.24,lng:127.02,name:'KAERI, South Korea'},{lat:24.10,lng:54.62,name:'Barakah, UAE'},
-  {lat:50.70,lng:3.90,name:'Doel, Belgium'},{lat:51.33,lng:3.71,name:'Borssele, Netherlands'},
-  {lat:59.44,lng:24.48,name:'Paldiski, Estonia'},{lat:56.43,lng:30.60,name:'Sosnovy Bor, Russia'},
-  {lat:44.14,lng:20.65,name:'Vinca, Serbia'},{lat:36.52,lng:140.60,name:'Tokai-2, Japan'},
+  {lat:44.33,lng:4.73,name:'Tricastin, France'},{lat:47.90,lng:1.27,name:'St-Laurent, France'},
+  {lat:49.98,lng:2.14,name:'Gravelines, France'},{lat:48.27,lng:7.57,name:'Fessenheim, France'},
+  {lat:44.26,lng:26.06,name:'Cernavoda, Romania'},{lat:50.70,lng:3.90,name:'Doel, Belgium'},
+  {lat:50.53,lng:5.27,name:'Tihange, Belgium'},{lat:51.33,lng:3.71,name:'Borssele, Netherlands'},
+  {lat:48.52,lng:10.43,name:'Gundremmingen, Germany'},{lat:49.71,lng:8.41,name:'Biblis, Germany'},
+  {lat:61.24,lng:21.44,name:'Olkiluoto, Finland'},{lat:61.40,lng:28.08,name:'Loviisa, Finland'},
+  {lat:55.70,lng:13.68,name:'Barseback, Sweden'},{lat:57.42,lng:16.67,name:'Oskarshamn, Sweden'},
+  {lat:57.25,lng:12.11,name:'Ringhals, Sweden'},{lat:42.06,lng:24.30,name:'Kozloduy, Bulgaria'},
+  {lat:48.09,lng:17.12,name:'Jaslovske Bohunice, Slovakia'},{lat:48.49,lng:18.88,name:'Mochovce, Slovakia'},
+  {lat:51.19,lng:22.40,name:'Lublin (proposed), Poland'},{lat:46.40,lng:15.51,name:'Krsko, Slovenia'},
+  {lat:47.62,lng:21.72,name:'Paks, Hungary'},{lat:51.42,lng:0.56,name:'Sizewell B, UK'},
+  {lat:55.00,lng:-3.21,name:'Torness, UK'},
+  // Active NPPs — Asia & Others
+  {lat:35.74,lng:139.72,name:'Tokai, Japan'},{lat:36.52,lng:140.60,name:'Tokai-2, Japan'},
+  {lat:42.86,lng:141.64,name:'Tomari, Japan'},{lat:37.39,lng:138.60,name:'Kashiwazaki-Kariwa, Japan'},
+  {lat:33.49,lng:129.83,name:'Genkai, Japan'},{lat:35.53,lng:135.98,name:'Takahama, Japan'},
+  {lat:37.42,lng:126.99,name:'Wolsong, S. Korea'},{lat:35.32,lng:129.38,name:'Shin-Kori, S. Korea'},
+  {lat:37.24,lng:127.02,name:'KAERI, S. Korea'},{lat:35.40,lng:129.43,name:'Ulchin/Hanul, S. Korea'},
+  {lat:21.67,lng:69.33,name:'Kakrapar, India'},{lat:19.84,lng:72.75,name:'Tarapur, India'},
+  {lat:10.17,lng:79.65,name:'Kalpakkam, India'},{lat:13.63,lng:80.18,name:'PFBR Madras, India'},
+  {lat:24.10,lng:54.62,name:'Barakah, UAE'},{lat:30.44,lng:30.05,name:'El Dabaa, Egypt'},
+  {lat:30.74,lng:120.96,name:'Qinshan, China'},{lat:22.60,lng:114.55,name:'Daya Bay, China'},
+  {lat:21.52,lng:109.15,name:'Fangchenggang, China'},{lat:25.44,lng:119.43,name:'Fuqing, China'},
+  {lat:44.19,lng:125.30,name:'Hongyanhe, China'},{lat:26.64,lng:108.06,name:'Taishan, China'},
+  {lat:50.10,lng:36.23,name:'Kharkiv NPI, Ukraine'},{lat:51.39,lng:30.10,name:'Chernobyl, Ukraine'},
+  {lat:47.51,lng:34.59,name:'Zaporizhzhia NPP, Ukraine'},{lat:46.46,lng:30.66,name:'South Ukraine NPP'},
+  {lat:51.33,lng:25.86,name:'Rivne NPP, Ukraine'},{lat:56.43,lng:30.60,name:'Leningrad NPP, Russia'},
+  {lat:51.67,lng:39.17,name:'Novovoronezh NPP, Russia'},{lat:55.62,lng:41.93,name:'VVER Dimitrovgrad, Russia'},
+  {lat:56.84,lng:35.91,name:'Kalinin NPP, Russia'},{lat:59.44,lng:24.48,name:'Paldiski, Estonia'},
+  {lat:-34.00,lng:18.72,name:'Koeberg, South Africa'},
 ];
 const _MILITARY_BASES = [
-  {lat:36.77,lng:-76.29,name:'Norfolk Naval, US'},{lat:32.87,lng:-117.14,name:'Camp Pendleton, US'},
-  {lat:38.95,lng:-77.45,name:'Dulles/CIA, US'},{lat:38.87,lng:-77.06,name:'Pentagon, US'},
-  {lat:26.30,lng:50.21,name:'NSA Bahrain'},{lat:25.41,lng:51.25,name:'Al Udeid, Qatar'},
-  {lat:24.43,lng:54.65,name:'Al Dhafra, UAE'},{lat:11.55,lng:43.15,name:'Camp Lemonnier, Djibouti'},
-  {lat:36.15,lng:-5.35,name:'Gibraltar'},{lat:35.09,lng:33.27,name:'Akrotiri, Cyprus'},
-  {lat:37.09,lng:24.94,name:'Souda Bay, Greece'},{lat:41.05,lng:28.95,name:'Incirlik, Turkey'},
-  {lat:49.20,lng:-2.13,name:'HMNB Devonport, UK'},{lat:48.45,lng:-4.42,name:'Brest Naval, France'},
-  {lat:35.45,lng:139.35,name:'Yokosuka, Japan'},{lat:33.45,lng:126.57,name:'Jeju, South Korea'},
-  {lat:1.35,lng:103.82,name:'Changi Naval, Singapore'},{lat:-34.73,lng:138.57,name:'Edinburgh, Australia'},
-  {lat:21.35,lng:-157.95,name:'Pearl Harbor, US'},{lat:22.32,lng:114.17,name:'Stonecutters Island, HK'},
+  // US Major Installations
+  {lat:36.77,lng:-76.29,name:'Norfolk Naval Station, US'},{lat:32.87,lng:-117.14,name:'Camp Pendleton, US'},
+  {lat:38.95,lng:-77.45,name:'CIA Langley, US'},{lat:38.87,lng:-77.06,name:'Pentagon, US'},
+  {lat:21.35,lng:-157.95,name:'Pearl Harbor, US'},{lat:32.34,lng:-64.68,name:'USNS Bermuda'},
+  {lat:71.29,lng:-156.77,name:'Utqiagvik/Barrow, US'},{lat:42.43,lng:-71.22,name:'Hanscom AFB, US'},
+  {lat:38.71,lng:-104.78,name:'Fort Carson, US'},{lat:31.38,lng:-100.42,name:'Goodfellow AFB, US'},
+  {lat:38.95,lng:-92.33,name:'Fort Leonard Wood, US'},{lat:30.43,lng:-86.70,name:'Eglin AFB, US'},
+  {lat:30.39,lng:-87.35,name:'NAS Pensacola, US'},{lat:28.23,lng:-80.61,name:'Patrick SFB, US'},
+  {lat:39.82,lng:-104.66,name:'Buckley SFB, US'},{lat:35.43,lng:-97.38,name:'Tinker AFB, US'},
+  {lat:32.38,lng:-86.36,name:'Maxwell AFB, US'},{lat:33.92,lng:-118.02,name:'Los Alamitos, US'},
+  {lat:35.23,lng:-106.61,name:'Kirtland AFB, US'},{lat:47.05,lng:-122.77,name:'JBLM, US'},
+  {lat:36.23,lng:-76.02,name:'MCAS Cherry Point, US'},{lat:34.72,lng:-120.57,name:'Vandenberg SFB, US'},
+  {lat:41.12,lng:-100.68,name:'USSTRATCOM Offutt, US'},{lat:39.11,lng:-121.44,name:'Beale AFB, US'},
+  {lat:29.38,lng:-98.58,name:'JBSA, US'},{lat:35.14,lng:-89.99,name:'NSA Mid-South, US'},
+  {lat:44.05,lng:-103.06,name:'Ellsworth AFB, US'},{lat:47.92,lng:-117.40,name:'Fairchild AFB, US'},
+  {lat:40.49,lng:-93.84,name:'Whiteman AFB, US'},{lat:28.93,lng:-111.05,name:'MCAS Yuma, US'},
+  {lat:36.58,lng:-87.49,name:'Fort Campbell, US'},{lat:31.61,lng:-84.17,name:'Fort Moore, US'},
+  {lat:35.14,lng:-79.00,name:'Fort Liberty, US'},{lat:31.95,lng:-81.15,name:'Fort Stewart, US'},
+  {lat:48.42,lng:-89.91,name:'Fort Drum, US'},{lat:64.30,lng:-149.18,name:'Fort Wainwright, US'},
+  // US Overseas
+  {lat:26.30,lng:50.21,name:'NSA Bahrain'},{lat:25.41,lng:51.25,name:'Al Udeid AB, Qatar'},
+  {lat:24.43,lng:54.65,name:'Al Dhafra AB, UAE'},{lat:11.55,lng:43.15,name:'Camp Lemonnier, Djibouti'},
+  {lat:-7.32,lng:72.41,name:'Diego Garcia, BIOT'},{lat:49.95,lng:7.26,name:'Ramstein AB, Germany'},
+  {lat:49.43,lng:7.60,name:'Landstuhl Medical, Germany'},{lat:48.22,lng:11.81,name:'Grafenwoehr, Germany'},
+  {lat:35.45,lng:139.35,name:'Yokosuka Naval, Japan'},{lat:35.05,lng:136.88,name:'Yokota AB, Japan'},
+  {lat:26.35,lng:127.77,name:'Kadena AB, Okinawa'},{lat:26.27,lng:127.73,name:'Camp Foster, Okinawa'},
+  {lat:37.47,lng:126.62,name:'Osan AB, S. Korea'},{lat:36.96,lng:127.03,name:'Camp Humphreys, S. Korea'},
+  {lat:64.29,lng:-15.23,name:'Keflavik, Iceland'},{lat:36.63,lng:-6.16,name:'Rota Naval, Spain'},
+  {lat:41.05,lng:28.95,name:'Incirlik AB, Turkey'},{lat:40.87,lng:14.29,name:'NSA Naples, Italy'},
+  {lat:40.92,lng:9.51,name:'La Maddalena, Italy'},{lat:36.82,lng:14.51,name:'NAS Sigonella, Italy'},
+  {lat:30.63,lng:32.34,name:'MFO Sinai, Egypt'},{lat:-2.17,lng:-79.92,name:'FOL Manta, Ecuador'},
+  // UK
+  {lat:36.15,lng:-5.35,name:'Gibraltar, UK'},{lat:35.09,lng:33.27,name:'Akrotiri, Cyprus'},
+  {lat:49.20,lng:-2.13,name:'HMNB Devonport, UK'},{lat:51.28,lng:-0.77,name:'Aldershot, UK'},
+  {lat:50.79,lng:-1.10,name:'HMNB Portsmouth, UK'},{lat:56.43,lng:-2.87,name:'HMNB Clyde/Faslane, UK'},
+  {lat:52.36,lng:0.49,name:'RAF Lakenheath, UK'},{lat:52.35,lng:0.77,name:'RAF Mildenhall, UK'},
+  {lat:53.04,lng:-1.25,name:'RAF Waddington, UK'},{lat:51.75,lng:-1.58,name:'RAF Brize Norton, UK'},
+  // France
+  {lat:48.45,lng:-4.42,name:'Brest Naval, France'},{lat:43.10,lng:5.93,name:'Toulon Naval, France'},
+  {lat:48.79,lng:-3.41,name:'Ile Longue SSBN, France'},{lat:43.52,lng:5.44,name:'BA 701 Salon, France'},
+  // Russia
   {lat:59.95,lng:30.32,name:'Kronstadt, Russia'},{lat:44.62,lng:33.53,name:'Sevastopol, Russia'},
   {lat:69.08,lng:33.42,name:'Severomorsk, Russia'},{lat:53.01,lng:158.65,name:'Petropavlovsk, Russia'},
-  {lat:18.27,lng:109.58,name:'Yulin, China'},{lat:38.05,lng:121.37,name:'Lushun, China'},
-  {lat:36.07,lng:120.38,name:'Qingdao, China'},{lat:30.00,lng:122.15,name:'Zhoushan, China'},
-  {lat:37.47,lng:126.62,name:'Pyeongtaek/Osan, S. Korea'},{lat:51.28,lng:-0.77,name:'Aldershot, UK'},
   {lat:48.73,lng:44.50,name:'Volgograd, Russia'},{lat:55.01,lng:82.93,name:'Novosibirsk, Russia'},
-  {lat:24.75,lng:46.65,name:'Prince Sultan AB, Saudi Arabia'},{lat:64.29,lng:-15.23,name:'Keflavik, Iceland'},
-  {lat:49.95,lng:7.26,name:'Ramstein AB, Germany'},{lat:-7.32,lng:72.41,name:'Diego Garcia, BIOT'},
-  {lat:13.05,lng:77.51,name:'Yelahanka AFB, India'},{lat:30.63,lng:32.34,name:'El Gorah MFO, Egypt'},
-  {lat:71.29,lng:-156.77,name:'Utqiagvik/Barrow, US'},{lat:42.43,lng:-71.22,name:'Hanscom AFB, US'},
-  {lat:35.05,lng:136.88,name:'Yokota AB, Japan'},{lat:26.35,lng:127.77,name:'Kadena AB, Okinawa'},
-  {lat:38.71,lng:-104.78,name:'Fort Carson, US'},{lat:31.38,lng:-100.42,name:'Goodfellow AFB, US'},
-  {lat:30.24,lng:67.00,name:'Quetta Cantonment, Pakistan'},{lat:34.95,lng:69.27,name:'Bagram, Afghanistan'},
-  {lat:38.95,lng:-92.33,name:'Fort Leonard Wood, US'},{lat:-2.17,lng:-79.92,name:'Manta FOL, Ecuador'},
-  {lat:68.43,lng:17.39,name:'Bardufoss, Norway'},{lat:64.84,lng:25.42,name:'Oulu, Finland'},
-  {lat:56.94,lng:24.11,name:'Adazi, Latvia'},{lat:54.52,lng:18.53,name:'Gdynia Naval, Poland'},
-  {lat:38.50,lng:44.52,name:'Incirlik, Turkey'},{lat:11.20,lng:43.14,name:'Camp Lemonnier 2, Djibouti'},
-  {lat:-25.70,lng:28.23,name:'Waterkloof AFB, South Africa'},{lat:6.22,lng:-75.59,name:'Rionegro, Colombia'},
-  {lat:14.49,lng:121.00,name:'Fort Bonifacio, Philippines'},{lat:-31.40,lng:-64.18,name:'Cordoba AB, Argentina'},
+  {lat:43.12,lng:131.90,name:'Vladivostok Fleet, Russia'},{lat:68.97,lng:33.09,name:'Gadzhiyevo SSBN, Russia'},
+  {lat:62.73,lng:40.32,name:'Severodvinsk Shipyard, Russia'},{lat:56.14,lng:40.40,name:'Teykovo ICBM, Russia'},
+  {lat:51.77,lng:55.95,name:'Dombarovsky ICBM, Russia'},{lat:52.93,lng:84.32,name:'Barnaul, Russia'},
+  {lat:59.57,lng:150.78,name:'Magadan, Russia'},{lat:43.11,lng:44.67,name:'Vladikavkaz, Russia'},
+  // China
+  {lat:18.27,lng:109.58,name:'Yulin Naval, China'},{lat:38.05,lng:121.37,name:'Lushun Naval, China'},
+  {lat:36.07,lng:120.38,name:'Qingdao Naval, China'},{lat:30.00,lng:122.15,name:'Zhoushan Naval, China'},
+  {lat:22.32,lng:114.17,name:'Stonecutters Is, HK'},{lat:39.13,lng:117.35,name:'Tianjin Garrison, China'},
+  {lat:31.40,lng:121.46,name:'Shanghai Garrison, China'},{lat:25.05,lng:102.72,name:'Kunming AB, China'},
+  {lat:29.57,lng:106.55,name:'Chongqing Mil Region, China'},{lat:34.38,lng:108.93,name:'Xian PLAAF, China'},
+  {lat:43.80,lng:87.63,name:'Urumqi, China'},{lat:16.83,lng:112.33,name:'Woody Island, SCS'},
+  // India
+  {lat:13.05,lng:77.51,name:'Yelahanka AFB, India'},{lat:15.39,lng:73.83,name:'INS Hansa Goa, India'},
+  {lat:8.97,lng:76.96,name:'Trivandrum Naval, India'},{lat:18.58,lng:83.55,name:'Visakhapatnam Naval, India'},
+  {lat:26.30,lng:73.05,name:'Jodhpur AFB, India'},{lat:26.93,lng:75.78,name:'Jaipur Mil, India'},
+  // Middle East
+  {lat:24.75,lng:46.65,name:'Prince Sultan AB, Saudi Arabia'},{lat:26.27,lng:50.16,name:'King Fahd AB, Saudi'},
+  {lat:21.48,lng:39.18,name:'Jeddah Naval, Saudi Arabia'},{lat:29.01,lng:48.08,name:'Ali Al Salem, Kuwait'},
+  {lat:23.58,lng:58.28,name:'Thumrait AB, Oman'},{lat:32.35,lng:36.26,name:'Muwaffaq al-Salti, Jordan'},
+  // NATO Europe
+  {lat:37.09,lng:24.94,name:'Souda Bay, Greece'},{lat:56.94,lng:24.11,name:'Adazi, Latvia'},
+  {lat:54.52,lng:18.53,name:'Gdynia Naval, Poland'},{lat:68.43,lng:17.39,name:'Bardufoss, Norway'},
+  {lat:64.84,lng:25.42,name:'Oulu, Finland'},{lat:59.41,lng:24.83,name:'Tapa, Estonia'},
+  {lat:55.07,lng:14.68,name:'Bornholm, Denmark'},{lat:58.11,lng:8.08,name:'Kristiansand, Norway'},
+  {lat:52.65,lng:13.50,name:'Strausberg, Germany'},{lat:50.84,lng:6.95,name:'Geilenkirchen AWACS, Germany'},
+  {lat:41.92,lng:12.50,name:'Centocelle, Italy'},{lat:45.43,lng:12.34,name:'Venice Arsenale, Italy'},
+  {lat:41.65,lng:-8.75,name:'Braga, Portugal'},{lat:40.50,lng:-3.68,name:'Torrejon AB, Spain'},
+  {lat:57.66,lng:12.24,name:'Gothenburg Garrison, Sweden'},{lat:59.87,lng:17.59,name:'Uppsala, Sweden'},
+  // Asia-Pacific
+  {lat:1.35,lng:103.82,name:'Changi Naval, Singapore'},{lat:-34.73,lng:138.57,name:'Edinburgh, Australia'},
+  {lat:-33.84,lng:151.25,name:'Garden Island, Australia'},{lat:-19.25,lng:146.77,name:'Townsville, Australia'},
+  {lat:-31.93,lng:115.97,name:'HMAS Stirling, Australia'},{lat:14.49,lng:121.00,name:'Fort Bonifacio, Philippines'},
+  {lat:12.88,lng:100.86,name:'U-Tapao, Thailand'},{lat:33.45,lng:126.57,name:'Jeju Naval, S. Korea'},
+  // South America & Africa
+  {lat:-25.70,lng:28.23,name:'Waterkloof AFB, South Africa'},{lat:-33.97,lng:18.60,name:'Simon\'s Town Naval, SA'},
+  {lat:6.22,lng:-75.59,name:'Rionegro, Colombia'},{lat:-31.40,lng:-64.18,name:'Cordoba AB, Argentina'},
+  {lat:-22.92,lng:-43.17,name:'Rio Naval, Brazil'},{lat:-12.91,lng:-38.51,name:'Salvador Naval, Brazil'},
+  {lat:5.60,lng:-0.17,name:'Burma Camp, Ghana'},{lat:9.06,lng:7.49,name:'Abuja Barracks, Nigeria'},
+  // Pakistan/Central Asia
+  {lat:30.24,lng:67.00,name:'Quetta Cantonment, Pakistan'},{lat:33.62,lng:73.10,name:'Rawalpindi GHQ, Pakistan'},
+  {lat:24.89,lng:67.01,name:'Masroor AB, Pakistan'},{lat:25.27,lng:68.37,name:'Shahbaz AB, Pakistan'},
+  {lat:34.95,lng:69.27,name:'Bagram, Afghanistan'},{lat:41.26,lng:69.28,name:'Chirchik, Uzbekistan'},
+  {lat:38.55,lng:68.77,name:'Dushanbe 201st, Tajikistan'},
 ];
 
 const _CABLE_LANDINGS = [
@@ -251,47 +343,156 @@ const _CABLE_LANDINGS = [
   {lat:-22.91,lng:-43.17,name:'Rio Cable Hub, BR'},{lat:51.50,lng:0.08,name:'London Docklands Hub, UK'},
   {lat:52.37,lng:4.90,name:'Amsterdam Cable Hub, NL'},{lat:60.17,lng:24.94,name:'Helsinki Cable Hub, FI'},
   {lat:59.33,lng:18.07,name:'Stockholm Cable Hub, SE'},{lat:36.20,lng:-5.37,name:'Gibraltar Cable Hub'},
+  {lat:41.15,lng:-8.61,name:'Porto/Carcavelos, PT'},{lat:43.37,lng:-8.40,name:'Vigo, Spain'},
+  {lat:38.72,lng:-9.14,name:'Lisbon/Sesimbra, PT'},{lat:33.59,lng:-7.59,name:'Casablanca, Morocco'},
+  {lat:36.75,lng:3.06,name:'Algiers, Algeria'},{lat:36.81,lng:10.17,name:'Tunis, Tunisia'},
+  {lat:31.21,lng:29.89,name:'Alexandria, Egypt'},{lat:11.59,lng:43.15,name:'Djibouti Cable Hub'},
+  {lat:-4.04,lng:39.67,name:'Mombasa Cable Hub, KE'},{lat:-6.16,lng:39.19,name:'Dar es Salaam, TZ'},
+  {lat:-25.97,lng:32.58,name:'Maputo, Mozambique'},{lat:-33.93,lng:18.42,name:'Cape Town, SA'},
+  {lat:-4.30,lng:15.30,name:'Muanda, DRC'},{lat:14.69,lng:-17.44,name:'Dakar Cable Hub, SN'},
+  {lat:5.56,lng:-0.19,name:'Accra Cable Hub, GH'},{lat:3.14,lng:101.69,name:'Kuala Lumpur Cable, MY'},
+  {lat:-6.21,lng:106.85,name:'Jakarta Cable Hub, ID'},{lat:14.60,lng:120.98,name:'Manila Cable Hub, PH'},
+  {lat:10.82,lng:106.63,name:'Ho Chi Minh Cable, VN'},{lat:21.03,lng:105.85,name:'Hanoi/Haiphong, VN'},
+  {lat:37.57,lng:126.98,name:'Seoul/Busan Cable, KR'},{lat:25.04,lng:121.57,name:'Taipei/Toucheng, TW'},
+  {lat:34.69,lng:135.50,name:'Osaka Cable Hub, JP'},{lat:-37.81,lng:144.96,name:'Melbourne Cable Hub, AU'},
+  {lat:-36.85,lng:174.76,name:'Auckland Cable Hub, NZ'},{lat:21.31,lng:-157.86,name:'Honolulu Cable Hub, US'},
+  {lat:-17.73,lng:-149.57,name:'Tahiti Cable Hub, FR'},{lat:-18.14,lng:178.44,name:'Fiji Cable Hub'},
+  {lat:45.50,lng:-73.57,name:'Montreal Cable, CA'},{lat:43.65,lng:-79.38,name:'Toronto Cable, CA'},
+  {lat:19.43,lng:-99.13,name:'Mexico City Cable Hub'},{lat:-12.05,lng:-77.04,name:'Lima Cable Hub, PE'},
+  {lat:-34.60,lng:-58.38,name:'Buenos Aires Cable, AR'},{lat:-33.45,lng:-70.67,name:'Santiago/Valparaiso, CL'},
 ];
 const _DATA_CENTERS = [
-  {lat:39.04,lng:-77.49,name:'Ashburn VA, US (largest cluster)'},{lat:37.37,lng:-121.92,name:'Santa Clara CA, US'},
-  {lat:53.35,lng:-6.26,name:'Dublin, Ireland (EU hub)'},{lat:50.11,lng:8.68,name:'Frankfurt, Germany'},
-  {lat:52.37,lng:4.90,name:'Amsterdam, Netherlands'},{lat:51.50,lng:-0.12,name:'London, UK'},
-  {lat:59.33,lng:18.07,name:'Stockholm, Sweden'},{lat:1.35,lng:103.82,name:'Singapore'},
-  {lat:35.68,lng:139.69,name:'Tokyo, Japan'},{lat:22.32,lng:114.17,name:'Hong Kong'},
-  {lat:37.57,lng:126.98,name:'Seoul, South Korea'},{lat:-33.87,lng:151.21,name:'Sydney, Australia'},
-  {lat:25.20,lng:55.27,name:'Dubai, UAE'},{lat:19.08,lng:72.88,name:'Mumbai, India'},
-  {lat:-23.55,lng:-46.63,name:'Sao Paulo, Brazil'},{lat:45.50,lng:-73.57,name:'Montreal, Canada'},
-  {lat:47.61,lng:-122.33,name:'Seattle WA, US'},{lat:33.75,lng:-84.39,name:'Atlanta GA, US'},
-  {lat:41.88,lng:-87.63,name:'Chicago IL, US'},{lat:32.78,lng:-96.80,name:'Dallas TX, US'},
-  {lat:50.08,lng:8.58,name:'Frankfurt DE2, Germany'},{lat:55.75,lng:37.62,name:'Moscow, Russia'},
-  {lat:39.91,lng:116.39,name:'Beijing, China'},{lat:-33.45,lng:-70.67,name:'Santiago, Chile'},
-  {lat:6.52,lng:3.38,name:'Lagos, Nigeria'},{lat:30.04,lng:31.24,name:'Cairo, Egypt'},
-  {lat:-1.29,lng:36.82,name:'Nairobi, Kenya'},{lat:35.69,lng:51.39,name:'Tehran, Iran'},
+  // US — Major Cloud Regions & Colocation
+  {lat:39.04,lng:-77.49,name:'Ashburn VA (Data Center Alley)'},{lat:39.10,lng:-77.55,name:'Ashburn VA West Cluster'},
+  {lat:37.37,lng:-121.92,name:'Santa Clara CA, US'},{lat:37.57,lng:-122.05,name:'Milpitas CA, US'},
+  {lat:47.61,lng:-122.33,name:'Seattle/Westin, US'},{lat:45.59,lng:-122.60,name:'Portland Hillsboro, US'},
+  {lat:33.75,lng:-84.39,name:'Atlanta GA, US'},{lat:41.88,lng:-87.63,name:'Chicago IL, US'},
+  {lat:32.78,lng:-96.80,name:'Dallas TX, US'},{lat:29.76,lng:-95.37,name:'Houston TX, US'},
+  {lat:34.05,lng:-118.24,name:'Los Angeles CA, US'},{lat:36.17,lng:-115.14,name:'Las Vegas NV, US'},
+  {lat:33.45,lng:-112.07,name:'Phoenix AZ, US'},{lat:39.74,lng:-104.99,name:'Denver CO, US'},
+  {lat:25.76,lng:-80.19,name:'Miami FL, US'},{lat:43.07,lng:-89.40,name:'Madison WI, US'},
+  {lat:42.36,lng:-71.06,name:'Boston MA, US'},{lat:40.71,lng:-74.01,name:'New York NY, US'},
+  {lat:38.90,lng:-77.04,name:'Washington DC, US'},{lat:35.23,lng:-80.84,name:'Charlotte NC, US'},
+  {lat:27.95,lng:-82.46,name:'Tampa FL, US'},{lat:47.25,lng:-122.44,name:'Tacoma/CenturyLink, US'},
+  {lat:41.49,lng:-81.69,name:'Cleveland OH, US'},{lat:44.97,lng:-93.27,name:'Minneapolis MN, US'},
+  {lat:30.27,lng:-97.74,name:'Austin TX, US'},{lat:36.85,lng:-76.29,name:'Virginia Beach VA, US'},
+  // Canada
+  {lat:45.50,lng:-73.57,name:'Montreal QC, Canada'},{lat:43.65,lng:-79.38,name:'Toronto ON, Canada'},
+  {lat:45.42,lng:-75.70,name:'Ottawa ON, Canada'},{lat:49.28,lng:-123.12,name:'Vancouver BC, Canada'},
+  {lat:51.05,lng:-114.07,name:'Calgary AB, Canada'},
+  // Europe
+  {lat:53.35,lng:-6.26,name:'Dublin, Ireland (EU hub)'},{lat:53.34,lng:-6.44,name:'Dublin West, Ireland'},
+  {lat:50.11,lng:8.68,name:'Frankfurt, Germany'},{lat:50.08,lng:8.58,name:'Frankfurt DE2'},
+  {lat:52.37,lng:4.90,name:'Amsterdam, Netherlands'},{lat:52.08,lng:5.13,name:'Utrecht, Netherlands'},
+  {lat:51.50,lng:-0.12,name:'London Docklands, UK'},{lat:51.52,lng:-0.71,name:'Slough, UK'},
+  {lat:55.68,lng:12.57,name:'Copenhagen, Denmark'},{lat:59.33,lng:18.07,name:'Stockholm, Sweden'},
+  {lat:60.17,lng:24.94,name:'Helsinki, Finland'},{lat:59.95,lng:10.75,name:'Oslo, Norway'},
+  {lat:48.86,lng:2.35,name:'Paris, France'},{lat:43.60,lng:1.44,name:'Toulouse, France'},
+  {lat:45.46,lng:9.19,name:'Milan, Italy'},{lat:41.90,lng:12.50,name:'Rome, Italy'},
+  {lat:40.42,lng:-3.70,name:'Madrid, Spain'},{lat:41.39,lng:2.17,name:'Barcelona, Spain'},
+  {lat:55.75,lng:37.62,name:'Moscow, Russia'},{lat:59.93,lng:30.32,name:'St Petersburg, Russia'},
+  {lat:52.52,lng:13.41,name:'Berlin, Germany'},{lat:48.14,lng:11.58,name:'Munich, Germany'},
+  {lat:50.94,lng:6.96,name:'Cologne, Germany'},{lat:46.95,lng:7.45,name:'Bern, Switzerland'},
+  {lat:47.37,lng:8.54,name:'Zurich, Switzerland'},{lat:46.20,lng:6.14,name:'Geneva, Switzerland'},
+  {lat:48.21,lng:16.37,name:'Vienna, Austria'},{lat:50.08,lng:14.44,name:'Prague, Czech Republic'},
+  {lat:52.23,lng:21.01,name:'Warsaw, Poland'},{lat:47.50,lng:19.04,name:'Budapest, Hungary'},
+  {lat:44.43,lng:26.10,name:'Bucharest, Romania'},{lat:42.70,lng:23.32,name:'Sofia, Bulgaria'},
+  {lat:38.72,lng:-9.14,name:'Lisbon, Portugal'},{lat:41.01,lng:28.98,name:'Istanbul, Turkey'},
+  // Middle East
+  {lat:25.20,lng:55.27,name:'Dubai, UAE'},{lat:24.45,lng:54.65,name:'Abu Dhabi, UAE'},
+  {lat:26.22,lng:50.58,name:'Bahrain'},{lat:25.29,lng:51.53,name:'Doha, Qatar'},
+  {lat:24.71,lng:46.67,name:'Riyadh, Saudi Arabia'},{lat:31.95,lng:35.95,name:'Amman, Jordan'},
+  {lat:32.07,lng:34.78,name:'Tel Aviv, Israel'},{lat:33.89,lng:35.50,name:'Beirut, Lebanon'},
+  {lat:35.69,lng:51.39,name:'Tehran, Iran'},{lat:30.04,lng:31.24,name:'Cairo, Egypt'},
+  // Asia-Pacific
+  {lat:1.35,lng:103.82,name:'Singapore (Tuas/Jurong)'},{lat:1.31,lng:103.86,name:'Singapore (Tai Seng)'},
+  {lat:35.68,lng:139.69,name:'Tokyo, Japan'},{lat:34.69,lng:135.50,name:'Osaka, Japan'},
+  {lat:22.32,lng:114.17,name:'Hong Kong'},{lat:22.27,lng:114.19,name:'Tseung Kwan O, HK'},
+  {lat:37.57,lng:126.98,name:'Seoul, South Korea'},{lat:36.35,lng:127.38,name:'Daejeon, S. Korea'},
+  {lat:25.04,lng:121.57,name:'Taipei, Taiwan'},{lat:24.97,lng:121.24,name:'Taoyuan, Taiwan'},
+  {lat:39.91,lng:116.39,name:'Beijing, China'},{lat:31.23,lng:121.47,name:'Shanghai, China'},
+  {lat:23.13,lng:113.26,name:'Guangzhou, China'},{lat:22.54,lng:114.06,name:'Shenzhen, China'},
+  {lat:29.06,lng:111.68,name:'Changsha, China'},{lat:26.07,lng:119.30,name:'Fuzhou, China'},
+  {lat:19.08,lng:72.88,name:'Mumbai, India'},{lat:12.97,lng:77.59,name:'Bangalore, India'},
+  {lat:28.63,lng:77.22,name:'New Delhi/Noida, India'},{lat:17.39,lng:78.49,name:'Hyderabad, India'},
+  {lat:13.08,lng:80.27,name:'Chennai, India'},{lat:23.81,lng:90.41,name:'Dhaka, Bangladesh'},
   {lat:14.60,lng:120.98,name:'Manila, Philippines'},{lat:3.14,lng:101.69,name:'Kuala Lumpur, Malaysia'},
-  {lat:41.01,lng:28.98,name:'Istanbul, Turkey'},{lat:25.04,lng:121.57,name:'Taipei, Taiwan'},
-  {lat:4.60,lng:-74.08,name:'Bogota, Colombia'},{lat:12.97,lng:77.59,name:'Bangalore, India'},
-  {lat:-6.21,lng:106.85,name:'Jakarta, Indonesia'},{lat:48.86,lng:2.35,name:'Paris FR, France'},
-  {lat:34.05,lng:-118.24,name:'Los Angeles CA, US'},{lat:23.81,lng:90.41,name:'Dhaka, Bangladesh'},
-  {lat:31.95,lng:35.95,name:'Amman, Jordan'},{lat:33.89,lng:35.50,name:'Beirut, Lebanon'},
-  {lat:59.93,lng:30.32,name:'St Petersburg, Russia'},{lat:43.07,lng:-89.40,name:'Madison WI, US'},
-  {lat:35.68,lng:51.42,name:'Tehran DC2, Iran'},{lat:-34.60,lng:-58.38,name:'Buenos Aires, Argentina'},
-  {lat:28.63,lng:77.22,name:'New Delhi, India'},{lat:55.68,lng:12.57,name:'Copenhagen, Denmark'},
+  {lat:-6.21,lng:106.85,name:'Jakarta, Indonesia'},{lat:13.76,lng:100.50,name:'Bangkok, Thailand'},
+  {lat:21.03,lng:105.85,name:'Hanoi, Vietnam'},{lat:10.82,lng:106.63,name:'Ho Chi Minh City, Vietnam'},
+  // Oceania
+  {lat:-33.87,lng:151.21,name:'Sydney, Australia'},{lat:-37.81,lng:144.96,name:'Melbourne, Australia'},
+  {lat:-27.47,lng:153.03,name:'Brisbane, Australia'},{lat:-31.95,lng:115.86,name:'Perth, Australia'},
+  {lat:-35.28,lng:149.13,name:'Canberra, Australia'},{lat:-36.85,lng:174.76,name:'Auckland, New Zealand'},
+  // Latin America
+  {lat:-23.55,lng:-46.63,name:'Sao Paulo, Brazil'},{lat:-22.91,lng:-43.17,name:'Rio de Janeiro, Brazil'},
+  {lat:-34.60,lng:-58.38,name:'Buenos Aires, Argentina'},{lat:-33.45,lng:-70.67,name:'Santiago, Chile'},
+  {lat:4.60,lng:-74.08,name:'Bogota, Colombia'},{lat:19.43,lng:-99.13,name:'Mexico City, Mexico'},
+  {lat:20.68,lng:-103.35,name:'Guadalajara, Mexico'},{lat:25.67,lng:-100.31,name:'Monterrey, Mexico'},
+  {lat:10.50,lng:-66.92,name:'Caracas, Venezuela'},{lat:-12.05,lng:-77.04,name:'Lima, Peru'},
+  // Africa
+  {lat:6.52,lng:3.38,name:'Lagos, Nigeria'},{lat:-1.29,lng:36.82,name:'Nairobi, Kenya'},
+  {lat:-33.93,lng:18.42,name:'Cape Town, South Africa'},{lat:-26.20,lng:28.04,name:'Johannesburg, South Africa'},
+  {lat:5.56,lng:-0.19,name:'Accra, Ghana'},{lat:33.59,lng:-7.59,name:'Casablanca, Morocco'},
+  {lat:14.69,lng:-17.44,name:'Dakar, Senegal'},{lat:9.02,lng:38.75,name:'Addis Ababa, Ethiopia'},
+  {lat:36.75,lng:3.06,name:'Algiers, Algeria'},{lat:0.31,lng:32.58,name:'Kampala, Uganda'},
 ];
 
 const _PIPELINE_HUBS = [
+  // Europe
   {lat:51.50,lng:3.60,name:'Rotterdam Pipeline Hub, NL'},{lat:60.39,lng:5.32,name:'Bergen Gas Hub, NO'},
   {lat:56.15,lng:10.21,name:'Denmark Gas Junction'},{lat:41.01,lng:28.98,name:'TurkStream Landing, TR'},
   {lat:54.32,lng:13.09,name:'Nord Stream Landing, DE'},{lat:36.80,lng:10.18,name:'TransMed Pipeline, TN'},
-  {lat:31.25,lng:32.31,name:'East Med Gas Hub, EG'},{lat:40.41,lng:49.87,name:'BTC Pipeline, AZ'},
-  {lat:29.37,lng:47.97,name:'Kuwait Oil Hub'},{lat:26.22,lng:50.55,name:'Bahrain Oil Hub'},
-  {lat:51.88,lng:55.10,name:'Druzhba Pipeline Hub, RU'},{lat:52.52,lng:104.30,name:'ESPO Pipeline, RU'},
-  {lat:39.91,lng:116.39,name:'China Gas Hub, Beijing'},{lat:29.76,lng:-95.37,name:'Houston Pipeline Hub, US'},
-  {lat:30.07,lng:-89.93,name:'Gulf Coast LOOP, US'},{lat:51.05,lng:-114.07,name:'Alberta Pipeline Hub, CA'},
-  {lat:55.76,lng:49.12,name:'Kazan Junction, RU'},{lat:41.69,lng:44.80,name:'BTC Tbilisi, Georgia'},
+  {lat:31.25,lng:32.31,name:'East Med Gas Hub, EG'},{lat:51.88,lng:55.10,name:'Druzhba Pipeline Hub, RU'},
+  {lat:55.76,lng:49.12,name:'Kazan Junction, RU'},{lat:53.21,lng:50.14,name:'Samara Pipeline Hub, RU'},
+  {lat:58.96,lng:5.73,name:'Stavanger Gas, NO'},{lat:57.05,lng:9.93,name:'Aalborg Gas, DK'},
+  {lat:51.43,lng:6.76,name:'Duisburg Pipeline Hub, DE'},{lat:48.78,lng:9.18,name:'Stuttgart Gas Hub, DE'},
+  {lat:45.46,lng:9.19,name:'Milan Pipeline Junction, IT'},{lat:40.85,lng:14.27,name:'Naples Compressor, IT'},
+  {lat:38.72,lng:-9.14,name:'Sines LNG Terminal, PT'},{lat:43.26,lng:5.38,name:'Marseille Fos LNG, FR'},
+  {lat:43.35,lng:-3.01,name:'Bilbao LNG, Spain'},{lat:37.80,lng:-1.28,name:'Cartagena LNG, Spain'},
+  {lat:46.15,lng:14.99,name:'TAG Pipeline Hub, Slovenia'},{lat:47.87,lng:16.25,name:'Baumgarten Gas Hub, Austria'},
+  {lat:51.23,lng:4.40,name:'Antwerp Pipeline Hub, BE'},{lat:54.18,lng:-6.34,name:'Interconnector UK-IE'},
+  {lat:53.25,lng:-4.25,name:'Point of Ayr Terminal, UK'},{lat:57.13,lng:-2.08,name:'St Fergus Terminal, UK'},
+  {lat:60.81,lng:4.99,name:'Kollsnes Terminal, NO'},{lat:62.47,lng:6.15,name:'Ormen Lange, NO'},
+  // Middle East & Central Asia
+  {lat:40.41,lng:49.87,name:'BTC Pipeline, AZ'},{lat:41.69,lng:44.80,name:'BTC Tbilisi, Georgia'},
   {lat:36.80,lng:34.63,name:'Ceyhan Terminal, Turkey'},{lat:26.72,lng:49.98,name:'Ras Tanura, SA'},
+  {lat:29.37,lng:47.97,name:'Kuwait Oil Hub'},{lat:26.22,lng:50.55,name:'Bahrain Oil Hub'},
   {lat:27.17,lng:56.27,name:'Bandar Abbas, Iran'},{lat:23.59,lng:58.54,name:'Mina al-Fahal, Oman'},
+  {lat:29.07,lng:48.13,name:'Mina Abdullah, Kuwait'},{lat:21.38,lng:39.17,name:'Yanbu Terminal, SA'},
+  {lat:26.43,lng:50.10,name:'Abqaiq Processing, SA'},{lat:25.36,lng:51.48,name:'Ras Laffan LNG, Qatar'},
+  {lat:24.19,lng:52.66,name:'Habshan-Fujairah, UAE'},{lat:30.38,lng:49.00,name:'Basra Oil Terminal, Iraq'},
+  {lat:36.19,lng:44.01,name:'Kirkuk Pipeline Hub, Iraq'},{lat:34.44,lng:35.84,name:'Tripoli Terminal, Lebanon'},
+  {lat:32.08,lng:34.78,name:'Ashkelon-Eilat Pipeline, IL'},{lat:31.78,lng:35.23,name:'Trans-Israel Pipeline'},
+  {lat:43.24,lng:76.95,name:'Almaty CPC, Kazakhstan'},{lat:41.32,lng:69.28,name:'Tashkent Gas Hub, UZ'},
+  {lat:37.95,lng:58.38,name:'Turkmenistan TAPI, TM'},{lat:40.18,lng:44.51,name:'Yerevan Gas Hub, Armenia'},
+  // Russia & Asia
+  {lat:52.52,lng:104.30,name:'ESPO Pipeline East, RU'},{lat:43.12,lng:131.90,name:'Kozmino Terminal, RU'},
+  {lat:48.68,lng:44.51,name:'Volgograd Pipeline, RU'},{lat:61.00,lng:69.00,name:'Tyumen Gas Hub, RU'},
+  {lat:56.25,lng:43.45,name:'Nizhny Novgorod Junction, RU'},{lat:55.04,lng:73.37,name:'Omsk Pipeline Hub, RU'},
+  {lat:39.91,lng:116.39,name:'China Gas Hub, Beijing'},{lat:31.23,lng:121.47,name:'Shanghai LNG Terminal'},
+  {lat:23.13,lng:113.26,name:'Guangdong LNG, China'},{lat:39.00,lng:121.86,name:'Dalian LNG, China'},
+  {lat:34.66,lng:135.43,name:'Osaka Terminals, Japan'},{lat:35.45,lng:139.65,name:'Yokohama LNG, Japan'},
+  {lat:37.57,lng:126.98,name:'Pyeongtaek LNG, S. Korea'},{lat:35.10,lng:128.60,name:'Tongyeong LNG, S. Korea'},
+  {lat:20.70,lng:70.35,name:'Jamnagar Refinery, India'},{lat:19.97,lng:73.10,name:'GAIL Pipeline Hub, India'},
+  {lat:22.30,lng:91.80,name:'Chittagong LNG, Bangladesh'},
+  // Americas
+  {lat:29.76,lng:-95.37,name:'Houston Pipeline Hub, US'},{lat:30.07,lng:-89.93,name:'Gulf Coast LOOP, US'},
+  {lat:51.05,lng:-114.07,name:'Alberta Pipeline Hub, CA'},{lat:48.80,lng:-123.16,name:'Trans Mountain, CA'},
+  {lat:49.16,lng:-122.70,name:'Burnaby Terminal, CA'},{lat:40.33,lng:-80.00,name:'Marcellus Hub, US'},
+  {lat:29.93,lng:-93.93,name:'Sabine Pass LNG, US'},{lat:30.12,lng:-93.28,name:'Cameron LNG, US'},
+  {lat:27.83,lng:-97.42,name:'Corpus Christi LNG, US'},{lat:30.39,lng:-89.11,name:'Pascagoula, US'},
+  {lat:32.35,lng:-90.18,name:'Jackson MS Pipeline, US'},{lat:40.81,lng:-74.07,name:'Linden NJ Hub, US'},
+  {lat:41.33,lng:-81.73,name:'Cushing-Patoka, US'},{lat:35.99,lng:-96.75,name:'Cushing OK Hub, US'},
   {lat:4.64,lng:-74.10,name:'Cano Limon, Colombia'},{lat:-23.96,lng:-46.33,name:'Santos Oil Port, Brazil'},
-  {lat:43.24,lng:76.95,name:'Almaty CPC, Kazakhstan'},{lat:34.66,lng:135.43,name:'Osaka Terminals, Japan'},
+  {lat:-3.73,lng:-38.52,name:'Pecem LNG, Brazil'},{lat:18.20,lng:-66.59,name:'EcoElectrica LNG, PR'},
+  {lat:9.36,lng:-79.92,name:'Colon LNG, Panama'},
+  // Africa & Oceania
+  {lat:36.83,lng:3.08,name:'Arzew LNG, Algeria'},{lat:36.89,lng:5.07,name:'Skikda LNG, Algeria'},
+  {lat:0.38,lng:9.41,name:'Libreville FLNG, Gabon'},{lat:-4.30,lng:15.30,name:'Banana Terminal, Congo'},
+  {lat:4.05,lng:9.72,name:'Kribi LNG, Cameroon'},{lat:6.45,lng:3.39,name:'Bonny Island LNG, Nigeria'},
+  {lat:-25.97,lng:32.59,name:'Temane Pipeline, Mozambique'},{lat:-19.84,lng:34.83,name:'Beira Pipeline, Mozambique'},
+  {lat:-38.04,lng:145.19,name:'Longford Terminal, Australia'},{lat:-23.85,lng:151.25,name:'Gladstone LNG, Australia'},
+  {lat:-20.78,lng:139.48,name:'Isa-Gladstone Pipeline, AU'},{lat:-21.62,lng:115.39,name:'Karratha NWS LNG, AU'},
 ];
 const _STRATEGIC_WATERWAYS = [
   {lat:30.45,lng:32.35,name:'Suez Canal, Egypt'},{lat:12.60,lng:43.15,name:'Bab el-Mandeb Strait'},
@@ -301,6 +502,12 @@ const _STRATEGIC_WATERWAYS = [
   {lat:-34.62,lng:20.00,name:'Cape of Good Hope'},{lat:-54.80,lng:-68.30,name:'Drake Passage'},
   {lat:61.10,lng:-45.00,name:'Denmark Strait'},{lat:54.00,lng:7.90,name:'Kiel Canal, Germany'},
   {lat:48.40,lng:-4.50,name:'English Channel entrance'},{lat:10.40,lng:107.00,name:'South China Sea chokepoint'},
+  {lat:2.50,lng:101.80,name:'Singapore Strait'},{lat:43.37,lng:4.84,name:'Gulf of Lion, France'},
+  {lat:-8.00,lng:115.50,name:'Lombok Strait, Indonesia'},{lat:-5.50,lng:105.80,name:'Sunda Strait, Indonesia'},
+  {lat:12.00,lng:44.00,name:'Gulf of Aden'},{lat:33.70,lng:35.90,name:'Eastern Mediterranean'},
+  {lat:57.00,lng:11.00,name:'Skagerrak Strait, DK/NO/SE'},{lat:55.50,lng:12.70,name:'Oresund, DK/SE'},
+  {lat:-1.50,lng:116.00,name:'Makassar Strait, Indonesia'},{lat:22.20,lng:114.10,name:'Victoria Harbour, HK'},
+  {lat:38.00,lng:-0.50,name:'Strait of Sicily/Tunisia'},{lat:42.50,lng:18.50,name:'Strait of Otranto'},
 ];
 const _SPACEPORTS = [
   {lat:28.57,lng:-80.65,name:'Kennedy Space Center, US'},{lat:34.63,lng:-120.63,name:'Vandenberg SFB, US'},
@@ -308,9 +515,14 @@ const _SPACEPORTS = [
   {lat:5.24,lng:-52.77,name:'Guiana Space Centre, FR'},{lat:19.61,lng:110.95,name:'Wenchang, China'},
   {lat:40.96,lng:100.30,name:'Jiuquan, China'},{lat:28.25,lng:102.03,name:'Xichang, China'},
   {lat:13.72,lng:80.23,name:'Satish Dhawan, India'},{lat:31.25,lng:131.08,name:'Tanegashima, Japan'},
-  {lat:-2.95,lng:40.21,name:'Luigi Broglio, Kenya (San Marco)'},{lat:28.24,lng:-16.64,name:'El Hierro (proposed), Spain'},
+  {lat:-2.95,lng:40.21,name:'Luigi Broglio, Kenya'},{lat:28.24,lng:-16.64,name:'El Hierro (proposed), Spain'},
   {lat:25.99,lng:-97.15,name:'SpaceX Starbase, US'},{lat:-31.04,lng:136.50,name:'Woomera, Australia'},
   {lat:57.44,lng:-4.26,name:'Sutherland Spaceport, UK'},{lat:69.30,lng:16.02,name:'Andoya, Norway'},
+  {lat:51.23,lng:0.53,name:'One Web Newquay, UK'},{lat:36.46,lng:-6.20,name:'El Arenosillo, Spain'},
+  {lat:2.37,lng:101.40,name:'SEALS, Malaysia'},{lat:-2.18,lng:-44.39,name:'Alcantara, Brazil'},
+  {lat:30.39,lng:130.97,name:'Uchinoura, Japan'},{lat:38.33,lng:127.53,name:'Naro, South Korea'},
+  {lat:41.10,lng:100.46,name:'Taiyuan, China'},{lat:68.11,lng:21.58,name:'Esrange, Sweden'},
+  {lat:-39.26,lng:177.86,name:'Rocket Lab Mahia, NZ'},{lat:64.66,lng:-18.10,name:'Keflavik (proposed), Iceland'},
 ];
 const _SHIPPING_HUBS = [
   {lat:31.23,lng:121.47,name:'Shanghai, China (#1 port)'},{lat:1.26,lng:103.84,name:'Singapore (#2 port)'},
@@ -321,6 +533,20 @@ const _SHIPPING_HUBS = [
   {lat:33.75,lng:-118.28,name:'Long Beach/LA, US'},{lat:12.98,lng:80.18,name:'Chennai, India'},
   {lat:-33.86,lng:151.21,name:'Sydney, Australia'},{lat:-23.95,lng:-46.30,name:'Santos, Brazil'},
   {lat:35.45,lng:139.65,name:'Yokohama, Japan'},{lat:22.84,lng:108.37,name:'Qinzhou, China'},
+  {lat:22.62,lng:120.29,name:'Kaohsiung, Taiwan'},{lat:30.63,lng:104.07,name:'Ningbo-Zhoushan, China'},
+  {lat:23.13,lng:113.26,name:'Guangzhou, China'},{lat:36.07,lng:120.38,name:'Qingdao, China'},
+  {lat:39.00,lng:121.86,name:'Dalian, China'},{lat:38.93,lng:121.62,name:'Tianjin, China'},
+  {lat:3.00,lng:101.40,name:'Port Klang, Malaysia'},{lat:-6.12,lng:106.88,name:'Tanjung Priok, Indonesia'},
+  {lat:13.10,lng:80.29,name:'Ennore, India'},{lat:22.95,lng:72.68,name:'Mundra, India'},
+  {lat:10.00,lng:76.27,name:'Kochi, India'},{lat:18.94,lng:72.84,name:'JNPT Mumbai, India'},
+  {lat:53.35,lng:-6.26,name:'Dublin Port, Ireland'},{lat:51.95,lng:1.25,name:'Felixstowe, UK'},
+  {lat:50.90,lng:1.85,name:'Calais, France'},{lat:43.30,lng:5.36,name:'Marseille, France'},
+  {lat:53.50,lng:8.13,name:'Bremerhaven, Germany'},{lat:51.43,lng:3.57,name:'Antwerp, Belgium'},
+  {lat:59.55,lng:10.70,name:'Oslo, Norway'},{lat:57.70,lng:11.93,name:'Gothenburg, Sweden'},
+  {lat:37.78,lng:-122.28,name:'Oakland, US'},{lat:29.73,lng:-95.27,name:'Houston Ship Channel, US'},
+  {lat:32.10,lng:-81.09,name:'Savannah, US'},{lat:-33.93,lng:18.42,name:'Cape Town, South Africa'},
+  {lat:-4.05,lng:39.67,name:'Mombasa, Kenya'},{lat:6.45,lng:3.39,name:'Apapa/Lagos, Nigeria'},
+  {lat:36.83,lng:3.08,name:'Algiers, Algeria'},{lat:33.60,lng:-7.60,name:'Casablanca, Morocco'},
 ];
 const _MAJOR_AIRPORTS = [
   {lat:40.64,lng:-73.78,name:'JFK, New York'},{lat:33.94,lng:-118.41,name:'LAX, Los Angeles'},
@@ -333,6 +559,27 @@ const _MAJOR_AIRPORTS = [
   {lat:37.46,lng:126.44,name:'ICN, Incheon'},{lat:-33.95,lng:151.18,name:'SYD, Sydney'},
   {lat:19.09,lng:72.87,name:'BOM, Mumbai'},{lat:-23.43,lng:-46.47,name:'GRU, Sao Paulo'},
   {lat:55.97,lng:37.41,name:'SVO, Moscow'},{lat:41.80,lng:12.25,name:'FCO, Rome'},
+  {lat:32.90,lng:-97.04,name:'DFW, Dallas'},{lat:42.36,lng:-71.01,name:'BOS, Boston'},
+  {lat:47.45,lng:-122.31,name:'SEA, Seattle'},{lat:39.86,lng:-104.67,name:'DEN, Denver'},
+  {lat:25.80,lng:-80.29,name:'MIA, Miami'},{lat:29.99,lng:-95.34,name:'IAH, Houston'},
+  {lat:38.95,lng:-77.46,name:'IAD, Washington Dulles'},{lat:36.08,lng:-115.15,name:'LAS, Las Vegas'},
+  {lat:33.44,lng:-112.01,name:'PHX, Phoenix'},{lat:45.59,lng:-73.74,name:'YUL, Montreal'},
+  {lat:43.68,lng:-79.63,name:'YYZ, Toronto'},{lat:49.19,lng:-123.18,name:'YVR, Vancouver'},
+  {lat:19.43,lng:-99.07,name:'MEX, Mexico City'},{lat:40.47,lng:-3.57,name:'MAD, Madrid'},
+  {lat:41.30,lng:2.08,name:'BCN, Barcelona'},{lat:45.63,lng:8.72,name:'MXP, Milan Malpensa'},
+  {lat:37.94,lng:23.94,name:'ATH, Athens'},{lat:41.26,lng:28.74,name:'IST, Istanbul'},
+  {lat:28.57,lng:77.10,name:'DEL, New Delhi'},{lat:12.99,lng:80.17,name:'MAA, Chennai'},
+  {lat:31.14,lng:121.81,name:'PVG, Shanghai Pudong'},{lat:23.39,lng:113.30,name:'CAN, Guangzhou'},
+  {lat:22.64,lng:113.81,name:'SZX, Shenzhen'},{lat:34.78,lng:135.44,name:'KIX, Osaka Kansai'},
+  {lat:25.08,lng:121.23,name:'TPE, Taipei Taoyuan'},{lat:14.51,lng:121.02,name:'MNL, Manila'},
+  {lat:5.98,lng:116.05,name:'BKI, Kota Kinabalu'},{lat:2.74,lng:101.70,name:'KUL, Kuala Lumpur'},
+  {lat:-6.13,lng:106.66,name:'CGK, Jakarta'},{lat:21.22,lng:-97.86,name:'CUN, Cancun'},
+  {lat:-34.82,lng:-58.54,name:'EZE, Buenos Aires'},{lat:-33.39,lng:-70.79,name:'SCL, Santiago'},
+  {lat:-22.81,lng:-43.25,name:'GIG, Rio de Janeiro'},{lat:-1.32,lng:36.93,name:'NBO, Nairobi'},
+  {lat:-26.14,lng:28.24,name:'JNB, Johannesburg'},{lat:30.12,lng:31.41,name:'CAI, Cairo'},
+  {lat:36.69,lng:3.22,name:'ALG, Algiers'},{lat:33.93,lng:-6.57,name:'CMN, Casablanca'},
+  {lat:25.32,lng:51.61,name:'DOH, Doha'},{lat:24.44,lng:54.65,name:'AUH, Abu Dhabi'},
+  {lat:26.27,lng:50.64,name:'BAH, Bahrain'},{lat:29.23,lng:47.97,name:'KWI, Kuwait'},
 ];
 const _FINANCIAL_CENTERS = [
   {lat:40.71,lng:-74.01,name:'Wall Street, New York'},{lat:51.51,lng:-0.08,name:'City of London'},
@@ -343,18 +590,35 @@ const _FINANCIAL_CENTERS = [
   {lat:-33.87,lng:151.21,name:'Martin Place, Sydney'},{lat:43.65,lng:-79.38,name:'Bay Street, Toronto'},
   {lat:19.08,lng:72.88,name:'Dalal Street, Mumbai'},{lat:37.57,lng:126.98,name:'Yeouido, Seoul'},
   {lat:-23.55,lng:-46.64,name:'Faria Lima, Sao Paulo'},{lat:52.37,lng:4.90,name:'Zuidas, Amsterdam'},
+  {lat:49.61,lng:6.13,name:'Kirchberg, Luxembourg'},{lat:55.68,lng:12.57,name:'Copenhagen Finance'},
+  {lat:53.35,lng:-6.26,name:'IFSC, Dublin'},{lat:59.33,lng:18.07,name:'Stureplan, Stockholm'},
+  {lat:60.17,lng:24.94,name:'Helsinki Finance'},{lat:46.20,lng:6.14,name:'Geneva Private Banking'},
+  {lat:44.43,lng:26.10,name:'Bucharest Finance'},{lat:41.01,lng:28.98,name:'Levent, Istanbul'},
+  {lat:30.04,lng:31.24,name:'Smart Village, Cairo'},{lat:39.91,lng:116.39,name:'Financial St, Beijing'},
+  {lat:-34.60,lng:-58.38,name:'Microcentro, Buenos Aires'},{lat:19.43,lng:-99.17,name:'Reforma, Mexico City'},
+  {lat:-1.29,lng:36.82,name:'Upper Hill, Nairobi'},{lat:-26.20,lng:28.04,name:'Sandton, Johannesburg'},
 ];
 const _MINING_SITES = [
-  {lat:-22.34,lng:-68.93,name:'Escondida, Chile (copper)'},{lat:-29.78,lng:137.77,name:'Olympic Dam, Australia (uranium/copper)'},
+  {lat:-22.34,lng:-68.93,name:'Escondida, Chile (copper)'},{lat:-29.78,lng:137.77,name:'Olympic Dam, AU (uranium/copper)'},
   {lat:-21.27,lng:-70.04,name:'Collahuasi, Chile (copper)'},{lat:37.13,lng:-113.55,name:'Iron County, US (iron)'},
-  {lat:-31.42,lng:159.07,name:'Lord Howe, Pacific'},{lat:62.45,lng:114.37,name:'Diavik, Canada (diamond)'},
-  {lat:-6.02,lng:106.05,name:'Grasberg, Indonesia (gold/copper)'},{lat:-20.65,lng:118.55,name:'Pilbara, Australia (iron)'},
-  {lat:47.30,lng:87.90,name:'Altay, China (rare earth)'},{lat:40.65,lng:109.97,name:'Baotou, China (rare earth)'},
-  {lat:-26.20,lng:27.95,name:'Witwatersrand, South Africa (gold)'},{lat:56.30,lng:60.61,name:'Ural Mountains, Russia (nickel)'},
-  {lat:69.35,lng:88.21,name:'Norilsk, Russia (nickel/palladium)'},{lat:-15.45,lng:28.28,name:'Lumwana, Zambia (copper)'},
-  {lat:-12.04,lng:26.40,name:'Konkola, Zambia (copper)'},{lat:60.03,lng:-112.47,name:'Athabasca, Canada (oil sands)'},
-  {lat:-9.42,lng:147.12,name:'Ok Tedi, PNG (gold/copper)'},{lat:51.46,lng:59.00,name:'Gai, Russia (copper)'},
-  {lat:7.35,lng:-2.33,name:'Obuasi, Ghana (gold)'},{lat:11.43,lng:-12.28,name:'Simandou, Guinea (iron)'},
+  {lat:62.45,lng:114.37,name:'Diavik, Canada (diamond)'},{lat:-6.02,lng:106.05,name:'Grasberg, Indonesia (gold/copper)'},
+  {lat:-20.65,lng:118.55,name:'Pilbara, AU (iron)'},{lat:47.30,lng:87.90,name:'Altay, China (rare earth)'},
+  {lat:40.65,lng:109.97,name:'Baotou, China (rare earth)'},{lat:-26.20,lng:27.95,name:'Witwatersrand, SA (gold)'},
+  {lat:56.30,lng:60.61,name:'Ural Mountains, RU (nickel)'},{lat:69.35,lng:88.21,name:'Norilsk, RU (Ni/Pd)'},
+  {lat:-15.45,lng:28.28,name:'Lumwana, Zambia (copper)'},{lat:-12.04,lng:26.40,name:'Konkola, Zambia (copper)'},
+  {lat:60.03,lng:-112.47,name:'Athabasca, Canada (oil sands)'},{lat:-9.42,lng:147.12,name:'Ok Tedi, PNG (gold/copper)'},
+  {lat:51.46,lng:59.00,name:'Gai, Russia (copper)'},{lat:7.35,lng:-2.33,name:'Obuasi, Ghana (gold)'},
+  {lat:11.43,lng:-12.28,name:'Simandou, Guinea (iron)'},{lat:-6.80,lng:29.25,name:'Kipushi, DRC (zinc/copper)'},
+  {lat:-10.73,lng:25.47,name:'Kamoto, DRC (cobalt/copper)'},{lat:-4.32,lng:28.63,name:'Tenke Fungurume, DRC (cobalt)'},
+  {lat:-22.50,lng:-68.05,name:'Chuquicamata, Chile (copper)'},{lat:-26.85,lng:-65.23,name:'Bajo de la Alumbrera, AR'},
+  {lat:-18.50,lng:-69.05,name:'Cerro Verde, Peru (copper)'},{lat:-14.92,lng:-75.13,name:'Marcona, Peru (iron)'},
+  {lat:46.88,lng:-71.25,name:'Lac-Megantic, Canada (lithium)'},{lat:36.51,lng:-117.08,name:'Boron, US (lithium/boron)'},
+  {lat:-22.83,lng:-68.28,name:'SQM Atacama, Chile (lithium)'},{lat:-20.55,lng:-68.64,name:'Uyuni, Bolivia (lithium)'},
+  {lat:67.86,lng:20.22,name:'Kiruna, Sweden (iron)'},{lat:64.17,lng:18.87,name:'Boliden, Sweden (base metals)'},
+  {lat:42.07,lng:43.57,name:'Chiatura, Georgia (manganese)'},{lat:68.65,lng:21.39,name:'Kevitsa, Finland (nickel)'},
+  {lat:-21.17,lng:48.33,name:'Ambatovy, Madagascar (nickel)'},{lat:-3.20,lng:116.00,name:'Batu Hijau, Indonesia (copper)'},
+  {lat:43.23,lng:76.95,name:'Kounrad, Kazakhstan (copper)'},{lat:2.00,lng:102.25,name:'Pahang, Malaysia (tin)'},
+  {lat:-15.93,lng:-68.70,name:'San Cristobal, Bolivia (silver)'},{lat:19.50,lng:-103.50,name:'Penasquito, Mexico (gold)'},
 ];
 const _TECH_HQS = [
   {lat:37.39,lng:-122.08,name:'Google, Mountain View'},{lat:37.48,lng:-122.14,name:'Meta, Menlo Park'},
@@ -367,6 +631,98 @@ const _TECH_HQS = [
   {lat:30.27,lng:120.15,name:'Alibaba, Hangzhou'},{lat:39.98,lng:116.31,name:'ByteDance, Beijing'},
   {lat:51.50,lng:-0.08,name:'DeepMind, London'},{lat:48.86,lng:2.35,name:'Mistral AI, Paris'},
   {lat:52.52,lng:13.41,name:'SAP, Berlin'},{lat:12.97,lng:77.64,name:'Infosys, Bangalore'},
+];
+const _CLOUD_REGIONS = [
+  // AWS Regions
+  {lat:39.04,lng:-77.49,name:'AWS us-east-1 (Virginia)'},{lat:41.88,lng:-87.63,name:'AWS us-east-2 (Ohio)'},
+  {lat:34.05,lng:-118.24,name:'AWS us-west-1 (N. California)'},{lat:45.59,lng:-122.60,name:'AWS us-west-2 (Oregon)'},
+  {lat:45.50,lng:-73.57,name:'AWS ca-central-1 (Montreal)'},{lat:53.35,lng:-6.26,name:'AWS eu-west-1 (Ireland)'},
+  {lat:51.50,lng:-0.12,name:'AWS eu-west-2 (London)'},{lat:48.86,lng:2.35,name:'AWS eu-west-3 (Paris)'},
+  {lat:50.11,lng:8.68,name:'AWS eu-central-1 (Frankfurt)'},{lat:59.33,lng:18.07,name:'AWS eu-north-1 (Stockholm)'},
+  {lat:45.46,lng:9.19,name:'AWS eu-south-1 (Milan)'},{lat:35.68,lng:139.69,name:'AWS ap-northeast-1 (Tokyo)'},
+  {lat:37.57,lng:126.98,name:'AWS ap-northeast-2 (Seoul)'},{lat:34.69,lng:135.50,name:'AWS ap-northeast-3 (Osaka)'},
+  {lat:1.35,lng:103.82,name:'AWS ap-southeast-1 (Singapore)'},{lat:-33.87,lng:151.21,name:'AWS ap-southeast-2 (Sydney)'},
+  {lat:19.08,lng:72.88,name:'AWS ap-south-1 (Mumbai)'},{lat:-23.55,lng:-46.63,name:'AWS sa-east-1 (Sao Paulo)'},
+  {lat:25.20,lng:55.27,name:'AWS me-south-1 (Bahrain)'},{lat:-1.29,lng:36.82,name:'AWS af-south-1 (Cape Town)'},
+  {lat:22.32,lng:114.17,name:'AWS ap-east-1 (Hong Kong)'},{lat:-6.21,lng:106.85,name:'AWS ap-southeast-3 (Jakarta)'},
+  // Azure Regions
+  {lat:37.37,lng:-121.92,name:'Azure West US (California)'},{lat:47.61,lng:-122.33,name:'Azure West US 2 (WA)'},
+  {lat:39.04,lng:-77.49,name:'Azure East US (Virginia)'},{lat:41.88,lng:-87.63,name:'Azure North Central US'},
+  {lat:32.78,lng:-96.80,name:'Azure South Central US (TX)'},{lat:43.65,lng:-79.38,name:'Azure Canada Central'},
+  {lat:52.37,lng:4.90,name:'Azure West Europe (NL)'},{lat:53.35,lng:-6.26,name:'Azure North Europe (IE)'},
+  {lat:50.11,lng:8.68,name:'Azure Germany West Central'},{lat:51.50,lng:-0.12,name:'Azure UK South'},
+  {lat:48.86,lng:2.35,name:'Azure France Central'},{lat:47.37,lng:8.54,name:'Azure Switzerland North'},
+  {lat:59.33,lng:18.07,name:'Azure Sweden Central'},{lat:52.23,lng:21.01,name:'Azure Poland Central'},
+  {lat:35.68,lng:139.69,name:'Azure Japan East'},{lat:37.57,lng:126.98,name:'Azure Korea Central'},
+  {lat:1.35,lng:103.82,name:'Azure Southeast Asia'},{lat:-33.87,lng:151.21,name:'Azure Australia East'},
+  {lat:20.08,lng:77.0,name:'Azure Central India'},{lat:25.20,lng:55.27,name:'Azure UAE North'},
+  {lat:-26.20,lng:28.04,name:'Azure South Africa North'},{lat:-23.55,lng:-46.63,name:'Azure Brazil South'},
+  {lat:24.71,lng:46.67,name:'Azure Saudi Arabia'},{lat:21.31,lng:-157.86,name:'Azure Hawaii (DoD)'},
+  // GCP Regions
+  {lat:34.05,lng:-118.24,name:'GCP us-west1 (Oregon)'},{lat:36.17,lng:-115.14,name:'GCP us-west4 (Las Vegas)'},
+  {lat:33.45,lng:-112.07,name:'GCP us-west3 (Salt Lake)'},{lat:39.04,lng:-77.49,name:'GCP us-east4 (Virginia)'},
+  {lat:33.75,lng:-84.39,name:'GCP us-south1 (Atlanta)'},{lat:45.50,lng:-73.57,name:'GCP northamerica-ne1 (Montreal)'},
+  {lat:51.50,lng:-0.12,name:'GCP europe-west2 (London)'},{lat:50.11,lng:8.68,name:'GCP europe-west3 (Frankfurt)'},
+  {lat:52.37,lng:4.90,name:'GCP europe-west4 (Netherlands)'},{lat:47.37,lng:8.54,name:'GCP europe-west6 (Zurich)'},
+  {lat:35.68,lng:139.69,name:'GCP asia-northeast1 (Tokyo)'},{lat:1.35,lng:103.82,name:'GCP asia-southeast1 (Singapore)'},
+  {lat:-33.87,lng:151.21,name:'GCP australia-southeast1 (Sydney)'},{lat:19.08,lng:72.88,name:'GCP asia-south1 (Mumbai)'},
+  {lat:-23.55,lng:-46.63,name:'GCP southamerica-east1 (Sao Paulo)'},{lat:25.20,lng:55.27,name:'GCP me-central1 (Doha)'},
+  {lat:32.07,lng:34.78,name:'GCP me-west1 (Tel Aviv)'},
+];
+const _STOCK_EXCHANGES = [
+  {lat:40.71,lng:-74.01,name:'NYSE, New York (largest)'},{lat:40.72,lng:-73.99,name:'NASDAQ, New York'},
+  {lat:41.88,lng:-87.63,name:'CBOE, Chicago'},{lat:41.88,lng:-87.64,name:'CME Group, Chicago'},
+  {lat:51.51,lng:-0.09,name:'LSE, London'},{lat:48.87,lng:2.34,name:'Euronext, Paris'},
+  {lat:50.11,lng:8.68,name:'Deutsche Borse, Frankfurt'},{lat:47.37,lng:8.54,name:'SIX, Zurich'},
+  {lat:40.42,lng:-3.70,name:'BME, Madrid'},{lat:45.46,lng:9.19,name:'Borsa Italiana, Milan'},
+  {lat:55.68,lng:12.57,name:'NASDAQ Nordic, Copenhagen'},{lat:59.33,lng:18.07,name:'NASDAQ Stockholm'},
+  {lat:60.17,lng:24.94,name:'NASDAQ Helsinki'},{lat:52.23,lng:21.01,name:'GPW, Warsaw'},
+  {lat:48.21,lng:16.37,name:'Wiener Borse, Vienna'},{lat:41.01,lng:28.98,name:'Borsa Istanbul'},
+  {lat:55.75,lng:37.62,name:'MOEX, Moscow'},{lat:35.68,lng:139.77,name:'JPX/TSE, Tokyo'},
+  {lat:34.69,lng:135.50,name:'OSE, Osaka'},{lat:22.28,lng:114.16,name:'HKEX, Hong Kong'},
+  {lat:31.23,lng:121.47,name:'SSE, Shanghai'},{lat:22.54,lng:114.07,name:'SZSE, Shenzhen'},
+  {lat:37.57,lng:126.98,name:'KRX, Seoul'},{lat:25.04,lng:121.57,name:'TWSE, Taipei'},
+  {lat:1.28,lng:103.85,name:'SGX, Singapore'},{lat:19.08,lng:72.88,name:'BSE, Mumbai'},
+  {lat:19.07,lng:72.87,name:'NSE, Mumbai'},{lat:13.76,lng:100.50,name:'SET, Bangkok'},
+  {lat:3.14,lng:101.69,name:'Bursa Malaysia, KL'},{lat:-6.21,lng:106.85,name:'IDX, Jakarta'},
+  {lat:14.60,lng:120.98,name:'PSE, Manila'},{lat:21.03,lng:105.85,name:'HOSE, Ho Chi Minh'},
+  {lat:25.20,lng:55.27,name:'DFM, Dubai'},{lat:24.45,lng:54.65,name:'ADX, Abu Dhabi'},
+  {lat:24.71,lng:46.67,name:'Tadawul, Riyadh'},{lat:31.95,lng:35.93,name:'ASE, Amman'},
+  {lat:32.07,lng:34.78,name:'TASE, Tel Aviv'},{lat:30.04,lng:31.24,name:'EGX, Cairo'},
+  {lat:-33.93,lng:18.42,name:'JSE, Johannesburg'},{lat:6.45,lng:3.39,name:'NGX, Lagos'},
+  {lat:-1.29,lng:36.82,name:'NSE, Nairobi'},{lat:5.56,lng:-0.19,name:'GSE, Accra'},
+  {lat:43.65,lng:-79.38,name:'TSX, Toronto'},{lat:19.43,lng:-99.13,name:'BMV, Mexico City'},
+  {lat:-23.55,lng:-46.63,name:'B3, Sao Paulo'},{lat:-34.60,lng:-58.38,name:'BCBA, Buenos Aires'},
+  {lat:-33.45,lng:-70.67,name:'BCS, Santiago'},{lat:4.60,lng:-74.08,name:'BVC, Bogota'},
+  {lat:-12.05,lng:-77.04,name:'BVL, Lima'},{lat:-33.87,lng:151.21,name:'ASX, Sydney'},
+  {lat:-36.85,lng:174.76,name:'NZX, Auckland'},
+];
+const _COMMODITY_HUBS = [
+  // Oil & Gas Trading
+  {lat:29.76,lng:-95.37,name:'Houston TX (Oil & Gas Capital)'},{lat:51.50,lng:-0.12,name:'London ICE (Brent)'},
+  {lat:40.71,lng:-74.01,name:'NYMEX, New York (WTI)'},{lat:25.20,lng:55.27,name:'DME, Dubai (Oman Crude)'},
+  {lat:1.35,lng:103.82,name:'Singapore (Asia Oil Hub)'},{lat:51.92,lng:4.48,name:'Rotterdam (NW Europe Oil)'},
+  // Metals
+  {lat:51.51,lng:-0.08,name:'LME, London (Base Metals)'},{lat:41.88,lng:-87.63,name:'COMEX, Chicago (Gold/Silver)'},
+  {lat:31.23,lng:121.47,name:'SHFE, Shanghai (Metals)'},{lat:35.68,lng:139.69,name:'TOCOM, Tokyo (Platinum)'},
+  {lat:-26.20,lng:28.04,name:'Johannesburg (Gold Mining)'},{lat:-30.03,lng:-51.23,name:'Porto Alegre (Iron Ore)'},
+  {lat:22.28,lng:114.17,name:'Hong Kong (Gold Market)'},
+  // Agriculture
+  {lat:41.88,lng:-87.64,name:'CBOT, Chicago (Grains)'},{lat:-23.55,lng:-46.63,name:'B3, Sao Paulo (Coffee/Sugar)'},
+  {lat:3.14,lng:101.69,name:'MDEX, KL (Palm Oil)'},{lat:51.50,lng:-0.12,name:'LIFFE, London (Cocoa/Coffee)'},
+  {lat:19.08,lng:72.88,name:'NCDEX, Mumbai (Spices/Cotton)'},{lat:40.71,lng:-74.01,name:'ICE NY (Cotton/Sugar)'},
+  {lat:0.31,lng:32.58,name:'Kampala (E. Africa Coffee)'},{lat:5.56,lng:-0.19,name:'Accra (Cocoa)'},
+  {lat:7.49,lng:3.60,name:'Ibadan (Cocoa Processing)'},{lat:-4.27,lng:15.28,name:'Kinshasa (Cobalt Trade)'},
+  // LNG & Energy
+  {lat:35.45,lng:139.65,name:'JKM, Tokyo (Asia LNG Benchmark)'},{lat:51.50,lng:3.60,name:'TTF, Rotterdam (EU Gas)'},
+  {lat:29.76,lng:-95.37,name:'Henry Hub, Louisiana (US Gas)'},{lat:25.29,lng:51.53,name:'Ras Laffan (LNG Export)'},
+  {lat:56.34,lng:2.75,name:'NBP, UK (Natural Gas)'},{lat:47.87,lng:16.25,name:'CEGH, Austria (EU Gas)'},
+  // Diamond & Precious Stones
+  {lat:51.22,lng:4.40,name:'Antwerp (Diamond Hub)'},{lat:19.08,lng:72.88,name:'Surat (Diamond Cutting)'},
+  {lat:32.07,lng:34.78,name:'Ramat Gan (Diamond Exchange)'},{lat:40.76,lng:-73.98,name:'47th St, NYC (Diamonds)'},
+  // Rare Earths & Specialty
+  {lat:40.65,lng:109.97,name:'Baotou (Rare Earth Capital)'},{lat:-12.04,lng:26.40,name:'Copper Belt (DRC/Zambia)'},
+  {lat:69.35,lng:88.21,name:'Norilsk (Nickel/Palladium)'},{lat:-20.65,lng:118.55,name:'Pilbara (Iron Ore)'},
 ];
 
 function initSitroomMap() {
@@ -562,6 +918,123 @@ async function loadSitroomMapData() {
     clearSitroomMarkers('techHQs');
     _TECH_HQS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'tech_hq'}, 'techHQs'));
   } else { clearSitroomMarkers('techHQs'); }
+
+  // Disease outbreaks (live data — plot geocoded WHO DON)
+  if (document.getElementById('sitroom-layer-diseases')?.checked) {
+    const dis = await safeFetch('/api/sitroom/diseases', {}, null);
+    if (dis && dis.outbreaks) {
+      clearSitroomMarkers('diseases');
+      dis.outbreaks.forEach(d => {
+        if (!d.lat || !d.lng) return;
+        addSitroomMarker({lat:d.lat,lng:d.lng,title:d.title||'Outbreak',
+          event_type:'disease',magnitude:null,depth_km:null,detail_json:d.detail_json}, 'diseases');
+      });
+    }
+  } else { clearSitroomMarkers('diseases'); }
+
+  // Radiation monitors (live data — plot Safecast readings)
+  if (document.getElementById('sitroom-layer-radiation')?.checked) {
+    const rad = await safeFetch('/api/sitroom/radiation', {}, null);
+    if (rad && rad.readings) {
+      clearSitroomMarkers('radiation');
+      rad.readings.forEach(r => {
+        if (!r.lat || !r.lng) return;
+        addSitroomMarker({lat:r.lat,lng:r.lng,title:r.title||'Radiation',
+          event_type:'radiation',magnitude:r.magnitude,depth_km:null,detail_json:r.detail_json}, 'radiation');
+      });
+    }
+  } else { clearSitroomMarkers('radiation'); }
+
+  // Protests & Unrest (live — filter UCDP for protest-type events)
+  if (document.getElementById('sitroom-layer-protests')?.checked) {
+    const pr = await safeFetch('/api/sitroom/protests', {}, null);
+    if (pr && pr.events) {
+      clearSitroomMarkers('protests');
+      pr.events.forEach(p => {
+        if (!p.lat || !p.lng) return;
+        addSitroomMarker({lat:p.lat,lng:p.lng,title:p.title||'Protest/Unrest',
+          event_type:'protest',magnitude:null,depth_km:null,detail_json:p.detail_json}, 'protests');
+      });
+    }
+  } else { clearSitroomMarkers('protests'); }
+
+  // AIS Ship Traffic (live data)
+  if (document.getElementById('sitroom-layer-ships')?.checked) {
+    const sh = await safeFetch('/api/sitroom/ships?limit=200', {}, null);
+    if (sh && sh.ships) {
+      clearSitroomMarkers('ships');
+      sh.ships.forEach(s => {
+        if (!s.lat || !s.lng) return;
+        addSitroomMarker({lat:s.lat,lng:s.lng,title:`${s.ship_name||s.mmsi} (${s.flag||'?'})`,
+          event_type:'ship',magnitude:null,depth_km:null,
+          detail_json:JSON.stringify({speed:s.speed_kn,heading:s.heading,type:s.ship_type})}, 'ships');
+      });
+    }
+  } else { clearSitroomMarkers('ships'); }
+
+  // Cloud Regions (static)
+  if (document.getElementById('sitroom-layer-cloudRegions')?.checked) {
+    clearSitroomMarkers('cloudRegions');
+    _CLOUD_REGIONS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'cloud_region'}, 'cloudRegions'));
+  } else { clearSitroomMarkers('cloudRegions'); }
+
+  // Stock Exchanges (static)
+  if (document.getElementById('sitroom-layer-exchanges')?.checked) {
+    clearSitroomMarkers('exchanges');
+    _STOCK_EXCHANGES.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'exchange'}, 'exchanges'));
+  } else { clearSitroomMarkers('exchanges'); }
+
+  // Commodity Hubs (static)
+  if (document.getElementById('sitroom-layer-commodityHubs')?.checked) {
+    clearSitroomMarkers('commodityHubs');
+    _COMMODITY_HUBS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'commodity_hub'}, 'commodityHubs'));
+  } else { clearSitroomMarkers('commodityHubs'); }
+
+  // Weather radar overlay (RainViewer tile layer)
+  _toggleWeatherRadar();
+}
+
+/* ─── Weather Radar (RainViewer) ─── */
+async function _toggleWeatherRadar() {
+  if (!_sitroomMap) return;
+  const cb = document.getElementById('sitroom-layer-radar');
+  if (!cb || !cb.checked) {
+    _removeRadarLayer();
+    return;
+  }
+  try {
+    const resp = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const frames = data.radar && data.radar.past;
+    if (!frames || !frames.length) return;
+    const latest = frames[frames.length - 1];
+    const tileUrl = `${data.host}${latest.path}/256/{z}/{x}/{y}/2/1_1.png`;
+
+    _removeRadarLayer();
+    _sitroomMap.addSource('rainviewer', {
+      type: 'raster',
+      tiles: [tileUrl],
+      tileSize: 256,
+      maxzoom: 7
+    });
+    _sitroomMap.addLayer({
+      id: 'rainviewer-layer',
+      type: 'raster',
+      source: 'rainviewer',
+      paint: { 'raster-opacity': 0.6 }
+    });
+    _sitroomRadarLayer = true;
+  } catch (e) { /* offline or API down */ }
+}
+
+function _removeRadarLayer() {
+  if (!_sitroomMap || !_sitroomRadarLayer) return;
+  try {
+    if (_sitroomMap.getLayer('rainviewer-layer')) _sitroomMap.removeLayer('rainviewer-layer');
+    if (_sitroomMap.getSource('rainviewer')) _sitroomMap.removeSource('rainviewer');
+  } catch (e) {}
+  _sitroomRadarLayer = null;
 }
 
 function clearSitroomMarkers(layerType) {
@@ -586,7 +1059,7 @@ function addSitroomMarker(ev, layerType) {
   if (!_sitroomMap) return;
   // Skip if would cluster with existing marker at this zoom
   if (_shouldCluster(ev.lat, ev.lng, layerType)) return;
-  const colors = { earthquakes: '#ff4444', weather: '#ffaa00', conflicts: '#ff6600', aviation: '#44aaff', volcanoes: '#ff3366', fires: '#ff8800', nuclear: '#ffff00', bases: '#44ff88', cables: '#3388ff', datacenters: '#aa66ff', pipelines: '#cc8844', waterways: '#00ddff', spaceports: '#ff66ff', shipping: '#88ccaa', ucdp: '#dd2222', airports: '#cccccc', fincenters: '#44dd88', mining: '#cc8844', techHQs: '#44aadd' };
+  const colors = { earthquakes: '#ff4444', weather: '#ffaa00', conflicts: '#ff6600', aviation: '#44aaff', volcanoes: '#ff3366', fires: '#ff8800', nuclear: '#ffff00', bases: '#44ff88', cables: '#3388ff', datacenters: '#aa66ff', pipelines: '#cc8844', waterways: '#00ddff', spaceports: '#ff66ff', shipping: '#88ccaa', ucdp: '#dd2222', airports: '#cccccc', fincenters: '#44dd88', mining: '#cc8844', techHQs: '#44aadd', diseases: '#ff44ff', radiation: '#66ff00', protests: '#ffcc00', ships: '#22bbdd', cloudRegions: '#6688ff', exchanges: '#ddaa22', commodityHubs: '#dd8866' };
   const color = colors[layerType] || '#ffffff';
   let size = layerType === 'aviation' ? 5 : 8;
   if (ev.magnitude) size = Math.max(6, Math.min(24, ev.magnitude * 3));

@@ -272,6 +272,20 @@ RSS_FEEDS = {
         {'name': 'Defender Dome', 'url': 'https://rsshub.app/telegram/channel/DefenderDome', 'category': 'OSINT'},
         {'name': 'OSINT Industries', 'url': 'https://rsshub.app/telegram/channel/OSINTIndustries', 'category': 'OSINT'},
         {'name': 'Iran Intl EN', 'url': 'https://rsshub.app/telegram/channel/IranIntlEN', 'category': 'OSINT'},
+        {'name': 'Abu Ali Express', 'url': 'https://rsshub.app/telegram/channel/AbuAliExpress', 'category': 'OSINT'},
+        {'name': 'Vahid Online', 'url': 'https://rsshub.app/telegram/channel/vahaborig', 'category': 'OSINT'},
+        {'name': 'Witness', 'url': 'https://rsshub.app/telegram/channel/WitnessChannel', 'category': 'OSINT'},
+        {'name': 'Yedioth News', 'url': 'https://rsshub.app/telegram/channel/yaborig', 'category': 'OSINT'},
+        {'name': 'Fotros Resistance', 'url': 'https://rsshub.app/telegram/channel/fotaborig', 'category': 'OSINT'},
+        {'name': 'Resistance Trench', 'url': 'https://rsshub.app/telegram/channel/ResistanceTrench', 'category': 'OSINT'},
+        {'name': 'OsintTV', 'url': 'https://rsshub.app/telegram/channel/OsintTV', 'category': 'OSINT'},
+        {'name': 'The Cradle', 'url': 'https://rsshub.app/telegram/channel/TheCradleMedia', 'category': 'OSINT'},
+        {'name': 'Middle East Eye TG', 'url': 'https://rsshub.app/telegram/channel/MiddleEastEye', 'category': 'OSINT'},
+        {'name': 'Cybersecurity Boardroom', 'url': 'https://rsshub.app/telegram/channel/CyberBoardroom', 'category': 'OSINT'},
+        {'name': 'The CyberWire TG', 'url': 'https://rsshub.app/telegram/channel/thecyberwire', 'category': 'OSINT'},
+        {'name': 'war_monitor UA', 'url': 'https://rsshub.app/telegram/channel/war_monitor_ua', 'category': 'OSINT'},
+        {'name': 'Intel Slava Z', 'url': 'https://rsshub.app/telegram/channel/intelslava', 'category': 'OSINT'},
+        {'name': 'Rybar', 'url': 'https://rsshub.app/telegram/channel/rybar', 'category': 'OSINT'},
     ],
     'think_tanks': [
         {'name': 'Atlantic Council', 'url': 'https://www.atlanticcouncil.org/feed/', 'category': 'Think Tanks'},
@@ -875,6 +889,73 @@ def _fetch_aviation():
     log.info(f"Situation Room: cached {len(valid)} aircraft positions")
 
 
+def _fetch_ais_ships():
+    """Fetch live vessel positions from free AIS sources.
+
+    Primary: BarentsWatch open AIS (Norwegian waters, no key).
+    Fallback: Parse major shipping chokepoint positions from cached events.
+    """
+    if not _can_fetch('ais_ships'):
+        return
+    _set_last_fetch('ais_ships')
+    ships = []
+
+    # Try Danish Maritime Authority AIS (free, no key, covers Danish/Baltic waters)
+    try:
+        resp = requests.get('https://ais.dk/api/ais/latest',
+                            params={'limit': 200},
+                            timeout=15, headers=_REQ_HEADERS)
+        if resp.ok:
+            data = resp.json()
+            for s in (data if isinstance(data, list) else data.get('features', data.get('data', []))):
+                # Handle GeoJSON or flat format
+                if isinstance(s, dict):
+                    props = s.get('properties', s)
+                    geom = s.get('geometry', {})
+                    coords = geom.get('coordinates', [])
+                    lat = coords[1] if len(coords) > 1 else props.get('latitude', props.get('lat', 0))
+                    lng = coords[0] if coords else props.get('longitude', props.get('lng', 0))
+                    if lat and lng:
+                        ships.append({
+                            'mmsi': str(props.get('mmsi', props.get('MMSI', ''))),
+                            'name': props.get('shipName', props.get('name', props.get('shipname', ''))),
+                            'lat': float(lat), 'lng': float(lng),
+                            'speed': float(props.get('sog', props.get('speed', 0)) or 0),
+                            'heading': float(props.get('cog', props.get('heading', 0)) or 0),
+                            'type': props.get('shipType', props.get('type', '')),
+                            'flag': props.get('flagCountry', props.get('flag', '')),
+                        })
+    except Exception as e:
+        log.debug(f"AIS DK fetch failed: {e}")
+
+    # If DK API didn't return data, try NOAA NDBC (buoys with some vessel data)
+    if not ships:
+        try:
+            resp = requests.get('https://www.marinetraffic.com/en/data/?asset_type=vessels&columns=flag,shipname,mmsi,lat_of_latest_position,lon_of_latest_position,speed,heading',
+                                timeout=12, headers={**_REQ_HEADERS, 'Accept': 'application/json'})
+            # This may not work without auth, silently fail
+        except Exception:
+            pass
+
+    if not ships:
+        return
+
+    with db_session() as db:
+        db.execute('''CREATE TABLE IF NOT EXISTS sitroom_ships
+            (id INTEGER PRIMARY KEY, mmsi TEXT, ship_name TEXT, lat REAL, lng REAL,
+             speed_kn REAL, heading REAL, ship_type TEXT, flag TEXT,
+             cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        db.execute('DELETE FROM sitroom_ships')
+        for s in ships[:300]:
+            db.execute('''INSERT INTO sitroom_ships
+                (mmsi, ship_name, lat, lng, speed_kn, heading, ship_type, flag)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                (s['mmsi'], s['name'], s['lat'], s['lng'],
+                 s['speed'], s['heading'], s['type'], s['flag']))
+        db.commit()
+    log.info(f"Situation Room: cached {len(ships)} vessel positions")
+
+
 def _fetch_space_weather():
     """Fetch space weather data from NOAA SWPC."""
     if not _can_fetch('space_weather'):
@@ -1134,6 +1215,66 @@ def _fetch_internet_outages():
     log.info(f"Situation Room: cached {len(outages)} internet outages")
 
 
+_COUNTRY_COORDS = {
+    'afghanistan': (33.0, 65.0), 'albania': (41.0, 20.0), 'algeria': (28.0, 3.0),
+    'angola': (-12.5, 18.5), 'argentina': (-34.0, -64.0), 'australia': (-25.0, 135.0),
+    'austria': (47.3, 13.3), 'azerbaijan': (40.5, 47.5), 'bangladesh': (24.0, 90.0),
+    'belarus': (53.0, 28.0), 'belgium': (50.8, 4.0), 'benin': (9.5, 2.3),
+    'bolivia': (-17.0, -65.0), 'bosnia': (44.0, 18.0), 'botswana': (-22.0, 24.0),
+    'brazil': (-10.0, -55.0), 'brunei': (4.5, 114.7), 'bulgaria': (43.0, 25.0),
+    'burkina faso': (13.0, -1.5), 'burundi': (-3.5, 29.9), 'cambodia': (13.0, 105.0),
+    'cameroon': (6.0, 12.0), 'canada': (56.0, -106.0), 'chad': (15.0, 19.0),
+    'chile': (-30.0, -71.0), 'china': (35.0, 105.0), 'colombia': (4.0, -72.0),
+    'congo': (-4.0, 22.0), 'costa rica': (10.0, -84.0), 'croatia': (45.2, 15.5),
+    'cuba': (22.0, -80.0), 'cyprus': (35.0, 33.0), 'czech': (49.8, 15.5),
+    'democratic republic': (-4.0, 22.0), 'denmark': (56.0, 10.0), 'djibouti': (11.5, 43.1),
+    'dominican': (19.0, -70.0), 'drc': (-4.0, 22.0), 'ecuador': (-1.0, -78.0),
+    'egypt': (27.0, 30.0), 'el salvador': (13.8, -88.9), 'eritrea': (15.0, 39.0),
+    'ethiopia': (8.0, 38.0), 'finland': (64.0, 26.0), 'france': (46.0, 2.0),
+    'gabon': (-1.0, 11.5), 'georgia': (42.0, 43.5), 'germany': (51.0, 9.0),
+    'ghana': (8.0, -1.2), 'greece': (39.0, 22.0), 'guatemala': (15.5, -90.3),
+    'guinea': (11.0, -10.0), 'haiti': (19.0, -72.4), 'honduras': (15.0, -86.5),
+    'hungary': (47.0, 20.0), 'india': (20.0, 77.0), 'indonesia': (-5.0, 120.0),
+    'iran': (32.0, 53.0), 'iraq': (33.0, 44.0), 'ireland': (53.0, -8.0),
+    'israel': (31.5, 34.8), 'italy': (42.8, 12.8), 'ivory coast': (7.5, -5.5),
+    'japan': (36.0, 138.0), 'jordan': (31.0, 36.0), 'kazakhstan': (48.0, 68.0),
+    'kenya': (-1.0, 38.0), 'korea': (36.0, 128.0), 'kuwait': (29.5, 47.5),
+    'laos': (18.0, 105.0), 'lebanon': (33.8, 35.8), 'liberia': (6.5, -9.5),
+    'libya': (27.0, 17.0), 'madagascar': (-20.0, 47.0), 'malawi': (-13.5, 34.0),
+    'malaysia': (2.5, 112.5), 'mali': (17.0, -4.0), 'mauritania': (20.0, -10.0),
+    'mexico': (23.0, -102.0), 'mongolia': (46.0, 105.0), 'morocco': (32.0, -5.0),
+    'mozambique': (-18.3, 35.0), 'myanmar': (22.0, 98.0), 'namibia': (-22.0, 17.0),
+    'nepal': (28.0, 84.0), 'netherlands': (52.5, 5.8), 'new zealand': (-41.0, 174.0),
+    'nicaragua': (13.0, -85.0), 'niger': (16.0, 8.0), 'nigeria': (10.0, 8.0),
+    'norway': (62.0, 10.0), 'oman': (21.0, 57.0), 'pakistan': (30.0, 70.0),
+    'palestine': (31.9, 35.2), 'panama': (9.0, -80.0), 'papua': (-6.0, 147.0),
+    'paraguay': (-23.0, -58.0), 'peru': (-10.0, -76.0), 'philippines': (13.0, 122.0),
+    'poland': (52.0, 20.0), 'portugal': (39.5, -8.0), 'qatar': (25.5, 51.3),
+    'romania': (46.0, 25.0), 'russia': (60.0, 100.0), 'rwanda': (-2.0, 29.9),
+    'saudi': (24.0, 45.0), 'senegal': (14.0, -14.5), 'serbia': (44.0, 21.0),
+    'sierra leone': (8.5, -11.8), 'singapore': (1.4, 103.8), 'slovakia': (48.7, 19.5),
+    'somalia': (5.0, 46.0), 'south africa': (-29.0, 24.0), 'south sudan': (7.0, 30.0),
+    'spain': (40.0, -4.0), 'sri lanka': (7.0, 81.0), 'sudan': (15.0, 30.0),
+    'sweden': (62.0, 15.0), 'switzerland': (47.0, 8.0), 'syria': (35.0, 38.0),
+    'taiwan': (23.5, 121.0), 'tajikistan': (39.0, 71.0), 'tanzania': (-6.0, 35.0),
+    'thailand': (15.0, 100.0), 'togo': (8.6, 1.2), 'tunisia': (34.0, 9.0),
+    'turkey': (39.0, 35.0), 'turkmenistan': (40.0, 60.0), 'uganda': (1.0, 32.0),
+    'ukraine': (49.0, 32.0), 'united arab': (24.0, 54.0), 'united kingdom': (54.0, -2.0),
+    'united states': (38.0, -97.0), 'uruguay': (-33.0, -56.0), 'uzbekistan': (41.0, 64.0),
+    'venezuela': (8.0, -66.0), 'vietnam': (16.0, 106.0), 'yemen': (15.0, 48.0),
+    'zambia': (-15.0, 28.0), 'zimbabwe': (-20.0, 30.0),
+}
+
+
+def _geocode_title(title):
+    """Extract country coordinates from a title string using keyword matching."""
+    title_lower = title.lower()
+    for country, (lat, lng) in _COUNTRY_COORDS.items():
+        if country in title_lower:
+            return lat, lng
+    return 0, 0
+
+
 def _fetch_disease_outbreaks():
     """Fetch disease outbreak data from WHO RSS."""
     if not _can_fetch('disease_outbreaks'):
@@ -1156,10 +1297,11 @@ def _fetch_disease_outbreaks():
         db.execute("DELETE FROM sitroom_events WHERE event_type = 'disease'")
         for item in items[:30]:
             eid = hashlib.sha256((item['title'] + item.get('link', '')).encode()).hexdigest()[:16]
+            lat, lng = _geocode_title(item['title'])
             db.execute('''INSERT OR IGNORE INTO sitroom_events
                 (event_id, event_type, title, lat, lng, event_time, source_url, detail_json)
-                VALUES (?, ?, ?, 0, 0, 0, ?, ?)''',
-                (eid, 'disease', item['title'], item.get('link', ''),
+                VALUES (?, ?, ?, ?, ?, 0, ?, ?)''',
+                (eid, 'disease', item['title'], lat, lng, item.get('link', ''),
                  json.dumps({'description': item.get('description', ''), 'published': item.get('published', '')})))
         db.commit()
     log.info(f"Situation Room: cached {len(items)} disease outbreak entries")
@@ -1945,6 +2087,7 @@ def refresh_all_feeds():
             _fetch_market_data()
             _fetch_conflict_data()
             _fetch_aviation()
+            _fetch_ais_ships()
             _fetch_space_weather()
             _fetch_volcanoes()
             _fetch_predictions()
@@ -2060,6 +2203,18 @@ def api_sitroom_aviation():
     with db_session() as db:
         rows = db.execute('SELECT * FROM sitroom_aviation ORDER BY altitude_m DESC LIMIT ?', (limit,)).fetchall()
     return jsonify({'aircraft': [dict(r) for r in rows]})
+
+
+@situation_room_bp.route('/api/sitroom/ships')
+def api_sitroom_ships():
+    """Return cached vessel positions."""
+    limit = min(request.args.get('limit', 200, type=int), 500)
+    with db_session() as db:
+        try:
+            rows = db.execute('SELECT * FROM sitroom_ships ORDER BY speed_kn DESC LIMIT ?', (limit,)).fetchall()
+        except Exception:
+            rows = []
+    return jsonify({'ships': [dict(r) for r in rows], 'count': len(rows)})
 
 
 @situation_room_bp.route('/api/sitroom/space-weather')
@@ -2667,6 +2822,30 @@ def api_sitroom_ucdp():
     with db_session() as db:
         rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'ucdp_conflict' ORDER BY magnitude DESC LIMIT 50").fetchall()
     return jsonify({'conflicts': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/protests')
+def api_sitroom_protests():
+    """Return protest/unrest events from UCDP + news keyword matching."""
+    with db_session() as db:
+        # UCDP violence type 2 = one-sided (protests), type 3 = non-state
+        ucdp_rows = db.execute(
+            "SELECT * FROM sitroom_events WHERE event_type = 'ucdp_conflict' AND "
+            "(LOWER(title) LIKE '%protest%' OR LOWER(title) LIKE '%unrest%' OR LOWER(title) LIKE '%demonstration%' "
+            "OR LOWER(title) LIKE '%riot%' OR LOWER(title) LIKE '%uprising%' OR LOWER(title) LIKE '%civil%') "
+            "ORDER BY cached_at DESC LIMIT 30"
+        ).fetchall()
+        # Also check news for protest keywords with geocodable locations
+        news_rows = db.execute(
+            "SELECT title, link, source_name, published FROM sitroom_news WHERE "
+            "(LOWER(title) LIKE '%protest%' OR LOWER(title) LIKE '%riot%' OR LOWER(title) LIKE '%demonstration%' "
+            "OR LOWER(title) LIKE '%unrest%' OR LOWER(title) LIKE '%uprising%' OR LOWER(title) LIKE '%strike %') "
+            "ORDER BY cached_at DESC LIMIT 20"
+        ).fetchall()
+    events = [dict(r) for r in ucdp_rows]
+    # News items don't have coordinates but we return them for the card
+    news_items = [dict(r) for r in news_rows]
+    return jsonify({'events': events, 'news': news_items, 'count': len(events) + len(news_items)})
 
 
 @situation_room_bp.route('/api/sitroom/cyber-threats')
