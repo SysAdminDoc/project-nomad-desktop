@@ -35,6 +35,8 @@ function initSituationRoom() {
   _sitroomAutoRefreshIfEmpty();
   _initSmartPollLoop();
   _initAnalysisWorker();
+  _initSitroomIDB();
+  _initCardResize();
 }
 
 function _sitroomRefreshPanels() {
@@ -3536,6 +3538,110 @@ async function loadSitroomSnapshot() {
     html += `<div style="text-align:center;font-size:10px;color:#888;padding:4px">Max quake: M${d.max_magnitude} | ${d.is_refreshing ? 'Refreshing...' : 'Idle'}</div>`;
   }
   el.innerHTML = html;
+}
+
+/* ─── P6: IndexedDB Offline Cache ─── */
+const _SITROOM_DB_NAME = 'SitroomCache';
+const _SITROOM_DB_VERSION = 1;
+let _sitroomIDB = null;
+
+function _initSitroomIDB() {
+  if (!window.indexedDB) return;
+  const req = indexedDB.open(_SITROOM_DB_NAME, _SITROOM_DB_VERSION);
+  req.onupgradeneeded = (e) => {
+    const db = e.target.result;
+    if (!db.objectStoreNames.contains('snapshots')) {
+      db.createObjectStore('snapshots', {keyPath: 'key'});
+    }
+    if (!db.objectStoreNames.contains('news')) {
+      const store = db.createObjectStore('news', {keyPath: 'id', autoIncrement: true});
+      store.createIndex('category', 'category', {unique: false});
+    }
+  };
+  req.onsuccess = (e) => { _sitroomIDB = e.target.result; };
+}
+
+function _idbSave(storeName, data) {
+  if (!_sitroomIDB) return;
+  try {
+    const tx = _sitroomIDB.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    if (Array.isArray(data)) {
+      data.forEach(item => store.put(item));
+    } else {
+      store.put(data);
+    }
+  } catch (e) { /* IDB not available */ }
+}
+
+function _idbGet(storeName, key) {
+  return new Promise((resolve) => {
+    if (!_sitroomIDB) { resolve(null); return; }
+    try {
+      const tx = _sitroomIDB.transaction(storeName, 'readonly');
+      const req = tx.objectStore(storeName).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch (e) { resolve(null); }
+  });
+}
+
+/* ─── P4: Panel Resize Controls ─── */
+function _initCardResize() {
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.sr-size-btn');
+    if (!btn) return;
+    const card = btn.closest('.sr-card');
+    if (!card) return;
+    const size = btn.dataset.size;
+    if (size) {
+      card.dataset.cardSize = size;
+      // Persist to localStorage
+      const cardId = card.querySelector('.sr-card-head')?.textContent?.trim()?.substring(0, 30);
+      if (cardId) {
+        const sizes = JSON.parse(localStorage.getItem('sitroom-card-sizes') || '{}');
+        sizes[cardId] = size;
+        localStorage.setItem('sitroom-card-sizes', JSON.stringify(sizes));
+      }
+    }
+  });
+  // Restore saved sizes
+  const sizes = JSON.parse(localStorage.getItem('sitroom-card-sizes') || '{}');
+  document.querySelectorAll('.sr-card').forEach(card => {
+    const cardId = card.querySelector('.sr-card-head')?.textContent?.trim()?.substring(0, 30);
+    if (cardId && sizes[cardId]) {
+      card.dataset.cardSize = sizes[cardId];
+    }
+  });
+}
+
+/* ─── P4: Virtual Scroll for News ─── */
+function _initVirtualScroll(containerId, items, renderFn, rowHeight) {
+  const container = document.getElementById(containerId);
+  if (!container || !items.length) return;
+  rowHeight = rowHeight || 36;
+  const visibleCount = Math.ceil(container.clientHeight / rowHeight) + 2;
+  let scrollTop = 0;
+
+  const totalHeight = items.length * rowHeight;
+  container.innerHTML = `<div style="height:${totalHeight}px;position:relative" class="sr-virtual-wrapper"></div>`;
+  const wrapper = container.querySelector('.sr-virtual-wrapper');
+
+  function render() {
+    const startIdx = Math.floor(scrollTop / rowHeight);
+    const endIdx = Math.min(startIdx + visibleCount, items.length);
+    let html = '';
+    for (let i = startIdx; i < endIdx; i++) {
+      html += `<div style="position:absolute;top:${i * rowHeight}px;left:0;right:0;height:${rowHeight}px">${renderFn(items[i], i)}</div>`;
+    }
+    wrapper.innerHTML = `<div style="height:${totalHeight}px;position:relative">${html}</div>`;
+  }
+
+  container.addEventListener('scroll', () => {
+    scrollTop = container.scrollTop;
+    requestAnimationFrame(render);
+  });
+  render();
 }
 
 /* ─── P6: Web Worker for Analysis ─── */
