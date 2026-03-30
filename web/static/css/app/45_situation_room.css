@@ -709,6 +709,94 @@
 .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: #141414 !important; }
 .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: #141414 !important; }
 
+/* ─── P4: Radar Loading Animation ─── */
+@keyframes sr-radar-sweep {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.sr-radar-loader {
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px 0; color: #333;
+}
+.sr-radar-loader::before {
+  content: ''; display: inline-block; width: 24px; height: 24px;
+  border: 2px solid #0f5040; border-top-color: #4aedc4;
+  border-radius: 50%; margin-right: 8px;
+  animation: sr-radar-sweep 1s linear infinite;
+}
+
+/* ─── P4: Skeleton Loader ─── */
+@keyframes sr-shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: 200px 0; }
+}
+.sr-skeleton {
+  background: linear-gradient(90deg, #111 25%, #1a1a1a 50%, #111 75%);
+  background-size: 400px 100%;
+  animation: sr-shimmer 1.5s infinite;
+  border-radius: 3px; height: 12px; margin: 6px 0;
+}
+.sr-skeleton-row { display: flex; gap: 8px; }
+.sr-skeleton-row .sr-skeleton { flex: 1; }
+.sr-skeleton.w-60 { width: 60%; }
+.sr-skeleton.w-40 { width: 40%; }
+.sr-skeleton.w-80 { width: 80%; }
+.sr-skeleton.h-20 { height: 20px; }
+
+/* ─── P4: Card Badges (NEW / PRO / LIVE) ─── */
+.sr-badge-new {
+  display: inline-block; font-size: 8px; padding: 1px 4px;
+  background: #4aedc4; color: #000; border-radius: 2px;
+  margin-left: 6px; font-weight: bold; letter-spacing: 0.5px;
+  animation: sr-pulse 2s infinite;
+}
+.sr-badge-pro {
+  display: inline-block; font-size: 8px; padding: 1px 4px;
+  background: #aa66ff; color: #fff; border-radius: 2px;
+  margin-left: 6px; font-weight: bold; letter-spacing: 0.5px;
+}
+.sr-badge-live {
+  display: inline-block; font-size: 8px; padding: 1px 4px;
+  background: #ff4444; color: #fff; border-radius: 2px;
+  margin-left: 6px; font-weight: bold; letter-spacing: 0.5px;
+  animation: sr-pulse 1.5s infinite;
+}
+
+/* ─── P4: Sparkline Bars ─── */
+.sr-sparkline-row {
+  display: flex; align-items: flex-end; gap: 2px;
+  height: 34px; padding: 4px 0;
+}
+.sr-spark-bar {
+  flex: 1; min-width: 3px; background: #4aedc4;
+  border-radius: 1px 1px 0 0; transition: height 0.3s ease;
+}
+.sr-spark-bar:hover { background: #6fffff; }
+
+/* ─── P4: AI Brief Styling ─── */
+.sr-ai-brief {
+  font-size: 11px; line-height: 1.6; color: #aaa;
+  padding: 8px; border-left: 2px solid #4aedc4;
+  margin: 4px 0; background: rgba(15, 80, 64, 0.08);
+}
+
+/* ─── P4: Mini Table ─── */
+.sr-table {
+  width: 100%; border-collapse: collapse; font-size: 10px;
+}
+.sr-table th {
+  text-align: left; padding: 4px 6px; color: #666;
+  border-bottom: 1px solid #1a1a1a; font-weight: normal; text-transform: uppercase;
+}
+.sr-table td { padding: 3px 6px; color: #aaa; border-bottom: 1px solid #0d0d0d; }
+.sr-table tr:hover td { background: rgba(74, 237, 196, 0.04); }
+
+/* ─── P4: Mini Labels ─── */
+.sr-mini-label {
+  font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+  color: #555; padding: 4px 8px; font-weight: bold;
+}
+
 /* ─── Responsive ─── */
 @media (max-width: 768px) {
   .sr-header { flex-direction: column; gap: 4px; height: auto; padding: 6px 12px; }

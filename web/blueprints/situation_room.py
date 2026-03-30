@@ -4860,3 +4860,159 @@ def api_sitroom_space_situational():
         'space_news': [dict(r) for r in space_news],
         'recent_launches': [dict(r)['title'] for r in launches],
     })
+
+
+# ─── P6/P7: Advanced Features ──────────────────────────────────────────
+
+@situation_room_bp.route('/api/sitroom/apt-groups')
+def api_sitroom_apt_groups():
+    """Return known Advanced Persistent Threat group profiles."""
+    apt_groups = [
+        {'name': 'APT28 (Fancy Bear)', 'origin': 'Russia/GRU', 'targets': 'NATO, elections, defense',
+         'notable': 'DNC hack 2016, Bundestag breach', 'active': True},
+        {'name': 'APT29 (Cozy Bear)', 'origin': 'Russia/SVR', 'targets': 'Government, think tanks',
+         'notable': 'SolarWinds supply chain attack', 'active': True},
+        {'name': 'APT41 (Double Dragon)', 'origin': 'China/MSS', 'targets': 'Healthcare, telecom, gaming',
+         'notable': 'Dual espionage + financial crime', 'active': True},
+        {'name': 'Lazarus Group', 'origin': 'North Korea/RGB', 'targets': 'Finance, crypto, defense',
+         'notable': 'Sony hack, WannaCry, $625M Ronin theft', 'active': True},
+        {'name': 'APT33 (Elfin)', 'origin': 'Iran/IRGC', 'targets': 'Aviation, energy, petrochemical',
+         'notable': 'Shamoon wiper attacks', 'active': True},
+        {'name': 'Sandworm (Voodoo Bear)', 'origin': 'Russia/GRU Unit 74455', 'targets': 'Critical infrastructure',
+         'notable': 'NotPetya, Ukraine grid attacks', 'active': True},
+        {'name': 'APT1 (Comment Crew)', 'origin': 'China/PLA Unit 61398', 'targets': 'US defense, IP theft',
+         'notable': 'Mandiant 2013 report, 141+ targets', 'active': False},
+        {'name': 'Equation Group', 'origin': 'USA/NSA TAO', 'targets': 'Nation-state targets globally',
+         'notable': 'Stuxnet co-developer, Shadow Brokers leak', 'active': True},
+        {'name': 'Turla (Snake)', 'origin': 'Russia/FSB Center 16', 'targets': 'Government, military, embassies',
+         'notable': 'Agent.BTZ, satellite C2', 'active': True},
+        {'name': 'Charming Kitten (APT35)', 'origin': 'Iran/IRGC', 'targets': 'Journalists, academics, dissidents',
+         'notable': 'Credential harvesting, social engineering', 'active': True},
+        {'name': 'Hafnium', 'origin': 'China/MSS', 'targets': 'US organizations via Exchange',
+         'notable': 'ProxyLogon zero-day campaign', 'active': True},
+        {'name': 'DarkSide/BlackMatter', 'origin': 'Russia (criminal)', 'targets': 'Critical infrastructure',
+         'notable': 'Colonial Pipeline ransomware', 'active': False},
+        {'name': 'REvil/Sodinokibi', 'origin': 'Russia (criminal)', 'targets': 'Enterprise ransomware',
+         'notable': 'Kaseya, JBS Foods attacks', 'active': False},
+        {'name': 'Mustang Panda', 'origin': 'China', 'targets': 'Southeast Asia, Europe, Mongolia',
+         'notable': 'PlugX malware, COVID-19 lures', 'active': True},
+        {'name': 'Kimsuky', 'origin': 'North Korea/RGB', 'targets': 'South Korea, US, Japan think tanks',
+         'notable': 'Nuclear/defense espionage', 'active': True},
+    ]
+    # Enrich with recent cyber threat news
+    with db_session() as db:
+        cyber = db.execute(
+            "SELECT title, source_name FROM sitroom_events WHERE event_type = 'cyber_threat' ORDER BY cached_at DESC LIMIT 10"
+        ).fetchall()
+    return jsonify({
+        'groups': apt_groups,
+        'active_count': sum(1 for g in apt_groups if g['active']),
+        'recent_threats': [dict(r) for r in cyber],
+    })
+
+
+@situation_room_bp.route('/api/sitroom/webhook-test', methods=['POST'])
+def api_sitroom_webhook_test():
+    """Test webhook notification delivery (POST to external URL)."""
+    data = request.get_json(silent=True) or {}
+    url = (data.get('url', '') or '')[:500]
+    if not url or not url.startswith('http'):
+        return jsonify({'error': 'Valid URL required'}), 400
+    # Validate URL is not internal
+    import ipaddress
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url)
+        if parsed.hostname in ('localhost', '127.0.0.1', '0.0.0.0', '::1'):
+            return jsonify({'error': 'Internal URLs not allowed'}), 400
+    except Exception:
+        return jsonify({'error': 'Invalid URL'}), 400
+    # Send test payload
+    try:
+        payload = {
+            'event': 'test',
+            'source': 'NOMAD Situation Room',
+            'message': 'Webhook test notification',
+            'timestamp': datetime.now().isoformat(),
+        }
+        resp = requests.post(url, json=payload, timeout=10, headers=_REQ_HEADERS)
+        return jsonify({'sent': True, 'status_code': resp.status_code})
+    except Exception as e:
+        return jsonify({'sent': False, 'error': str(e)[:200]})
+
+
+@situation_room_bp.route('/api/sitroom/webhook-config', methods=['GET', 'POST'])
+def api_sitroom_webhook_config():
+    """Manage webhook notification configuration."""
+    with db_session() as db:
+        db.execute('''CREATE TABLE IF NOT EXISTS sitroom_webhooks
+            (id INTEGER PRIMARY KEY, url TEXT, event_types TEXT, enabled INTEGER DEFAULT 1,
+             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        if request.method == 'POST':
+            data = request.get_json(silent=True) or {}
+            url = (data.get('url', '') or '')[:500]
+            events = data.get('event_types', 'all')
+            if url and url.startswith('http'):
+                db.execute('INSERT INTO sitroom_webhooks (url, event_types) VALUES (?, ?)',
+                           (url, events))
+                db.commit()
+                return jsonify({'added': True})
+            return jsonify({'error': 'Valid URL required'}), 400
+        rows = db.execute('SELECT * FROM sitroom_webhooks ORDER BY created_at DESC').fetchall()
+        return jsonify({'webhooks': [dict(r) for r in rows]})
+
+
+@situation_room_bp.route('/api/sitroom/trend-comparison')
+def api_sitroom_trend_comparison():
+    """Compare news volume trends between two topics."""
+    topic1 = request.args.get('t1', 'ukraine')[:50]
+    topic2 = request.args.get('t2', 'israel')[:50]
+    with db_session() as db:
+        t1_count = db.execute(
+            "SELECT COUNT(*) FROM sitroom_news WHERE LOWER(title) LIKE ?",
+            (f'%{topic1.lower()}%',)
+        ).fetchone()[0]
+        t2_count = db.execute(
+            "SELECT COUNT(*) FROM sitroom_news WHERE LOWER(title) LIKE ?",
+            (f'%{topic2.lower()}%',)
+        ).fetchone()[0]
+        # 24h counts
+        t1_24h = db.execute(
+            "SELECT COUNT(*) FROM sitroom_news WHERE LOWER(title) LIKE ? AND cached_at > datetime('now', '-24 hours')",
+            (f'%{topic1.lower()}%',)
+        ).fetchone()[0]
+        t2_24h = db.execute(
+            "SELECT COUNT(*) FROM sitroom_news WHERE LOWER(title) LIKE ? AND cached_at > datetime('now', '-24 hours')",
+            (f'%{topic2.lower()}%',)
+        ).fetchone()[0]
+    return jsonify({
+        'topic1': {'name': topic1, 'total': t1_count, 'last_24h': t1_24h},
+        'topic2': {'name': topic2, 'total': t2_count, 'last_24h': t2_24h},
+        'dominant': topic1 if t1_count > t2_count else topic2,
+    })
+
+
+@situation_room_bp.route('/api/sitroom/situation-snapshot')
+def api_sitroom_situation_snapshot():
+    """Complete situation snapshot — all key metrics in one call."""
+    with db_session() as db:
+        news = db.execute("SELECT COUNT(*) FROM sitroom_news").fetchone()[0]
+        events = db.execute("SELECT COUNT(*) FROM sitroom_events").fetchone()[0]
+        quakes = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'earthquake'").fetchone()[0]
+        fires = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'fire'").fetchone()[0]
+        conflicts = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE event_type IN ('conflict','ucdp_conflict')").fetchone()[0]
+        cyber = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'cyber_threat'").fetchone()[0]
+        oref = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'oref_alert'").fetchone()[0]
+        markets = db.execute("SELECT COUNT(*) FROM sitroom_markets").fetchone()[0]
+        big_quake = db.execute("SELECT MAX(magnitude) FROM sitroom_events WHERE event_type = 'earthquake'").fetchone()[0]
+    last_fetch_state, is_running = _get_state()
+    live_sources = sum(1 for k, v in last_fetch_state.items() if v and (datetime.now() - v).total_seconds() < 3600)
+    return jsonify({
+        'total_articles': news, 'total_events': events,
+        'earthquakes': quakes, 'max_magnitude': big_quake,
+        'active_fires': fires, 'conflicts': conflicts,
+        'cyber_threats': cyber, 'oref_alerts': oref,
+        'market_symbols': markets, 'live_sources': live_sources,
+        'is_refreshing': is_running,
+        'snapshot_time': datetime.now().isoformat(),
+    })

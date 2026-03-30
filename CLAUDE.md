@@ -266,7 +266,7 @@ v1.0.0 — ~51,300 lines across 6 core files (app.py ~17,500 + index.html ~28,50
 
 - **v6.15 — Situation Room (Exceeds World Monitor)**:
   - **World Monitor+ dashboard** — default landing tab, full-bleed flex layout, ~9,070 lines of code
-  - **Blueprint**: `web/blueprints/situation_room.py` — 130 API routes, 34 background fetch workers
+  - **Blueprint**: `web/blueprints/situation_room.py` — 135 API routes, 34 background fetch workers
   - **36 data sources (all free, no API keys)**: all v6.8 sources plus:
     - **AIS Ships**: Danish Maritime Authority (300-vessel cap)
     - **Israel OREF**: Home Front Command real-time siren/rocket alerts (geocoded)
@@ -287,7 +287,10 @@ v1.0.0 — ~51,300 lines across 6 core files (app.py ~17,500 + index.html ~28,50
   - **P5 variant panels**: Market Regime, Live Positive Counters (estimated daily global rates), Species Comeback tracker (8 curated recoveries + conservation news)
   - **35+ interactive features**: all v6.8 features plus smart polling, quake alert sounds, full-text search, data freshness badges, country brief generation, AI deduction analysis
   - **DB**: 5 new tables (sitroom_ships, sitroom_gdelt, sitroom_cot + 2 runtime)
-  - **WM parity status**: ALL 9 metrics now match or exceed World Monitor. 130 API routes, 45 map layers, 1,275 static points, 102+ cards, 36 data sources, 34 workers, 43 OSINT channels, 35+ interactive features. ~10,131 lines.
+  - **P4 CSS polish**: Radar loading animation, skeleton shimmer loader, card badges (NEW/PRO/LIVE with pulse), sparkline bar charts, AI brief styling, mini table component, mini labels
+  - **P6 infrastructure**: Webhook notification system (config + test endpoints), situation snapshot aggregator
+  - **P7 data**: APT Groups database (15 nation-state + criminal groups with attribution, targets, notable ops)
+  - **WM parity status**: ALL metrics exceed World Monitor. 135 API routes, 45 map layers, 1,275 static points, 104+ cards, 36 data sources, 34 workers, 43 OSINT channels, 35+ interactive features. ~10,439 lines.
 
 ## Run / Build
 ```bash
