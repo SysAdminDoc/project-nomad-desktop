@@ -1,7 +1,7 @@
 /* ─── Situation Room v4 — World Monitor Intelligence Dashboard ─── */
 
 let _sitroomMap = null;
-let _sitroomMarkers = { earthquakes: [], weather: [], conflicts: [], aviation: [], volcanoes: [], fires: [], nuclear: [], bases: [], cables: [], datacenters: [], pipelines: [], waterways: [], spaceports: [], shipping: [], ucdp: [] };
+let _sitroomMarkers = { earthquakes: [], weather: [], conflicts: [], aviation: [], volcanoes: [], fires: [], nuclear: [], bases: [], cables: [], datacenters: [], pipelines: [], waterways: [], spaceports: [], shipping: [], ucdp: [], airports: [], fincenters: [] };
 let _sitroomNewsOffset = 0;
 const SITROOM_NEWS_PAGE = 50;
 let _sitroomAutoTimer = null;
@@ -61,6 +61,8 @@ function _sitroomRefreshPanels() {
   loadSitroomCorrelations();
   loadSitroomYieldCurve();
   loadSitroomStablecoins();
+  loadSitroomVelocity();
+  loadSitroomServiceStatus();
   _checkCriticalAlerts();
   loadSitroomLiveChannels();
 }
@@ -241,6 +243,28 @@ const _SHIPPING_HUBS = [
   {lat:-33.86,lng:151.21,name:'Sydney, Australia'},{lat:-23.95,lng:-46.30,name:'Santos, Brazil'},
   {lat:35.45,lng:139.65,name:'Yokohama, Japan'},{lat:22.84,lng:108.37,name:'Qinzhou, China'},
 ];
+const _MAJOR_AIRPORTS = [
+  {lat:40.64,lng:-73.78,name:'JFK, New York'},{lat:33.94,lng:-118.41,name:'LAX, Los Angeles'},
+  {lat:51.47,lng:-0.46,name:'Heathrow, London'},{lat:49.01,lng:2.55,name:'CDG, Paris'},
+  {lat:25.25,lng:55.36,name:'DXB, Dubai'},{lat:1.36,lng:103.99,name:'Changi, Singapore'},
+  {lat:35.55,lng:139.78,name:'Haneda, Tokyo'},{lat:22.31,lng:113.91,name:'HKG, Hong Kong'},
+  {lat:50.03,lng:8.57,name:'FRA, Frankfurt'},{lat:52.31,lng:4.77,name:'AMS, Amsterdam'},
+  {lat:41.98,lng:-87.91,name:'ORD, Chicago'},{lat:33.64,lng:-84.43,name:'ATL, Atlanta'},
+  {lat:13.68,lng:100.75,name:'BKK, Bangkok'},{lat:40.08,lng:116.58,name:'PEK, Beijing'},
+  {lat:37.46,lng:126.44,name:'ICN, Incheon'},{lat:-33.95,lng:151.18,name:'SYD, Sydney'},
+  {lat:19.09,lng:72.87,name:'BOM, Mumbai'},{lat:-23.43,lng:-46.47,name:'GRU, Sao Paulo'},
+  {lat:55.97,lng:37.41,name:'SVO, Moscow'},{lat:41.80,lng:12.25,name:'FCO, Rome'},
+];
+const _FINANCIAL_CENTERS = [
+  {lat:40.71,lng:-74.01,name:'Wall Street, New York'},{lat:51.51,lng:-0.08,name:'City of London'},
+  {lat:22.28,lng:114.16,name:'Central, Hong Kong'},{lat:1.28,lng:103.85,name:'Raffles Place, Singapore'},
+  {lat:35.68,lng:139.76,name:'Marunouchi, Tokyo'},{lat:47.37,lng:8.54,name:'Paradeplatz, Zurich'},
+  {lat:50.11,lng:8.68,name:'Bankenviertel, Frankfurt'},{lat:31.23,lng:121.47,name:'Lujiazui, Shanghai'},
+  {lat:25.21,lng:55.27,name:'DIFC, Dubai'},{lat:48.87,lng:2.34,name:'La Defense, Paris'},
+  {lat:-33.87,lng:151.21,name:'Martin Place, Sydney'},{lat:43.65,lng:-79.38,name:'Bay Street, Toronto'},
+  {lat:19.08,lng:72.88,name:'Dalal Street, Mumbai'},{lat:37.57,lng:126.98,name:'Yeouido, Seoul'},
+  {lat:-23.55,lng:-46.64,name:'Faria Lima, Sao Paulo'},{lat:52.37,lng:4.90,name:'Zuidas, Amsterdam'},
+];
 
 function initSitroomMap() {
   const container = document.getElementById('sitroom-map');
@@ -410,6 +434,18 @@ async function loadSitroomMapData() {
       });
     }
   } else { clearSitroomMarkers('ucdp'); }
+
+  // Airports (static)
+  if (document.getElementById('sitroom-layer-airports')?.checked) {
+    clearSitroomMarkers('airports');
+    _MAJOR_AIRPORTS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'airport'}, 'airports'));
+  } else { clearSitroomMarkers('airports'); }
+
+  // Financial centers (static)
+  if (document.getElementById('sitroom-layer-fincenters')?.checked) {
+    clearSitroomMarkers('fincenters');
+    _FINANCIAL_CENTERS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'finance'}, 'fincenters'));
+  } else { clearSitroomMarkers('fincenters'); }
 }
 
 function clearSitroomMarkers(layerType) {
@@ -419,7 +455,7 @@ function clearSitroomMarkers(layerType) {
 
 function addSitroomMarker(ev, layerType) {
   if (!_sitroomMap) return;
-  const colors = { earthquakes: '#ff4444', weather: '#ffaa00', conflicts: '#ff6600', aviation: '#44aaff', volcanoes: '#ff3366', fires: '#ff8800', nuclear: '#ffff00', bases: '#44ff88', cables: '#3388ff', datacenters: '#aa66ff', pipelines: '#cc8844', waterways: '#00ddff', spaceports: '#ff66ff', shipping: '#88ccaa', ucdp: '#dd2222' };
+  const colors = { earthquakes: '#ff4444', weather: '#ffaa00', conflicts: '#ff6600', aviation: '#44aaff', volcanoes: '#ff3366', fires: '#ff8800', nuclear: '#ffff00', bases: '#44ff88', cables: '#3388ff', datacenters: '#aa66ff', pipelines: '#cc8844', waterways: '#00ddff', spaceports: '#ff66ff', shipping: '#88ccaa', ucdp: '#dd2222', airports: '#cccccc', fincenters: '#44dd88' };
   const color = colors[layerType] || '#ffffff';
   let size = layerType === 'aviation' ? 5 : 8;
   if (ev.magnitude) size = Math.max(6, Math.min(24, ev.magnitude * 3));
@@ -920,6 +956,7 @@ function _updateMapLegend() {
     pipelines: {color:'#cc8844',label:'Pipelines'}, waterways: {color:'#00ddff',label:'Waterways'},
     spaceports: {color:'#ff66ff',label:'Spaceports'}, shipping: {color:'#88ccaa',label:'Shipping'},
     ucdp: {color:'#dd2222',label:'Armed Conflicts'},
+    airports: {color:'#cccccc',label:'Airports'}, fincenters: {color:'#44dd88',label:'Finance'},
   };
   const active = [];
   document.querySelectorAll('[data-sitroom-layer]').forEach(cb => {
@@ -1406,6 +1443,49 @@ function _showSitroomAlert(type, message) {
   stack.appendChild(toast);
   // Auto-dismiss after 15s
   setTimeout(() => { if (toast.parentElement) toast.remove(); }, 15000);
+}
+
+/* ─── Social Velocity ─── */
+async function loadSitroomVelocity() {
+  const d = await safeFetch('/api/sitroom/social-velocity', {}, null);
+  const el = document.getElementById('sitroom-velocity');
+  if (!el) return;
+  if (!d || !d.stories?.length) { el.innerHTML = '<div class="sr-empty">No velocity data yet</div>'; return; }
+  el.innerHTML = d.stories.map(s => {
+    let det = {}; try { det = s.detail_json ? JSON.parse(s.detail_json) : {}; } catch(e) {}
+    const speed = s.magnitude || 0;
+    const barWidth = Math.min(100, speed * 15);
+    return `<div style="padding:4px 12px;border-bottom:1px solid #1e1e1e">
+      <div style="font-size:10px;color:#c8ccd0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.title || '')}</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+        <div style="flex:1;height:3px;background:#1e1e1e;border-radius:1px;overflow:hidden">
+          <div style="width:${barWidth}%;height:100%;background:${speed >= 6 ? '#e05050' : speed >= 4 ? '#d4a017' : '#0f5040'};border-radius:1px"></div>
+        </div>
+        <span style="font-size:8px;font-weight:700;color:${speed >= 6 ? '#e05050' : '#888'}">${speed}x</span>
+      </div>
+      <div style="font-size:7px;color:#333;margin-top:1px">${escapeHtml(det.sources || '')}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ─── Service Status ─── */
+async function loadSitroomServiceStatus() {
+  const d = await safeFetch('/api/sitroom/service-status', {}, null);
+  const el = document.getElementById('sitroom-service-status');
+  if (!el) return;
+  if (!d || !d.services?.length) { el.innerHTML = '<div class="sr-empty">No service status data</div>'; return; }
+  el.innerHTML = d.services.map(s => {
+    let det = {}; try { det = s.detail_json ? JSON.parse(s.detail_json) : {}; } catch(e) {}
+    const isIncident = (s.title || '').toLowerCase().includes('incident') || (s.title || '').toLowerCase().includes('outage');
+    return `<div class="sitroom-event-item${isIncident ? ' sitroom-sev-extreme' : ''}">
+      <span class="sitroom-mag" style="background:${isIncident ? '#e05050' : '#2aad94'};color:#000">${(det.service || '??').substring(0,3)}</span>
+      <div class="sitroom-event-info">
+        <div class="sitroom-event-title">${escapeHtml(s.title || '')}</div>
+        <div class="sitroom-event-meta">${det.published ? escapeHtml(det.published) : ''}</div>
+      </div>
+      ${s.source_url ? `<a href="${escapeAttr(s.source_url)}" target="_blank" rel="noopener" class="sitroom-event-link">&#8599;</a>` : ''}
+    </div>`;
+  }).join('');
 }
 
 /* ─── Cross-Domain Correlations ─── */

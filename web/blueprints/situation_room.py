@@ -69,6 +69,7 @@ FETCH_COOLDOWN = {
     'radiation': 1800, 'gdelt_trending': 600, 'sanctions': 3600,
     'displacement': 7200, 'ucdp': 3600, 'cyber_threats': 1800,
     'yield_curve': 3600, 'stablecoins': 600, 'correlation': 300,
+    'service_status': 300, 'social_velocity': 600,
 }
 
 # ─── Live YouTube Channels ────────────────────────────────────────────
@@ -1340,6 +1341,73 @@ def _compute_correlations():
     log.info(f"Situation Room: computed {len(signals)} cross-domain correlations")
 
 
+def _fetch_service_status():
+    """Fetch cloud service status from public status pages."""
+    if not _can_fetch('service_status'):
+        return
+    _set_last_fetch('service_status')
+
+    services = []
+    status_feeds = [
+        ('AWS', 'https://status.aws.amazon.com/rss/all.rss'),
+        ('GitHub', 'https://www.githubstatus.com/history.rss'),
+        ('Cloudflare', 'https://www.cloudflarestatus.com/history.rss'),
+        ('Google Cloud', 'https://status.cloud.google.com/en/feed.atom'),
+        ('Azure', 'https://azure.status.microsoft/en-us/status/feed/'),
+    ]
+    for name, url in status_feeds:
+        try:
+            resp = requests.get(url, timeout=8, headers=_REQ_HEADERS)
+            if resp.ok:
+                items = _parse_feed(resp.text, name, 'Status')
+                for item in items[:3]:
+                    services.append({'service': name, 'title': item['title'],
+                                     'published': item.get('published', ''), 'link': item.get('link', '')})
+        except Exception:
+            pass
+
+    if not services:
+        return
+
+    with db_session() as db:
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'service_status'")
+        for s in services:
+            eid = hashlib.sha256((s['service'] + s['title']).encode()).hexdigest()[:16]
+            db.execute('''INSERT OR IGNORE INTO sitroom_events
+                (event_id, event_type, title, lat, lng, event_time, source_url, detail_json)
+                VALUES (?, ?, ?, 0, 0, 0, ?, ?)''',
+                (eid, 'service_status', f"[{s['service']}] {s['title'][:400]}", s.get('link', ''),
+                 json.dumps({'service': s['service'], 'published': s.get('published', '')})))
+        db.commit()
+    log.info(f"Situation Room: cached {len(services)} service status items")
+
+
+def _fetch_social_velocity():
+    """Track news velocity — how fast stories spread across sources."""
+    if not _can_fetch('social_velocity'):
+        return
+    _set_last_fetch('social_velocity')
+
+    with db_session() as db:
+        # Find keywords that appear in many articles (high velocity)
+        rows = db.execute('''
+            SELECT LOWER(SUBSTR(title, 1, 60)) as headline, COUNT(*) as cnt, GROUP_CONCAT(DISTINCT source_name) as sources
+            FROM sitroom_news GROUP BY LOWER(SUBSTR(title, 1, 40))
+            HAVING cnt >= 3 ORDER BY cnt DESC LIMIT 15
+        ''').fetchall()
+
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'social_velocity'")
+        for r in rows:
+            eid = hashlib.sha256(dict(r)['headline'].encode()).hexdigest()[:16]
+            db.execute('''INSERT OR IGNORE INTO sitroom_events
+                (event_id, event_type, title, magnitude, lat, lng, event_time, detail_json)
+                VALUES (?, ?, ?, ?, 0, 0, 0, ?)''',
+                (eid, 'social_velocity', dict(r)['headline'][:500], dict(r)['cnt'],
+                 json.dumps({'count': dict(r)['cnt'], 'sources': dict(r)['sources']})))
+        db.commit()
+    log.info(f"Situation Room: computed {len(rows)} social velocity entries")
+
+
 def _fetch_displacement():
     """Fetch UNHCR displacement/refugee data."""
     if not _can_fetch('displacement'):
@@ -1428,6 +1496,8 @@ def refresh_all_feeds():
             _fetch_cyber_threats()
             _fetch_yield_curve()
             _fetch_stablecoins()
+            _fetch_service_status()
+            _fetch_social_velocity()
             _compute_correlations()
         except Exception as e:
             log.exception(f"Situation Room refresh error: {e}")
@@ -1737,6 +1807,22 @@ def api_sitroom_diseases():
     with db_session() as db:
         rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'disease' ORDER BY cached_at DESC LIMIT 30").fetchall()
     return jsonify({'outbreaks': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/service-status')
+def api_sitroom_service_status():
+    """Return cloud service status."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'service_status' ORDER BY cached_at DESC LIMIT 20").fetchall()
+    return jsonify({'services': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/social-velocity')
+def api_sitroom_social_velocity():
+    """Return social velocity — fast-spreading stories."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'social_velocity' ORDER BY magnitude DESC LIMIT 15").fetchall()
+    return jsonify({'stories': [dict(r) for r in rows], 'count': len(rows)})
 
 
 @situation_room_bp.route('/api/sitroom/correlations')
