@@ -67,7 +67,7 @@ FETCH_COOLDOWN = {
     'fires': 600, 'disease_outbreaks': 1800,
     'internet_outages': 600,
     'radiation': 1800, 'gdelt_trending': 600, 'sanctions': 3600,
-    'displacement': 7200,
+    'displacement': 7200, 'ucdp': 3600, 'cyber_threats': 1800,
 }
 
 # ─── Live YouTube Channels ────────────────────────────────────────────
@@ -223,16 +223,47 @@ RSS_FEEDS = {
         {'name': 'White House', 'url': 'https://www.whitehouse.gov/feed/', 'category': 'Government'},
         {'name': 'State Dept', 'url': 'https://www.state.gov/rss-feed/press-releases/feed/', 'category': 'Government'},
         {'name': 'FAO News', 'url': 'https://www.fao.org/feeds/fao-newsroom-rss', 'category': 'Government'},
+        {'name': 'DOD News', 'url': 'https://www.defense.gov/News/rss/', 'category': 'Government'},
+        {'name': 'Treasury', 'url': 'https://home.treasury.gov/system/files/press-releases.xml', 'category': 'Government'},
+        {'name': 'CISA News', 'url': 'https://www.cisa.gov/news.xml', 'category': 'Government'},
+        {'name': 'UK MOD', 'url': 'https://www.gov.uk/government/organisations/ministry-of-defence.atom', 'category': 'Government'},
+        {'name': 'EU External Action', 'url': 'https://www.eeas.europa.eu/eeas/rss_en', 'category': 'Government'},
+    ],
+    'startups_vc': [
+        {'name': 'TechCrunch Startups', 'url': 'https://techcrunch.com/category/startups/feed/', 'category': 'Startups'},
+        {'name': 'Crunchbase News', 'url': 'https://news.crunchbase.com/feed/', 'category': 'Startups'},
+        {'name': 'Y Combinator Blog', 'url': 'https://www.ycombinator.com/blog/rss/', 'category': 'Startups'},
+        {'name': 'PitchBook News', 'url': 'https://pitchbook.com/news/feed', 'category': 'Startups'},
+        {'name': 'Sifted', 'url': 'https://sifted.eu/feed', 'category': 'Startups'},
     ],
     'osint': [
         {'name': 'BNO News', 'url': 'https://rsshub.app/telegram/channel/BNONews', 'category': 'OSINT'},
-        {'name': 'NEXTA', 'url': 'https://rsshub.app/telegram/channel/nexaborig', 'category': 'OSINT'},
-        {'name': 'Intel Slava Z', 'url': 'https://rsshub.app/telegram/channel/inaborig', 'category': 'OSINT'},
+        {'name': 'NEXTA', 'url': 'https://rsshub.app/telegram/channel/nexta_live', 'category': 'OSINT'},
         {'name': 'OSINTdefender', 'url': 'https://rsshub.app/telegram/channel/OSINTdefender', 'category': 'OSINT'},
         {'name': 'Aurora Intel', 'url': 'https://rsshub.app/telegram/channel/AuroraIntel', 'category': 'OSINT'},
         {'name': 'Liveuamap', 'url': 'https://rsshub.app/telegram/channel/liveuamap', 'category': 'OSINT'},
         {'name': 'War Monitor', 'url': 'https://rsshub.app/telegram/channel/WarMonitors', 'category': 'OSINT'},
         {'name': 'Spectator Index', 'url': 'https://rsshub.app/telegram/channel/spectaborig', 'category': 'OSINT'},
+        {'name': 'DeepState UA', 'url': 'https://rsshub.app/telegram/channel/DeepStateUA', 'category': 'OSINT'},
+        {'name': 'Bellingcat', 'url': 'https://rsshub.app/telegram/channel/belaborig', 'category': 'OSINT'},
+        {'name': 'Clash Report', 'url': 'https://rsshub.app/telegram/channel/claborig', 'category': 'OSINT'},
+        {'name': 'ME Spectator', 'url': 'https://rsshub.app/telegram/channel/maborig', 'category': 'OSINT'},
+        {'name': 'Osint Updates', 'url': 'https://rsshub.app/telegram/channel/OsintUpdates', 'category': 'OSINT'},
+        {'name': 'DD Geopolitics', 'url': 'https://rsshub.app/telegram/channel/DDGeopolitics', 'category': 'OSINT'},
+        {'name': 'The Hacker News TG', 'url': 'https://rsshub.app/telegram/channel/thehaborig', 'category': 'OSINT'},
+        {'name': 'CyberWar', 'url': 'https://rsshub.app/telegram/channel/cyberaborig', 'category': 'OSINT'},
+        {'name': 'FalconFeeds', 'url': 'https://rsshub.app/telegram/channel/FalconFeedsio', 'category': 'OSINT'},
+        {'name': 'Geopolitics Prime', 'url': 'https://rsshub.app/telegram/channel/GeopoliticsPrime', 'category': 'OSINT'},
+    ],
+    'think_tanks': [
+        {'name': 'Atlantic Council', 'url': 'https://www.atlanticcouncil.org/feed/', 'category': 'Think Tanks'},
+        {'name': 'CSIS Analysis', 'url': 'https://www.csis.org/analysis/feed', 'category': 'Think Tanks'},
+        {'name': 'Brookings', 'url': 'https://www.brookings.edu/feed/', 'category': 'Think Tanks'},
+        {'name': 'Carnegie', 'url': 'https://carnegieendowment.org/rss/solr/?lang=en', 'category': 'Think Tanks'},
+        {'name': 'RAND', 'url': 'https://www.rand.org/blog.xml', 'category': 'Think Tanks'},
+        {'name': 'CrisisWatch (ICG)', 'url': 'https://www.crisisgroup.org/crisiswatch/feed', 'category': 'Think Tanks'},
+        {'name': 'Chatham House', 'url': 'https://www.chathamhouse.org/rss', 'category': 'Think Tanks'},
+        {'name': 'Council on Foreign Relations', 'url': 'https://www.cfr.org/rss/news', 'category': 'Think Tanks'},
     ],
     'commodities': [
         {'name': 'Mining.com', 'url': 'https://www.mining.com/feed/', 'category': 'Commodities'},
@@ -1015,6 +1046,110 @@ def _fetch_sanctions():
     log.info(f"Situation Room: cached {len(articles)} sanctions/trade items")
 
 
+def _fetch_ucdp_conflicts():
+    """Fetch armed conflict events from UCDP GED API."""
+    if not _can_fetch('ucdp'):
+        return
+    _set_last_fetch('ucdp')
+    try:
+        # UCDP Georeferenced Event Dataset - recent events
+        resp = requests.get('https://ucdpapi.pcr.uu.se/api/gedevents/24.1',
+                            params={'pagesize': 50, 'page': 0},
+                            timeout=15, headers=_REQ_HEADERS)
+        if not resp.ok:
+            return
+        data = resp.json()
+    except Exception as e:
+        log.debug(f"UCDP fetch failed: {e}")
+        return
+
+    results = data.get('Result', [])
+    if not results:
+        return
+
+    with db_session() as db:
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'ucdp_conflict'")
+        for ev in results[:50]:
+            lat = ev.get('latitude') or 0
+            lng = ev.get('longitude') or 0
+            deaths = (ev.get('best') or 0)
+            eid = str(ev.get('id', hashlib.sha256(json.dumps(ev, sort_keys=True, default=str).encode()).hexdigest()[:12]))
+            country = ev.get('country', '')
+            db.execute('''INSERT OR IGNORE INTO sitroom_events
+                (event_id, event_type, title, magnitude, lat, lng, event_time, detail_json)
+                VALUES (?, ?, ?, ?, ?, ?, 0, ?)''',
+                (eid, 'ucdp_conflict',
+                 f"{ev.get('type_of_violence_str', 'Armed conflict')} - {ev.get('side_a', '')} vs {ev.get('side_b', '')}",
+                 deaths, lat, lng,
+                 json.dumps({'country': country, 'region': ev.get('region', ''),
+                             'deaths_best': deaths, 'deaths_low': ev.get('low', 0), 'deaths_high': ev.get('high', 0),
+                             'year': ev.get('year', ''), 'source': ev.get('source_article', ''),
+                             'side_a': ev.get('side_a', ''), 'side_b': ev.get('side_b', ''),
+                             'violence_type': ev.get('type_of_violence_str', '')})))
+        db.commit()
+    log.info(f"Situation Room: cached {len(results)} UCDP conflict events")
+
+
+def _fetch_cyber_threats():
+    """Fetch cybersecurity threat data from CISA KEV + NVD."""
+    if not _can_fetch('cyber_threats'):
+        return
+    _set_last_fetch('cyber_threats')
+
+    items = []
+
+    # CISA Known Exploited Vulnerabilities (KEV)
+    try:
+        resp = requests.get('https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json',
+                            timeout=15, headers=_REQ_HEADERS)
+        if resp.ok:
+            data = resp.json()
+            for vuln in (data.get('vulnerabilities', []))[-20:]:
+                items.append({
+                    'title': f"{vuln.get('cveID', '')} - {vuln.get('vendorProject', '')} {vuln.get('product', '')}",
+                    'description': vuln.get('shortDescription', ''),
+                    'date': vuln.get('dateAdded', ''),
+                    'source': 'CISA KEV',
+                    'severity': 'high',
+                })
+    except Exception as e:
+        log.debug(f"CISA KEV fetch failed: {e}")
+
+    # CISA advisories RSS
+    try:
+        resp = requests.get('https://www.cisa.gov/cybersecurity-advisories/all.xml',
+                            timeout=_REQ_TIMEOUT, headers=_REQ_HEADERS)
+        if resp.ok:
+            adv = _parse_feed(resp.text, 'CISA', 'Cyber')
+            for a in adv[:10]:
+                items.append({
+                    'title': a['title'],
+                    'description': a.get('description', ''),
+                    'date': a.get('published', ''),
+                    'source': 'CISA Advisory',
+                    'severity': 'medium',
+                    'link': a.get('link', ''),
+                })
+    except Exception as e:
+        log.debug(f"CISA advisories fetch failed: {e}")
+
+    if not items:
+        return
+
+    with db_session() as db:
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'cyber_threat'")
+        for item in items:
+            eid = hashlib.sha256((item['title']).encode()).hexdigest()[:16]
+            db.execute('''INSERT OR IGNORE INTO sitroom_events
+                (event_id, event_type, title, lat, lng, event_time, source_url, detail_json)
+                VALUES (?, ?, ?, 0, 0, 0, ?, ?)''',
+                (eid, 'cyber_threat', item['title'][:500], item.get('link', ''),
+                 json.dumps({'description': item.get('description', '')[:500], 'date': item.get('date', ''),
+                             'source': item.get('source', ''), 'severity': item.get('severity', '')})))
+        db.commit()
+    log.info(f"Situation Room: cached {len(items)} cyber threats")
+
+
 def _fetch_displacement():
     """Fetch UNHCR displacement/refugee data."""
     if not _can_fetch('displacement'):
@@ -1099,6 +1234,8 @@ def refresh_all_feeds():
             _fetch_gdelt_trending()
             _fetch_sanctions()
             _fetch_displacement()
+            _fetch_ucdp_conflicts()
+            _fetch_cyber_threats()
         except Exception as e:
             log.exception(f"Situation Room refresh error: {e}")
         finally:
@@ -1240,7 +1377,9 @@ def api_sitroom_summary():
             (SELECT COUNT(*) FROM sitroom_custom_feeds) as custom_feeds,
             (SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'fire') as fires,
             (SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'disease') as diseases,
-            (SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'internet_outage') as outages
+            (SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'internet_outage') as outages,
+            (SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'ucdp_conflict') as ucdp,
+            (SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'cyber_threat') as cyber
         ''').fetchone()
 
         top_quakes = db.execute(
@@ -1261,6 +1400,7 @@ def api_sitroom_summary():
         'custom_feed_count': counts['custom_feeds'],
         'fire_count': counts['fires'], 'disease_count': counts['diseases'],
         'outage_count': counts['outages'],
+        'ucdp_count': counts['ucdp'], 'cyber_count': counts['cyber'],
         'top_earthquakes': [dict(r) for r in top_quakes],
         'markets': [dict(r) for r in market_rows],
         'space_weather': space_weather,
@@ -1404,6 +1544,22 @@ def api_sitroom_diseases():
     with db_session() as db:
         rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'disease' ORDER BY cached_at DESC LIMIT 30").fetchall()
     return jsonify({'outbreaks': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/ucdp')
+def api_sitroom_ucdp():
+    """Return UCDP armed conflict events."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'ucdp_conflict' ORDER BY magnitude DESC LIMIT 50").fetchall()
+    return jsonify({'conflicts': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/cyber-threats')
+def api_sitroom_cyber_threats():
+    """Return cyber threat data (CISA KEV + advisories)."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'cyber_threat' ORDER BY cached_at DESC LIMIT 30").fetchall()
+    return jsonify({'threats': [dict(r) for r in rows], 'count': len(rows)})
 
 
 @situation_room_bp.route('/api/sitroom/osint')
