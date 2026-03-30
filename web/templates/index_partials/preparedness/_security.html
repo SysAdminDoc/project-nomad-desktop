@@ -1,0 +1,97 @@
+    <!-- Sub: Security -->
+    <div id="psub-security" class="prep-sub">
+    <div class="prep-section prep-utility-section prep-security-section">
+      <h3 class="prep-heading">Security Operations <button class="help-icon" data-help="security-guide" title="Security module guide">?</button></h3>
+
+      <div id="security-dashboard" class="prep-dashboard-grid prep-security-dashboard"></div>
+
+      <div class="prep-subtabs-shell prep-tab-strip">
+        <button type="button" class="btn btn-sm prep-utility-tab prep-utility-tab-active" id="sec-tab-cameras" data-security-tab="cameras">Cameras</button>
+        <button type="button" class="btn btn-sm prep-utility-tab" id="sec-tab-access" data-security-tab="access">Access Log</button>
+      </div>
+
+      <div id="security-cameras-panel">
+        <div class="prep-form-shell prep-data-shell prep-security-camera-form">
+          <div class="prep-form-grid prep-security-camera-grid">
+            <label class="prep-field"><span class="prep-field-label">Camera Name</span><input id="cam-name" name="cam_name" class="prep-field-control" placeholder="Front Door"></label>
+            <label class="prep-field prep-field-span-2"><span class="prep-field-label">Stream URL</span><input id="cam-url" name="cam_url" class="prep-field-control" placeholder="http://192.168.1.100:8080/video"></label>
+            <label class="prep-field"><span class="prep-field-label">Type</span><select id="cam-type" name="cam_type" class="prep-field-control"><option value="mjpeg">MJPEG</option><option value="snapshot">Snapshot (refresh)</option><option value="hls">HLS Stream</option></select></label>
+            <label class="prep-field"><span class="prep-field-label">Location</span><input id="cam-location" name="cam_location" class="prep-field-control" placeholder="North perimeter"></label>
+          </div>
+          <div class="prep-form-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-prep-action="add-camera">Add Camera</button>
+          </div>
+        </div>
+        <p class="prep-module-note prep-security-note">Supports MJPEG streams (most IP cameras), snapshot URLs (auto-refreshes), and HLS streams. Common camera URLs:<br>
+        Reolink: <code>http://IP/cgi-bin/api.cgi?cmd=Snap&channel=0</code> | Amcrest: <code>http://IP/cgi-bin/snapshot.cgi</code> | Wyze: Use rtsp-simple-server bridge | Generic ONVIF: <code>http://IP:port/video</code></p>
+        <div id="camera-grid" class="prep-camera-grid"></div>
+
+        <div class="prep-data-shell prep-utility-shell prep-motion-shell">
+          <div class="prep-utility-header">
+            <div>
+              <div class="prep-command-note">Automation</div>
+              <h4 class="prep-utility-subtitle">Motion Detection</h4>
+            </div>
+            <button type="button" class="btn btn-sm" data-prep-action="toggle-motion-settings-panel" id="motion-settings-toggle-btn">Settings</button>
+          </div>
+          <div id="motion-status-card" class="prep-inline-status prep-motion-status">
+            <div class="prep-status-copy">Loading motion detection status...</div>
+          </div>
+          <div id="motion-settings-panel" class="prep-secondary-block prep-motion-settings is-hidden">
+            <div class="prep-form-grid prep-motion-grid">
+              <label class="prep-field"><span class="prep-field-label">Threshold (5-100)</span><input id="motion-threshold" name="motion_threshold" class="prep-field-control" type="number" min="5" max="100" value="25"></label>
+              <label class="prep-field"><span class="prep-field-label">Check Interval (sec)</span><input id="motion-interval" name="motion_interval" class="prep-field-control" type="number" min="1" max="30" value="2"></label>
+              <label class="prep-field"><span class="prep-field-label">Cooldown (sec)</span><input id="motion-cooldown" name="motion_cooldown" class="prep-field-control" type="number" min="5" max="600" value="60"></label>
+            </div>
+            <div class="prep-form-actions">
+              <button type="button" class="btn btn-sm btn-primary" data-prep-action="configure-motion-detection">Apply</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="security-access-panel" class="is-hidden">
+        <div class="prep-form-shell prep-data-shell prep-access-form">
+          <div class="prep-utility-header prep-utility-header-compact">
+            <div>
+              <div class="prep-command-note">Log Activity</div>
+              <h4 class="prep-utility-subtitle">Access Events</h4>
+            </div>
+          </div>
+          <div class="prep-form-grid prep-access-grid">
+            <label class="prep-field"><span class="prep-field-label">Person</span><input id="al-person" name="al_person" class="prep-field-control" placeholder="Name"></label>
+            <label class="prep-field"><span class="prep-field-label">Direction</span><select id="al-direction" name="al_direction" class="prep-field-control"><option value="entry">Entry</option><option value="exit">Exit</option><option value="patrol">Patrol</option><option value="unknown">Unknown</option></select></label>
+            <label class="prep-field"><span class="prep-field-label">Location</span><input id="al-location" name="al_location" class="prep-field-control" placeholder="Front gate"></label>
+            <label class="prep-field"><span class="prep-field-label">Method</span><select id="al-method" name="al_method" class="prep-field-control"><option value="visual">Visual</option><option value="camera">Camera</option><option value="sensor">Sensor</option><option value="radio">Radio Report</option><option value="other">Other</option></select></label>
+            <label class="prep-field prep-field-span-2"><span class="prep-field-label">Notes</span><input id="al-notes" name="al_notes" class="prep-field-control" placeholder="Optional details"></label>
+          </div>
+          <div class="prep-form-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-prep-action="log-access">Log</button>
+          </div>
+        </div>
+        <div class="prep-command-bar prep-access-history-bar">
+          <div>
+            <div class="prep-command-note">History</div>
+            <h4 class="prep-utility-subtitle">Access History</h4>
+          </div>
+          <div class="prep-command-actions">
+            <button type="button" class="btn btn-sm btn-danger" data-prep-action="clear-access-log">Clear Log</button>
+          </div>
+        </div>
+        <div id="access-log-list" class="prep-table-wrap prep-access-log-shell"></div>
+      </div>
+
+      <div class="prep-data-shell prep-utility-shell prep-perimeter-shell">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Boundaries</div>
+            <h4 class="prep-utility-subtitle">Perimeter Zones</h4>
+          </div>
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="create-perimeter-zone">Add Zone</button>
+        </div>
+        <div id="perimeter-zones-list" class="prep-record-list prep-perimeter-list">
+          <div class="prep-table-empty">Loading...</div>
+        </div>
+      </div>
+    </div>
+    </div><!-- /psub-security -->

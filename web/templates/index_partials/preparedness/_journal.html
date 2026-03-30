@@ -1,0 +1,30 @@
+    <!-- Sub: Daily Journal -->
+    <div id="psub-journal" class="prep-sub">
+    <div class="prep-section">
+      <div class="prep-utility-header prep-utility-header-compact">
+        <h3 class="prep-utility-subtitle">Daily Journal <button class="help-icon" data-help="prep" title="Journal guide">?</button></h3>
+        <button type="button" class="btn btn-sm" data-prep-action="export-journal" title="Export journal as Markdown">Export Journal</button>
+      </div>
+      <div class="settings-card prep-form-shell mb-12">
+        <label class="prep-field">
+          <span class="prep-field-label">Entry</span>
+          <textarea id="journal-entry" name="journal_entry" rows="4" class="prep-field-control prep-ops-textarea" placeholder="Record today's observations, events, decisions, lessons learned…" data-ctrl-enter-action="submit-journal"></textarea>
+        </label>
+        <div class="prep-toolbar prep-toolbar-row prep-toolbar-compact">
+          <select id="journal-mood" name="journal_mood" class="prep-toolbar-select prep-toolbar-select-tight">
+            <option value="">Mood...</option>
+            <option value="good">Good</option>
+            <option value="okay">Okay</option>
+            <option value="stressed">Stressed</option>
+            <option value="alert">On Alert</option>
+            <option value="tired">Tired</option>
+            <option value="motivated">Motivated</option>
+          </select>
+          <input id="journal-tags" name="journal_tags" class="prep-toolbar-input prep-toolbar-input-wide" placeholder="Tags (comma-separated)">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="submit-journal">Log Entry</button>
+          <span class="prep-reference-footnote prep-reference-footnote-tight">Ctrl+Enter to submit</span>
+        </div>
+      </div>
+      <div id="journal-list"></div>
+    </div>
+    </div><!-- /psub-journal -->

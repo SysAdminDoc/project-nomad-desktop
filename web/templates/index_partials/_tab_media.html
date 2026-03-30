@@ -1,0 +1,276 @@
+  <div id="tab-media" class="tab-content workspace-stack">
+    <div class="media-layout">
+      <!-- Folder Sidebar -->
+      <div class="media-sidebar">
+        <div class="media-sidebar-head">
+          <div class="media-sidebar-title">Folders</div>
+          <button class="btn btn-sm btn-primary media-sidebar-create-btn" data-media-action="create-folder">+ New Folder</button>
+        </div>
+        <div id="media-folder-list" class="media-scroll-region media-folder-list"></div>
+        <div class="media-sidebar-footer" id="media-stats-footer">0 items</div>
+      </div>
+
+      <!-- Main Content -->
+      <div class="media-main">
+        <div class="media-command-deck">
+          <div class="media-command-deck-head">
+            <div class="media-command-copy">
+              <div class="section-header-label media-command-kicker">OFFLINE LIBRARY</div>
+              <h2 class="media-command-title">Curate channels, downloads, books, and local knowledge in one calm library.</h2>
+              <p class="media-command-text">Move from collecting content to organizing it and resuming it later without the workspace feeling like five separate download tools glued together.</p>
+            </div>
+            <div class="media-command-actions">
+              <button type="button" class="btn btn-sm btn-primary" data-media-sub-switch="channels">Browse Channels</button>
+              <button type="button" class="btn btn-sm" data-media-sub-switch="books">Open Books</button>
+              <button type="button" class="btn btn-sm" data-media-action="toggle-queue">View Downloads</button>
+            </div>
+          </div>
+          <div class="media-command-pills">
+            <span class="media-command-pill">Capture</span>
+            <span class="media-command-pill">Organize</span>
+            <span class="media-command-pill">Resume later</span>
+            <span class="media-command-pill">Offline first</span>
+          </div>
+        </div>
+        <!-- Sub-Tab Bar -->
+        <div class="media-subtabs workspace-toolbar">
+          <button class="media-subtab active" data-msub="channels" data-media-sub-switch="channels">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            Channels <span class="media-subtab-count" id="mst-channels">210</span>
+          </button>
+          <button class="media-subtab" data-msub="videos" data-media-sub-switch="videos">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Videos <span class="media-subtab-count" id="mst-videos"></span>
+          </button>
+          <button class="media-subtab" data-msub="audio" data-media-sub-switch="audio">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            Audio <span class="media-subtab-count" id="mst-audio"></span>
+          </button>
+          <button class="media-subtab" data-msub="books" data-media-sub-switch="books">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            Books <span class="media-subtab-count" id="mst-books"></span>
+          </button>
+          <button class="media-subtab" data-msub="torrents" data-media-sub-switch="torrents">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Torrents <span class="media-subtab-count">152</span>
+          </button>
+          <div class="media-subtabs-spacer"></div>
+          <div class="media-subtabs-meta" id="media-total-stats"></div>
+        </div>
+
+        <!-- Top Bar -->
+        <div class="media-topbar" id="media-topbar">
+          <div class="media-topbar-main">
+            <input type="url" id="media-url-input" name="media_url_input" class="media-input media-url-input" placeholder="Paste YouTube URL to download..." autocomplete="url" aria-label="Media download URL">
+            <button class="btn btn-sm btn-primary" id="media-dl-btn" data-media-action="download-url">Download</button>
+            <input type="file" id="media-file-upload" name="media_file_upload" class="media-file-upload is-hidden" multiple data-change-action="upload-media-files">
+            <button class="btn btn-sm" data-click-target="media-file-upload">Upload File</button>
+            <select id="media-cat-select" name="media_cat_select" class="preset-select media-cat-select" aria-label="Media category">
+              <option value="general">General</option><option value="survival">Survival</option><option value="medical">Medical</option>
+              <option value="repair">Repair</option><option value="bushcraft">Bushcraft</option><option value="cooking">Cooking</option>
+              <option value="radio">Radio</option><option value="farming">Farming</option><option value="defense">Defense</option>
+            </select>
+            <button class="btn btn-sm" data-media-action="toggle-catalog" id="media-catalog-btn">Catalog</button>
+          </div>
+          <div class="media-topbar-actions">
+            <select id="media-sort" name="media_sort" class="preset-select media-sort-select" data-change-action="change-media-sort" aria-label="Sort media items">
+              <option value="title">Name</option><option value="date">Newest</option><option value="size">Size</option><option value="favorited">Favorites</option>
+            </select>
+            <input type="search" id="media-search" name="media_search" class="media-input media-search-input" data-input-action="filter-media-list" placeholder="Search…" autocomplete="off" aria-label="Search media library">
+            <button class="btn btn-sm" data-media-action="toggle-select" id="media-select-btn" title="Select multiple items">Select</button>
+            <button class="btn btn-sm" data-media-action="toggle-view" id="media-view-btn" title="Toggle grid/list view">Grid</button>
+            <button class="btn btn-sm" data-media-action="toggle-queue" id="dl-queue-btn" title="Download queue">Downloads</button>
+          </div>
+        </div>
+
+        <!-- yt-dlp Setup Banner -->
+        <div id="media-ytdlp-banner" class="media-inline-panel media-inline-panel-setup is-hidden">
+          <div class="media-inline-panel-head">
+            <span>Video/Audio Downloader (yt-dlp) required for downloading content. <span class="media-inline-meta">~3 MB</span></span>
+            <button class="btn btn-sm btn-primary" data-media-action="install-ytdlp">Setup Downloader</button>
+          </div>
+          <div id="ytdlp-install-progress" class="media-progress-row is-hidden">
+            <div class="progress-bar"><div class="fill is-zero-width" id="ytdlp-install-fill"></div></div>
+          </div>
+        </div>
+
+        <!-- Download Progress Area -->
+        <div id="media-dl-progress" class="media-inline-panel media-inline-panel-progress is-hidden">
+          <div class="media-inline-panel-head media-inline-panel-head-tight">
+            <span id="media-dl-title" class="media-progress-title">Downloading...</span>
+            <span id="media-dl-speed" class="media-progress-meta"></span>
+          </div>
+          <div class="progress-bar"><div class="fill is-zero-width" id="media-dl-fill"></div></div>
+        </div>
+
+        <!-- Download Queue -->
+        <div id="dl-queue-panel" class="media-inline-panel media-inline-panel-scroll media-inline-panel-scroll-queue is-hidden">
+          <div class="media-inline-panel-head media-inline-panel-head-tight">
+            <span class="media-inline-title">Downloads</span>
+            <button class="btn btn-sm btn-ghost media-close-btn-sm" type="button" data-media-action="toggle-queue" aria-label="Close downloads panel">x</button>
+          </div>
+          <div id="dl-queue-list" class="media-inline-list media-inline-list-compact"></div>
+        </div>
+
+        <!-- Catalog Panel (hidden by default) -->
+        <div id="media-catalog-panel" class="media-inline-panel media-inline-panel-scroll media-inline-panel-setup is-hidden">
+          <div class="media-inline-panel-head media-inline-panel-head-spaced">
+            <div>
+              <span class="media-inline-title" id="media-catalog-title">Catalog</span>
+              <span class="media-inline-meta" id="media-catalog-desc">Curated content for offline use</span>
+            </div>
+            <div class="media-inline-actions">
+              <button class="btn btn-sm btn-primary" id="media-catalog-dl-all" data-media-action="download-all-catalog">Download All</button>
+              <button class="btn btn-sm btn-ghost media-close-btn" type="button" data-media-action="toggle-catalog" aria-label="Close media catalog">x</button>
+            </div>
+          </div>
+          <div id="media-catalog-list"></div>
+        </div>
+
+        <!-- Batch Action Bar -->
+        <div id="media-batch-bar" class="media-batch-bar is-hidden">
+          <span id="media-batch-count">0 selected</span>
+          <div class="media-inline-actions">
+            <button class="btn btn-sm media-batch-btn-soft" data-media-action="batch-move">Move</button>
+            <button class="btn btn-sm media-batch-btn-danger" data-media-action="batch-delete">Delete</button>
+            <button class="btn btn-sm media-batch-btn-muted" data-media-action="toggle-select">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Content Area -->
+        <div id="media-content-area" class="media-content-area">
+          <div id="media-continue" class="media-inline-panel media-continue-shell media-continue-panel is-hidden">
+            <div class="workspace-toolbar media-section-heading">
+              <span class="section-header-label">CONTINUE WATCHING</span>
+              <div class="section-divider section-divider-grow"></div>
+            </div>
+            <div id="media-continue-items" class="media-continue-items"></div>
+          </div>
+          <div id="media-item-list"></div>
+        </div>
+
+        <!-- Channel Browser -->
+        <div id="channel-browser" class="media-browser-region is-hidden">
+          <div class="media-browser-toolbar">
+            <span class="media-browser-title">Survival Channels</span>
+            <span class="media-browser-meta" id="channel-count">210 channels &middot; 26 categories</span>
+            <div class="media-browser-spacer"></div>
+            <button class="btn btn-sm media-compact-btn" data-media-action="load-subscriptions" id="subs-btn" title="My subscriptions">SUBSCRIPTIONS</button>
+            <select id="channel-cat-filter" name="channel_cat_filter" class="media-input media-filter-select media-channel-filter" data-change-action="filter-channels" aria-label="Filter channels by category">
+              <option value="">All Categories</option>
+            </select>
+            <input type="search" id="channel-search" name="channel_search" class="media-input media-search-input media-channel-search" data-input-action="filter-channels" placeholder="Filter channels…" autocomplete="off" aria-label="Filter channels">
+            <span class="media-toolbar-divider"></span>
+            <input type="search" id="yt-search-input" name="yt_search_input" class="media-input media-search-input media-yt-search-input" data-enter-action="search-youtube" placeholder="Search YouTube…" autocomplete="off" aria-label="Search YouTube">
+            <button class="btn btn-sm btn-primary media-compact-btn" data-media-action="search-youtube">SEARCH YT</button>
+          </div>
+          <div id="channel-list" class="media-scroll-region media-browser-list"></div>
+          <div id="yt-video-results" class="media-scroll-region media-browser-results is-hidden"></div>
+          <!-- Embedded YouTube Watch Player -->
+          <div id="yt-watch-panel" class="media-player-shell is-hidden">
+            <div class="media-player-toolbar">
+              <span id="yt-watch-title" class="media-player-title"></span>
+              <div class="media-inline-actions">
+                <span id="yt-watch-dl-status" class="media-yt-status"></span>
+                <button class="btn btn-sm btn-ghost media-close-btn" type="button" data-media-action="close-yt-watch" aria-label="Close YouTube player">x</button>
+              </div>
+            </div>
+            <iframe id="yt-watch-frame" class="media-video-frame" allow="accelerometer;autoplay;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>
+          </div>
+        </div>
+
+        <!-- Torrent Library Browser -->
+        <div id="torrent-browser" class="media-browser-region is-hidden">
+
+          <!-- Header bar -->
+          <div class="media-browser-toolbar">
+            <div class="media-browser-title-group">
+              <span class="media-browser-title">Offline Knowledge Library</span>
+              <span id="torrent-client-badge" class="media-torrent-badge is-hidden">Client Active</span>
+            </div>
+            <div class="media-browser-spacer"></div>
+            <span class="media-browser-meta">152 collections &middot; curated for grid-down scenarios</span>
+            <button class="btn btn-sm media-compact-btn" data-media-action="open-torrent-save-dir" title="Open downloads folder">FOLDER</button>
+            <input type="search" id="torrent-search" name="torrent_search" class="media-input media-search-input media-torrent-search" data-input-action="filter-torrents" placeholder="Search collections…" autocomplete="off" aria-label="Search torrent collections">
+          </div>
+
+          <!-- Active downloads panel -->
+          <div id="torrent-active-panel" class="media-inline-panel media-inline-panel-scroll media-inline-panel-scroll-active is-hidden">
+            <div class="media-inline-panel-head media-inline-panel-head-tight">
+              <span class="media-inline-title">Active Downloads</span>
+              <span id="torrent-active-count" class="media-browser-meta"></span>
+              <div class="media-browser-spacer"></div>
+              <span id="torrent-total-speed" class="media-active-speed"></span>
+            </div>
+            <div id="torrent-active-list" class="media-active-list"></div>
+          </div>
+
+          <!-- Category filter bar -->
+          <div class="media-chip-toolbar">
+            <button class="btn btn-sm torrent-cat-btn active" data-cat="all" data-torrent-cat="all">ALL (152)</button>
+            <span class="media-toolbar-divider"></span>
+            <button class="btn btn-sm torrent-cat-btn" data-cat="survival" data-torrent-cat="survival">Survival</button>
+            <button class="btn btn-sm torrent-cat-btn" data-cat="medical" data-torrent-cat="medical">Medical</button>
+            <button class="btn btn-sm torrent-cat-btn" data-cat="maps" data-torrent-cat="maps">Maps</button>
+            <button class="btn btn-sm torrent-cat-btn" data-cat="textbooks" data-torrent-cat="textbooks">Textbooks</button>
+            <button class="btn btn-sm torrent-cat-btn" data-cat="encyclopedias" data-torrent-cat="encyclopedias">Encyclopedias</button>
+            <button class="btn btn-sm torrent-cat-btn" data-cat="weather" data-torrent-cat="weather">Weather</button>
+            <button class="btn btn-sm torrent-cat-btn" data-cat="farming" data-torrent-cat="farming">Farming</button>
+            <button class="btn btn-sm torrent-cat-btn" data-cat="radio" data-torrent-cat="radio">Radio</button>
+            <button class="btn btn-sm torrent-cat-btn" data-cat="videos" data-torrent-cat="videos">Videos</button>
+            <button class="btn btn-sm torrent-cat-btn" data-cat="software" data-torrent-cat="software">Software</button>
+            <button class="btn btn-sm torrent-cat-btn" data-cat="repair" data-torrent-cat="repair">Repair</button>
+            <button class="btn btn-sm torrent-cat-btn" data-cat="energy" data-torrent-cat="energy">Energy</button>
+          </div>
+
+          <!-- Library grid -->
+          <div id="torrent-list" class="media-grid-scroll">
+          </div>
+        </div>
+
+        <!-- Video Player -->
+        <div id="media-player" class="media-player-shell is-hidden">
+          <div class="media-player-toolbar">
+            <span id="media-player-title" class="media-player-title"></span>
+            <div class="media-inline-actions">
+              <select id="media-speed" name="media_speed" class="media-input media-speed-select" data-change-action="set-media-speed" aria-label="Media playback speed">
+                <option value="0.5">0.5x</option>
+                <option value="0.75">0.75x</option>
+                <option value="1" selected>1x</option>
+                <option value="1.25">1.25x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2">2x</option>
+              </select>
+                <button class="btn btn-sm btn-ghost media-close-btn" type="button" data-media-action="close-media-player" aria-label="Close media player">x</button>
+            </div>
+          </div>
+          <video id="media-video-el" class="media-video-el is-hidden" controls crossorigin="anonymous">
+            <track id="media-video-subs" kind="subtitles" srclang="en" label="English" default>
+          </video>
+          <div id="subtitle-status" class="subtitle-status is-hidden">Subtitles loaded</div>
+          <audio id="media-audio-el" class="media-audio-shell is-hidden" controls></audio>
+          <div id="audio-chapters-panel" class="media-audio-chapters-shell is-hidden">
+            <div class="media-audio-chapters-title">Chapters</div>
+            <div id="audio-chapters-list"></div>
+          </div>
+        </div>
+
+        <!-- Book Reader Overlay -->
+        <div id="media-book-reader" class="media-book-reader is-hidden">
+          <div class="media-book-reader-toolbar">
+            <span id="book-reader-title" class="media-book-reader-title"></span>
+            <div class="media-book-reader-actions">
+          <button class="btn btn-sm" data-media-action="book-prev" id="book-prev-btn">Prev</button>
+              <span id="book-reader-loc" class="media-book-reader-loc"></span>
+          <button class="btn btn-sm" data-media-action="book-next" id="book-next-btn">Next</button>
+          <button class="btn btn-sm btn-ghost media-close-btn" type="button" data-media-action="close-book-reader" aria-label="Close book reader">x</button>
+            </div>
+          </div>
+          <div id="book-reader-content" class="media-book-reader-content"></div>
+          <iframe id="book-pdf-frame" class="media-book-reader-frame is-hidden"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preparedness Tab -->

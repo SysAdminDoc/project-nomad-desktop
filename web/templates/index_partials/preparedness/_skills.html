@@ -1,0 +1,42 @@
+    <!-- Sub: Skills Tracker -->
+    <div id="psub-skills" class="prep-sub">
+    <div class="prep-section">
+      <h3>Survival Skills Self-Assessment</h3>
+      <div class="prep-note-block mb-12">Track your proficiency across 60+ survival skills. Honest self-assessment reveals your training gaps before you need the skills.</div>
+      <div class="prep-toolbar prep-toolbar-row mb-12">
+        <button type="button" class="btn btn-sm btn-primary" data-prep-action="open-skill-form">+ Add Custom Skill</button>
+        <button type="button" class="btn btn-sm" data-prep-action="seed-default-skills">Load Default 60 Skills</button>
+        <div id="skills-filter-btns" class="prep-chip-row"></div>
+        <div class="prep-toolbar-spacer"></div>
+        <div id="skills-summary" class="prep-inline-stats"></div>
+      </div>
+      <div id="skills-form" class="prep-form-shell prep-data-shell mb-12 is-hidden">
+        <div class="prep-form-grid prep-form-grid-2 prep-ops-form-grid">
+          <label class="prep-field"><span class="prep-field-label">Skill Name</span><input id="skill-name" name="skill_name" class="prep-field-control" placeholder="e.g. Shelter building"></label>
+          <label class="prep-field"><span class="prep-field-label">Category</span>
+            <select id="skill-cat" name="skill_cat" class="prep-field-control">
+              <option>Fire</option><option>Water</option><option>Shelter</option><option>Food</option>
+              <option>Navigation</option><option>Medical</option><option>Communications</option>
+              <option>Security</option><option>Mechanical</option><option>Homesteading</option><option>General</option>
+            </select>
+          </label>
+          <label class="prep-field"><span class="prep-field-label">Proficiency</span>
+            <select id="skill-prof" name="skill_prof" class="prep-field-control">
+              <option value="none">None — Never practiced</option>
+              <option value="basic">Basic — Know the theory</option>
+              <option value="intermediate">Intermediate — Can do it with effort</option>
+              <option value="expert">Expert — Can teach it</option>
+            </select>
+          </label>
+          <label class="prep-field"><span class="prep-field-label">Last Practiced</span><input id="skill-practiced" name="skill_practiced" type="date" class="prep-field-control"></label>
+          <label class="prep-field prep-field-span-2"><span class="prep-field-label">Notes</span><input id="skill-notes" name="skill_notes" class="prep-field-control" placeholder="Training resources, goals, etc."></label>
+        </div>
+        <div class="prep-form-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="save-skill">Save</button>
+          <button type="button" class="btn btn-sm" data-prep-action="close-skill-form">Cancel</button>
+        </div>
+        <input type="hidden" id="skill-edit-id" name="skill_edit_id" value="">
+      </div>
+      <div id="skills-list" class="prep-reference-panel-grid-compact"></div>
+    </div>
+    </div><!-- /psub-skills -->

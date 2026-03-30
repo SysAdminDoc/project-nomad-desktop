@@ -1,0 +1,164 @@
+    <!-- Header with Print -->
+    <div class="prep-command-bar">
+      <span class="prep-command-note">Set the board, choose the situation, then work the lane that matches the moment.</span>
+      <div class="prep-command-actions">
+        <button class="btn btn-sm" data-app-frame-title="Emergency Card" data-app-frame-url="/api/preparedness/print" title="Print server-side card">Print Basic Card</button>
+        <button class="btn btn-sm btn-primary" data-prep-action="print-full-card" title="Print complete card with family plan, PACE, and all local data">Print Full Card</button>
+        <button class="btn btn-sm btn-primary prep-emergency-btn" data-app-frame-title="Emergency Reference Sheet" data-app-frame-url="/api/emergency-sheet" title="Print comprehensive one-page emergency reference with all contacts, supplies, patients, waypoints">Emergency Sheet</button>
+        <button class="btn btn-sm" data-prep-action="generate-status-report" title="Generate comprehensive status report from all systems">Status Report</button>
+      </div>
+    </div>
+    <!-- Situation Board -->
+    <div class="sit-board" id="sit-board">
+      <button type="button" class="sit-cell" data-sit-domain="security" data-domain="security" data-level="green"><div class="sit-label">Security</div><div class="sit-level">Good</div></button>
+      <button type="button" class="sit-cell" data-sit-domain="water" data-domain="water" data-level="green"><div class="sit-label">Water</div><div class="sit-level">Good</div></button>
+      <button type="button" class="sit-cell" data-sit-domain="food" data-domain="food" data-level="green"><div class="sit-label">Food</div><div class="sit-level">Good</div></button>
+      <button type="button" class="sit-cell" data-sit-domain="medical" data-domain="medical" data-level="green"><div class="sit-label">Medical</div><div class="sit-level">Good</div></button>
+      <button type="button" class="sit-cell" data-sit-domain="power" data-domain="power" data-level="green"><div class="sit-label">Power</div><div class="sit-level">Good</div></button>
+      <button type="button" class="sit-cell" data-sit-domain="comms" data-domain="comms" data-level="green"><div class="sit-label">Comms</div><div class="sit-level">Good</div></button>
+    </div>
+
+    <!-- Scenario-first navigation -->
+    <div class="prep-nav prep-nav-shell prep-scenario-shell">
+      <div class="prep-scenario-intro">
+        <div class="section-header-label prep-scenario-kicker">Preparedness Workflows</div>
+        <h3 class="prep-scenario-title-main">Choose the situation you are managing</h3>
+        <p class="prep-scenario-copy-main">Each lane groups the right tools together so you can move from assessment to action without hunting through modules.</p>
+      </div>
+      <div class="prep-category-row prep-scenario-grid" id="prep-categories">
+        <button type="button" class="prep-cat-btn prep-scenario-card active" data-cat="coordinate" data-prep-category="coordinate" aria-pressed="true">
+          <span class="prep-scenario-icon" aria-hidden="true">&#9878;</span>
+          <span class="prep-scenario-body">
+            <span class="prep-scenario-title">Coordinate</span>
+            <span class="prep-scenario-copy">Run checklists, log incidents, and manage the command-post workflow.</span>
+            <span class="prep-scenario-tags"><span>Checklists</span><span>Incidents</span><span>Command Post</span></span>
+          </span>
+        </button>
+        <button type="button" class="prep-cat-btn prep-scenario-card" data-cat="sustain" data-prep-category="sustain" aria-pressed="false">
+          <span class="prep-scenario-icon" aria-hidden="true">&#127806;</span>
+          <span class="prep-scenario-body">
+            <span class="prep-scenario-title">Sustain</span>
+            <span class="prep-scenario-copy">Keep water, food, fuel, equipment, and environmental conditions stable.</span>
+            <span class="prep-scenario-tags"><span>Supplies</span><span>Power</span><span>Weather</span></span>
+          </span>
+        </button>
+        <button type="button" class="prep-cat-btn prep-scenario-card" data-cat="care" data-prep-category="care" aria-pressed="false">
+          <span class="prep-scenario-icon" aria-hidden="true">&#10010;</span>
+          <span class="prep-scenario-body">
+            <span class="prep-scenario-title">Care &amp; People</span>
+            <span class="prep-scenario-copy">Support medical readiness, family plans, contacts, and community capacity.</span>
+            <span class="prep-scenario-tags"><span>Medical</span><span>Contacts</span><span>Family</span></span>
+          </span>
+        </button>
+        <button type="button" class="prep-cat-btn prep-scenario-card" data-cat="protect" data-prep-category="protect" aria-pressed="false">
+          <span class="prep-scenario-icon" aria-hidden="true">&#128737;</span>
+          <span class="prep-scenario-body">
+            <span class="prep-scenario-title">Protect &amp; Secure</span>
+            <span class="prep-scenario-copy">Watch security, comms discipline, sensitive records, and exposure threats.</span>
+            <span class="prep-scenario-tags"><span>Security</span><span>Radio</span><span>Vault</span></span>
+          </span>
+        </button>
+        <button type="button" class="prep-cat-btn prep-scenario-card" data-cat="learn" data-prep-category="learn" aria-pressed="false">
+          <span class="prep-scenario-icon" aria-hidden="true">&#128214;</span>
+          <span class="prep-scenario-body">
+            <span class="prep-scenario-title">Reference &amp; Planning</span>
+            <span class="prep-scenario-copy">Use procedures, calculators, and field reference when you need a fast answer.</span>
+            <span class="prep-scenario-tags"><span>Guides</span><span>Protocols</span><span>Calculators</span></span>
+          </span>
+        </button>
+      </div>
+      <div class="prep-scenario-focus" id="prep-scenario-focus" aria-live="polite">
+        <div class="prep-scenario-focus-kicker" id="prep-scenario-focus-kicker">Coordinate</div>
+        <div class="prep-scenario-focus-copy" id="prep-scenario-focus-copy">Run checklists, capture incidents, and keep the operational picture current.</div>
+      </div>
+      <div class="prep-subtabs-label">Choose a workspace inside this lane</div>
+      <!-- Sub-tabs within selected category -->
+      <div class="prep-subtabs prep-subtabs-shell" id="prep-subtab-bar">
+        <!-- Populated by showPrepCategory() -->
+      </div>
+    </div>
+
+    <!-- Sub: Checklists -->
+    <div id="psub-checklists" class="prep-sub active">
+    <div class="prep-section">
+      <h3>Emergency Checklists <button class="help-icon" data-help="prep" title="How checklists work">?</button></h3>
+      <p class="prep-section-note">Keep one checklist active, see what remains at a glance, and make handoffs easier when more than one person is involved.</p>
+      <div class="prep-layout">
+        <div class="prep-sidebar">
+          <div class="prep-sidebar-header">
+            <span>My Checklists</span>
+          </div>
+          <div class="prep-template-btns" id="prep-template-btns"></div>
+          <div class="prep-toolbar prep-toolbar-compact prep-toolbar-row prep-checklist-actions">
+            <button class="btn btn-sm prep-micro-btn" data-prep-action="create-custom-checklist" title="Create blank custom checklist">+ Custom</button>
+            <input type="file" id="cl-import-file" name="cl_import_file" accept=".json" data-change-action="import-checklist-json" class="is-hidden">
+            <button class="btn btn-sm prep-micro-btn" data-click-target="cl-import-file" title="Import shared checklist">Import</button>
+            <button class="btn btn-sm prep-micro-btn" data-prep-action="export-current-checklist" title="Export current checklist for sharing">Share</button>
+          </div>
+          <div class="prep-list" id="prep-list"></div>
+        </div>
+        <div class="prep-main">
+          <div class="prep-main-header">
+            <h4 id="prep-active-name">Select or create a checklist</h4>
+            <div class="prep-inline-meta prep-inline-meta-compact">
+              <span id="prep-active-stats" class="prep-inline-stats"></span>
+              <button class="btn btn-sm prep-micro-btn" data-prep-action="add-checklist-item" title="Add item to this checklist">+ Item</button>
+            </div>
+          </div>
+          <div class="prep-progress-bar"><div class="fill is-zero-width" id="prep-progress-fill"></div></div>
+          <div class="prep-checklist" id="prep-checklist">
+            <div class="empty-state prep-empty-fill">
+              <div class="icon prep-empty-icon-muted">&#9745;</div>
+              <p>Choose a template above to create a checklist, or select an existing one.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div><!-- /psub-checklists -->
+
+    <!-- Sub: Incidents -->
+    <div id="psub-incidents" class="prep-sub">
+    <div class="prep-section">
+      <h3>Incident Log <button class="help-icon" data-help="prep" title="What to log as incidents">?</button></h3>
+      <p class="prep-section-note">Capture events in sequence so the next operator can understand risk, severity, and timing without reconstructing the timeline.</p>
+      <div class="prep-toolbar prep-toolbar-row prep-data-toolbar">
+        <select id="inc-severity" name="inc_severity" class="preset-select prep-toolbar-select prep-toolbar-select-tight" aria-label="Incident severity">
+          <option value="info">Info</option>
+          <option value="warning">Warning</option>
+          <option value="alert">Alert</option>
+          <option value="critical">Critical</option>
+        </select>
+        <select id="inc-category" name="inc_category" class="preset-select prep-toolbar-select" aria-label="Incident category">
+          <option value="security">Security</option>
+          <option value="medical">Medical</option>
+          <option value="infrastructure">Infrastructure</option>
+          <option value="weather">Weather</option>
+          <option value="comms">Comms</option>
+          <option value="supply">Supply</option>
+          <option value="movement">Movement</option>
+          <option value="other">Other</option>
+        </select>
+        <input id="inc-desc" name="inc_desc" class="prep-toolbar-input prep-text-input" placeholder="Describe the event..." autocomplete="off" aria-label="Incident description">
+        <button class="btn btn-sm btn-primary" data-prep-action="log-incident">Log Event</button>
+      </div>
+      <div class="prep-toolbar prep-toolbar-secondary prep-toolbar-row prep-data-toolbar">
+        <select id="inc-filter" name="inc_filter" class="preset-select prep-toolbar-select" data-change-action="load-incidents" aria-label="Filter incidents by category">
+          <option value="">All Categories</option>
+          <option value="security">Security</option>
+          <option value="medical">Medical</option>
+          <option value="infrastructure">Infrastructure</option>
+          <option value="weather">Weather</option>
+          <option value="comms">Comms</option>
+          <option value="supply">Supply</option>
+          <option value="movement">Movement</option>
+          <option value="other">Other</option>
+        </select>
+        <span class="prep-toolbar-spacer"></span>
+        <button class="btn btn-sm btn-danger" data-prep-action="clear-incidents">Clear All</button>
+      </div>
+      <div class="settings-card prep-data-shell prep-incident-shell">
+        <div id="incidents-list" class="prep-record-list"></div>
+      </div>
+    </div>
+    </div><!-- /psub-incidents -->

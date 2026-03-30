@@ -1,5 +1,5 @@
 /**
- * Toast notification system for N.O.M.A.D.
+ * Toast notification system for NOMAD Field Desk.
  * Stacking, typed toast messages with auto-dismiss.
  */
 

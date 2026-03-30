@@ -21,6 +21,12 @@ except ImportError:
 
 log = logging.getLogger('nomad.config')
 
+APP_DISPLAY_NAME = 'NOMAD Field Desk'
+APP_SHORT_NAME = 'NOMAD'
+APP_EXECUTABLE_BASENAME = 'NOMADFieldDesk'
+APP_STORAGE_DIRNAME = 'NOMADFieldDesk'
+LEGACY_STORAGE_DIRNAMES = ('ProjectNOMAD',)
+
 
 # ---------------------------------------------------------------------------
 # Application Settings (class-based, env-overridable)
@@ -45,6 +51,7 @@ class Config:
 
     # --- Service Ports ---
     APP_PORT = int(os.environ.get('NOMAD_PORT', 8080))
+    APP_HOST = os.environ.get('NOMAD_HOST', '127.0.0.1')
     OLLAMA_PORT = int(os.environ.get('NOMAD_OLLAMA_PORT', 11434))
     KIWIX_PORT = int(os.environ.get('NOMAD_KIWIX_PORT', 8888))
     CYBERCHEF_PORT = int(os.environ.get('NOMAD_CYBERCHEF_PORT', 8889))
@@ -86,14 +93,23 @@ def get_config_path():
     """Fixed location for config pointer (outside data dir to solve bootstrap)."""
     from platform_utils import get_config_base
     base = get_config_base()
-    return os.path.join(base, 'ProjectNOMAD', 'config.json')
+    preferred = os.path.join(base, APP_STORAGE_DIRNAME, 'config.json')
+    if os.path.isfile(preferred):
+        return preferred
+    for legacy_name in LEGACY_STORAGE_DIRNAMES:
+        legacy = os.path.join(base, legacy_name, 'config.json')
+        if os.path.isfile(legacy):
+            return legacy
+    return preferred
 
 
 def load_config() -> dict:
     global _config_cache, _config_mtime
     path = get_config_path()
+    if _config_cache is not None and _config_mtime == float('inf'):
+        return _config_cache
     if not os.path.isfile(path):
-        return {}
+        return _config_cache if _config_cache is not None else {}
     try:
         mtime = os.path.getmtime(path)
     except OSError:
@@ -156,7 +172,7 @@ def save_config(data: dict):
 
 
 def get_data_dir() -> str:
-    """Single source of truth for the N.O.M.A.D. data directory."""
+    """Single source of truth for the NOMAD data directory."""
     # Portable mode — store data next to the executable
     from platform_utils import is_portable_mode, get_portable_data_dir
     if is_portable_mode():
@@ -165,10 +181,20 @@ def get_data_dir() -> str:
     cfg = load_config()
     data_dir = cfg.get('data_dir', '')
     if data_dir and os.path.isabs(data_dir):
-        os.makedirs(data_dir, exist_ok=True)
-        return data_dir
+        try:
+            os.makedirs(data_dir, exist_ok=True)
+            return data_dir
+        except OSError as exc:
+            log.warning('Configured data directory unavailable, falling back to default: %s (%s)', data_dir, exc)
     from platform_utils import get_data_base
-    default = os.path.join(get_data_base(), 'ProjectNOMAD')
+    data_base = get_data_base()
+    default = os.path.join(data_base, APP_STORAGE_DIRNAME)
+    if not os.path.isdir(default):
+        for legacy_name in LEGACY_STORAGE_DIRNAMES:
+            legacy_dir = os.path.join(data_base, legacy_name)
+            if os.path.isdir(legacy_dir):
+                default = legacy_dir
+                break
     os.makedirs(default, exist_ok=True)
     return default
 

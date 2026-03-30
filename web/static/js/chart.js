@@ -1,5 +1,5 @@
 /**
- * NomadChart — Reusable Canvas 2D Chart Engine for N.O.M.A.D.
+ * NomadChart - reusable Canvas 2D chart engine for NOMAD Field Desk.
  * Provides line, bar, donut, breakdown, and sparkline charts.
  */
 

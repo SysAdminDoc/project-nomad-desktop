@@ -1,5 +1,5 @@
 /**
- * Centralized API client for N.O.M.A.D.
+ * Centralized API client for NOMAD Field Desk.
  * Replaces raw fetch() calls with consistent error handling.
  */
 

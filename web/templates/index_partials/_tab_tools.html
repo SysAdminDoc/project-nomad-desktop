@@ -1,0 +1,202 @@
+  <!-- Tools Tab -->
+  <div id="tab-tools" class="tab-content tools-workspace settings-workspace">
+    <div class="tools-command-deck workspace-panel">
+      <div class="tools-command-deck-head">
+        <div class="tools-command-copy">
+          <div class="section-header-label tools-command-kicker">FIELD UTILITIES</div>
+          <h2 class="tools-command-title">Launch the specialized tools that support field work, training, and off-grid communication.</h2>
+          <p class="tools-command-text">Use this workspace when you need instruments, scenario practice, or external tools that complement the main operating lanes without cluttering them.</p>
+        </div>
+        <div class="tools-command-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-tool-action="scan-meshtastic">Scan Radios</button>
+          <button type="button" class="btn btn-sm" data-drill-type="blackout">Start Drill</button>
+          <button type="button" class="btn btn-sm" data-app-frame-title="NukeMap" data-app-frame-url="/nukemap/">Open NukeMap</button>
+        </div>
+      </div>
+      <div class="tools-command-pills">
+        <span class="tools-command-pill">Instruments</span>
+        <span class="tools-command-pill">Launch tools</span>
+        <span class="tools-command-pill">Off-grid comms</span>
+        <span class="tools-command-pill">Training drills</span>
+        <span class="tools-command-pill">Scenario history</span>
+      </div>
+    </div>
+    <div class="settings-grid settings-workspace-grid tools-workspace-grid">
+
+      <!-- Compass & Inclinometer -->
+      <div class="settings-card tools-card tools-compass-card">
+        <div class="tools-panel-head">
+          <div class="workspace-kicker">INSTRUMENTS</div>
+          <h3>&#129517; Compass &amp; Inclinometer</h3>
+        </div>
+        <div class="tools-card-intro">Uses your device's orientation sensors for heading and tilt. Best on systems that expose compass and inclinometer data; some desktops may not.</div>
+        <div class="tools-instrument-row">
+          <div id="compass-display" class="compass-display">
+            <div id="compass-rose" class="compass-rose">
+              <div id="compass-needle" class="compass-needle">
+              </div>
+              <span class="compass-mark compass-mark-north">N</span>
+              <span class="compass-mark compass-mark-south">S</span>
+              <span class="compass-mark compass-mark-west">W</span>
+              <span class="compass-mark compass-mark-east">E</span>
+            </div>
+            <div id="compass-heading" class="compass-reading">---&deg;</div>
+            <div id="compass-cardinal" class="compass-subreading">No sensor</div>
+          </div>
+          <div class="compass-tilt-panel">
+            <div class="compass-tilt-label">Tilt</div>
+            <div id="inclinometer-pitch" class="compass-tilt-reading">--&deg;</div>
+            <div class="compass-axis-label">Pitch</div>
+            <div id="inclinometer-roll" class="compass-tilt-reading compass-tilt-reading-secondary">--&deg;</div>
+            <div class="compass-axis-label">Roll</div>
+          </div>
+        </div>
+        <div class="tools-card-actions workspace-toolbar">
+          <button class="btn btn-sm btn-primary" data-tool-action="start-compass" id="compass-start-btn">Enable Compass</button>
+          <span id="compass-error" class="tools-inline-note compass-error"></span>
+        </div>
+      </div>
+
+      <!-- NukeMap -->
+      <div class="settings-card tools-card tools-launch-card tools-launch-card-nukemap layout-span-full">
+        <h3 class="tools-launch-title tools-launch-title-alert">
+          <span class="tools-launch-icon">&#9762;</span> NukeMap — Nuclear Effects Simulator
+        </h3>
+        <div class="tools-card-intro tools-launch-copy">
+          Full nuclear weapon effects simulator with Glasstone & Dolan physics. Blast radius, thermal radiation, fallout, EMP, shelter analysis, MIRV simulation, and a complete WW3 simulation engine with 418 verified targets and 7 escalation scenarios. Works completely offline.
+        </div>
+        <div class="tools-launch-actions workspace-toolbar">
+          <button class="btn btn-sm tools-launch-btn tools-launch-btn-alert" data-app-frame-title="NukeMap" data-app-frame-url="/nukemap/">Launch NukeMap</button>
+          <span class="tools-launch-meta">418 targets | 708 warheads | 7 scenarios | Animated missile arcs | Nuclear winter | Shelter analysis</span>
+        </div>
+      </div>
+
+      <!-- VIPTrack -->
+      <div class="settings-card tools-card tools-launch-card tools-launch-card-info layout-span-full">
+        <h3 class="tools-launch-title tools-launch-title-info">
+          <span class="tools-launch-icon">&#9992;</span> VIPTrack — Military &amp; VIP Aircraft Tracker
+        </h3>
+        <div class="tools-card-intro tools-launch-copy">
+          Real-time military, government, and VIP aircraft tracker using live ADS-B data feeds. Monitors global military aviation activity with type-accurate aircraft silhouettes, altitude-colored trails, watchlist alerts, and comprehensive intelligence databases. <strong>Requires internet connection for live data.</strong>
+        </div>
+        <div class="tools-launch-actions workspace-toolbar">
+          <button class="btn btn-sm tools-launch-btn tools-launch-btn-info" data-app-frame-title="VIPTrack" data-app-frame-url="https://sysadmindoc.github.io/VIPTrack/">Launch VIPTrack</button>
+          <span class="tools-launch-meta">Live ADS-B | Military + VIP + PIA | 90+ aircraft silhouettes | Watchlist alerts | Weather radar</span>
+        </div>
+      </div>
+
+      <!-- Meshtastic Integration -->
+      <div class="settings-card tools-card tools-mesh-card layout-span-full">
+        <div class="tools-panel-head">
+          <div class="workspace-kicker">OFF-GRID COMMS</div>
+          <h3>Off-Grid Radio Messaging <button class="help-icon" data-help="comms-guide" title="Radio & messaging guide">?</button></h3>
+        </div>
+        <div class="tools-card-intro">Send messages without cell towers or internet using a Meshtastic radio device. Range: 1-10+ miles. Plug a Meshtastic radio into your USB port to get started.</div>
+        <div class="tools-toolbar workspace-toolbar">
+          <button class="btn btn-sm btn-primary" data-tool-action="scan-meshtastic">Scan for Devices</button>
+          <span id="mesh-status" class="tools-status-pill mesh-status-pill">No device connected</span>
+        </div>
+        <div id="mesh-nodes" class="mesh-nodes-grid"></div>
+        <div class="mesh-compose-row workspace-toolbar">
+          <input id="mesh-msg" name="mesh_msg" class="mesh-compose-input" placeholder="Type mesh message..." disabled>
+          <button class="btn btn-sm" data-tool-action="send-mesh-msg" disabled id="mesh-send-btn">Send</button>
+        </div>
+        <div class="tools-subsection-head">
+          <div class="tools-subsection-copy">
+            <div class="workspace-kicker">LIVE TRAFFIC</div>
+            <p class="tools-subsection-text">Incoming and outgoing mesh activity appears here once a device is connected.</p>
+          </div>
+        </div>
+        <div id="mesh-log" class="mesh-log">
+          <div class="mesh-log-empty">Waiting for a connected radio.</div>
+        </div>
+        <div class="tools-footnote">
+          <strong>Setup:</strong> 1. Buy a Meshtastic radio (search "Meshtastic" online). 2. Plug it into your USB port. 3. Click "Scan for Devices" above.
+          Works in Chrome and Edge browsers. <a class="link-accent" href="https://meshtastic.org/">Learn more at meshtastic.org</a>
+        </div>
+      </div>
+
+      <!-- Barcode Scanner (opens via modal from inventory) -->
+
+      <!-- Video Library moved to Media tab -->
+
+      <!-- Guided Drills -->
+      <div class="settings-card tools-card tools-drills-card layout-span-full">
+        <div class="tools-panel-head">
+          <div class="workspace-kicker">PRACTICE</div>
+          <h3>Guided Emergency Drills <button class="help-icon" data-help="scenarios-deep" title="How drills & scenarios work">?</button></h3>
+        </div>
+        <div class="tools-card-intro">Run a timed drill to test your preparedness. Each drill walks you through tasks, tracks completion time, and generates an after-action review.</div>
+        <div class="drill-cards-grid" id="drill-cards">
+          <button type="button" class="calc-card drill-card" data-drill-type="72hour">
+            <h4 class="drill-card-title">72-Hour Kit Check</h4>
+            <div class="drill-card-copy">Verify your 72-hour kit is complete, nothing expired, all batteries charged. Est: 30 min.</div>
+          </button>
+          <button type="button" class="calc-card drill-card" data-drill-type="evacuation">
+            <h4 class="drill-card-title">Evacuation Drill</h4>
+            <div class="drill-card-copy">Time how fast your household can pack go-bags, load vehicles, and reach rally point. Est: 15-30 min.</div>
+          </button>
+          <button type="button" class="calc-card drill-card" data-drill-type="comms">
+            <h4 class="drill-card-title">Communications Check</h4>
+            <div class="drill-card-copy">Test all radios, verify frequencies, run a radio net with contacts, check backup power. Est: 20 min.</div>
+          </button>
+          <button type="button" class="calc-card drill-card" data-drill-type="blackout">
+            <h4 class="drill-card-title">Blackout Drill</h4>
+            <div class="drill-card-copy">Turn off main breaker. Operate on backup power only. Test lighting, cooking, comms, heating. Est: 2-4 hours.</div>
+          </button>
+          <button type="button" class="calc-card drill-card" data-drill-type="medical">
+            <h4 class="drill-card-title">Medical Response</h4>
+            <div class="drill-card-copy">Locate and inventory first aid kit, practice tourniquet application, review CPR steps. Est: 20 min.</div>
+          </button>
+          <button type="button" class="calc-card drill-card" data-drill-type="water">
+            <h4 class="drill-card-title">Water Security</h4>
+            <div class="drill-card-copy">Test water filter, practice purification methods, verify water storage levels. Est: 30 min.</div>
+          </button>
+        </div>
+        <div id="drill-active" class="drill-active-shell is-hidden">
+          <div class="drill-active-header workspace-toolbar workspace-heading-row">
+            <h4 id="drill-title" class="drill-active-title"></h4>
+            <span id="drill-timer" class="drill-active-timer"></span>
+          </div>
+          <div id="drill-summary" class="drill-summary-strip" hidden></div>
+          <div id="drill-progress" class="progress-bar drill-active-progress" hidden>
+            <div id="drill-progress-fill" class="fill drill-active-progress-fill"></div>
+          </div>
+          <div id="drill-steps" class="drill-steps drill-step-list"></div>
+          <div class="drill-active-actions">
+            <button class="btn btn-sm btn-primary" data-tool-action="complete-drill">Complete Drill</button>
+            <button class="btn btn-sm btn-danger" data-tool-action="cancel-drill">Cancel</button>
+          </div>
+        </div>
+      </div>
+      <!-- Drill History -->
+      <div class="settings-card tools-card tools-history-card layout-span-full">
+        <div class="tools-panel-head tools-panel-head-split workspace-toolbar workspace-heading-row">
+          <div>
+            <div class="workspace-kicker">REVIEW</div>
+            <h3 class="tools-panel-heading"><span>Drill History</span></h3>
+          </div>
+          <button class="btn btn-sm" data-tool-action="load-drill-history">Refresh</button>
+        </div>
+        <p class="tools-card-intro">Review pace, completion quality, and recency so the next drill is easy to improve.</p>
+        <div id="drill-history-list" class="tools-history-list tools-history-stack"></div>
+      </div>
+
+      <!-- Scenario Training Engine -->
+      <div class="settings-card tools-card tools-scenarios-card layout-span-full tools-card-accent">
+        <div class="tools-panel-head tools-panel-head-split workspace-toolbar workspace-heading-row">
+          <div>
+            <div class="workspace-kicker">SIMULATIONS</div>
+            <h3 class="tools-panel-heading"><span class="tools-panel-heading-text">Immersive Training Scenarios <button class="help-icon" data-help="scenarios-deep" title="How training scenarios work">?</button></span></h3>
+          </div>
+          <button class="btn btn-sm" data-tool-action="load-scenario-history">History</button>
+        </div>
+        <p class="tools-card-intro">Multi-phase survival simulations with AI-generated complications. Your real inventory, contacts, and situation data shape the experience. Each decision is logged and scored.</p>
+        <div id="scenario-selector" class="scenario-selector-grid"></div>
+        <div id="scenario-active" class="scenario-active-shell is-hidden"></div>
+        <div id="scenario-history" class="scenario-history-shell is-hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Media Tab -->

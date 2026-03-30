@@ -1,0 +1,64 @@
+    <!-- Sub: Community Resource Registry -->
+    <div id="psub-community" class="prep-sub">
+    <div class="prep-section">
+      <h3>Community Resource Registry</h3>
+      <div class="prep-note-block">Document trusted neighbors and community members, including the skills and equipment they can bring during an emergency. Knowing the network around you multiplies resilience.</div>
+      <div class="prep-command-bar">
+        <div class="prep-command-note">Trusted people and shared capabilities</div>
+        <div class="prep-command-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="open-community-form">+ Add Person</button>
+        </div>
+      </div>
+      <div id="community-form" class="prep-form-shell prep-community-form is-hidden">
+        <div class="prep-form-grid prep-form-grid-2 prep-ops-form-grid">
+          <label class="prep-field"><span class="prep-field-label">Name *</span><input id="comm-name" name="comm_name" class="prep-field-control" placeholder="Name or identifier"></label>
+          <label class="prep-field"><span class="prep-field-label">Distance (miles)</span><input id="comm-dist" name="comm_dist" type="number" min="0" step="0.1" value="0.1" class="prep-field-control"></label>
+          <label class="prep-field"><span class="prep-field-label">Trust Level</span>
+            <select id="comm-trust" name="comm_trust" class="prep-field-control">
+              <option value="unknown">Unknown</option><option value="acquaintance">Acquaintance</option>
+              <option value="trusted">Trusted</option><option value="inner-circle">Inner Circle</option>
+            </select>
+          </label>
+          <label class="prep-field"><span class="prep-field-label">Contact (optional)</span><input id="comm-contact" name="comm_contact" class="prep-field-control" placeholder="Phone / callsign / freq"></label>
+          <label class="prep-field prep-field-span-2"><span class="prep-field-label">Skills (comma-separated)</span><input id="comm-skills" name="comm_skills" class="prep-field-control" placeholder="e.g. nurse, mechanic, ham radio, military, farmer"></label>
+          <label class="prep-field prep-field-span-2"><span class="prep-field-label">Equipment (comma-separated)</span><input id="comm-equip" name="comm_equip" class="prep-field-control" placeholder="e.g. generator, ham radio, tractor, well, solar, medical kit"></label>
+          <label class="prep-field prep-field-span-2"><span class="prep-field-label">Notes</span><textarea id="comm-notes" name="comm_notes" rows="2" class="prep-field-control prep-ops-textarea" placeholder="Personality, reliability notes, location, special circumstances..."></textarea></label>
+        </div>
+        <div class="prep-form-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="save-community">Save</button>
+          <button type="button" class="btn btn-sm" data-prep-action="close-community-form">Cancel</button>
+        </div>
+        <input type="hidden" id="comm-edit-id" name="comm_edit_id" value="">
+      </div>
+      <div id="community-skills-summary" class="prep-community-summary"></div>
+      <div id="community-list" class="prep-community-grid"></div>
+    </div>
+
+    <!-- Federation Network -->
+    <div class="prep-section">
+      <h3>Federation Network</h3>
+          <div class="prep-note-block">Connect with other NOMAD nodes on your LAN for shared situational awareness, resource coordination, and emergency communication.</div>
+      <div class="prep-command-bar">
+        <div class="prep-command-note">Node coordination and shared resource visibility</div>
+        <div class="prep-command-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="show-add-peer-form">+ Add Peer</button>
+          <button type="button" class="btn btn-sm" data-prep-action="load-federation-peers">Refresh</button>
+          <button type="button" class="btn btn-sm" data-prep-action="load-federation-marketplace">Resource Marketplace</button>
+        </div>
+      </div>
+      <div id="add-peer-form" class="prep-form-shell prep-federation-form is-hidden">
+        <div class="prep-form-grid prep-form-grid-2 prep-ops-form-grid">
+          <label class="prep-field"><span class="prep-field-label">Node ID</span><input id="fp-nodeid" name="fp_nodeid" class="prep-field-control prep-ops-mono-field" placeholder="node-abc123"></label>
+          <label class="prep-field"><span class="prep-field-label">Name</span><input id="fp-name" name="fp_name" class="prep-field-control" placeholder="Neighbor's Node"></label>
+          <label class="prep-field"><span class="prep-field-label">Trust</span><select id="fp-trust" name="fp_trust" class="prep-field-control"><option value="observer">Observer</option><option value="member">Member</option><option value="trusted">Trusted</option><option value="admin">Admin</option></select></label>
+          <label class="prep-field"><span class="prep-field-label">IP</span><input id="fp-ip" name="fp_ip" class="prep-field-control prep-ops-mono-field" placeholder="192.168.1.x"></label>
+        </div>
+        <div class="prep-form-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="submit-add-peer">Add</button>
+          <button type="button" class="btn btn-sm btn-ghost" data-prep-action="hide-add-peer-form">Cancel</button>
+        </div>
+      </div>
+      <div id="federation-peers-list" class="prep-federation-grid"></div>
+      <div id="federation-marketplace" class="prep-market-shell is-hidden"></div>
+    </div>
+    </div><!-- /psub-community -->

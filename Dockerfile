@@ -1,9 +1,9 @@
-# N.O.M.A.D. Headless Server
+# NOMAD Field Desk Headless Server
 # Run without desktop GUI — Flask serves on port 8080
 FROM python:3.12-slim
 
-LABEL maintainer="Project N.O.M.A.D." \
-      description="Offline survival command center — headless server mode" \
+LABEL maintainer="NOMAD Field Desk" \
+      description="Desktop-first offline preparedness and field operations workspace — headless server mode" \
       version="1.0.0"
 
 # System deps for pyserial, Pillow, crypto

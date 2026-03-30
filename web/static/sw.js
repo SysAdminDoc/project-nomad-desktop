@@ -83,7 +83,7 @@ self.addEventListener('fetch', event => {
 // Handle push-alert messages from the main page for background notifications
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'push-alert') {
-    self.registration.showNotification(event.data.title || 'N.O.M.A.D. Alert', {
+self.registration.showNotification(event.data.title || 'NOMAD Alert', {
       body: event.data.body || 'New alert received',
       icon: '/static/logo.png',
       badge: '/static/logo.png',

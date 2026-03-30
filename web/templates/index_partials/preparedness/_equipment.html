@@ -1,0 +1,58 @@
+    <div id="psub-equipment" class="prep-sub">
+      <div class="prep-section prep-resource-shell">
+      <div class="prep-command-bar">
+        <div>
+          <div class="prep-command-note">Equipment service and readiness</div>
+          <div class="prep-note-block">Track critical generators, tools, vehicles, and service intervals in a cleaner maintenance workspace.</div>
+        </div>
+        <div class="prep-command-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="open-equip-form">+ Add Equipment</button>
+        </div>
+      </div>
+      <div id="equip-status-row" class="prep-resource-summary-grid"></div>
+      <div id="equip-table" class="prep-resource-table-shell"></div>
+      <!-- Add/Edit Modal -->
+      <div id="equip-modal" class="modal-overlay prep-resource-modal-overlay is-hidden" data-backdrop-close="equip-modal">
+        <div class="modal-card prep-resource-modal-card">
+          <div class="modal-header prep-secondary-heading">
+            <h3 id="equip-modal-title">Add Equipment</h3>
+            <button type="button" class="modal-close" data-prep-action="close-equip-form" aria-label="Close equipment form">&times;</button>
+          </div>
+          <div class="modal-body prep-resource-modal-form">
+          <input type="hidden" id="equip-id" name="equip_id">
+          <div class="prep-form-grid prep-form-grid-2 prep-ops-form-grid">
+            <label class="prep-field prep-field-span-2"><span class="prep-field-label">Equipment Name *</span><input type="text" id="equip-name" name="equip_name" class="prep-field-control" placeholder="Honda EU2200i Generator"></label>
+            <label class="prep-field"><span class="prep-field-label">Category</span>
+              <select id="equip-category" name="equip_category" class="prep-field-control">
+                <option value="generator">Generator</option><option value="vehicle">Vehicle</option>
+                <option value="tool">Power Tool</option><option value="communication">Communication</option>
+                <option value="medical">Medical Device</option><option value="water">Water/Filtration</option>
+                <option value="security">Security</option><option value="general">General</option>
+              </select>
+            </label>
+            <label class="prep-field"><span class="prep-field-label">Status</span>
+              <select id="equip-status" name="equip_status" class="prep-field-control">
+                <option value="operational">Operational</option>
+                <option value="needs-service">Needs Service</option>
+                <option value="in-service">In Service</option>
+                <option value="non-operational">Non-Operational</option>
+              </select>
+            </label>
+            <label class="prep-field"><span class="prep-field-label">Last Service Date</span><input type="date" id="equip-last" name="equip_last" class="prep-field-control"></label>
+            <label class="prep-field"><span class="prep-field-label">Next Service Due</span><input type="date" id="equip-next" name="equip_next" class="prep-field-control"></label>
+            <label class="prep-field prep-field-span-2"><span class="prep-field-label">Location</span><input type="text" id="equip-location" name="equip_location" class="prep-field-control" placeholder="Garage, storage room..."></label>
+            <label class="prep-field prep-field-span-2"><span class="prep-field-label">Service Notes</span><textarea id="equip-service-notes" name="equip_service_notes" rows="2" class="prep-field-control prep-ops-textarea" placeholder="Oil type, filter size, torque specs..."></textarea></label>
+            <label class="prep-field prep-field-span-2"><span class="prep-field-label">Notes</span><textarea id="equip-notes" name="equip_notes" rows="2" class="prep-field-control prep-ops-textarea"></textarea></label>
+          </div>
+          <div class="prep-form-actions prep-resource-actions">
+            <button type="button" class="btn btn-sm btn-ghost" data-prep-action="close-equip-form">Cancel</button>
+            <button type="button" class="btn btn-sm btn-primary" data-prep-action="save-equip">Save</button>
+          </div>
+          </div>
+        </div>
+      </div>
+      <div class="prep-note-block prep-resource-note">
+        <strong>Maintenance Reminders:</strong> Generator: Oil every 50–100 hrs or annually &bull; Vehicle: Oil every 3–5k miles &bull; Chainsaw: Chain, bar oil, air filter each use &bull; Water filters: Per manufacturer spec &bull; Batteries: Test/top-up every 3 months
+      </div>
+      </div>
+    </div><!-- /psub-equipment -->

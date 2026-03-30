@@ -1,5 +1,5 @@
 /**
- * Internationalization (i18n) for N.O.M.A.D.
+ * Internationalization (i18n) for NOMAD Field Desk.
  * Handles language loading, translation, and RTL support.
  */
 

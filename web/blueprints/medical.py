@@ -8,6 +8,7 @@ from flask import Blueprint, request, jsonify, Response
 
 from db import get_db, log_activity
 from config import get_data_dir
+from web.print_templates import render_print_document
 
 medical_bp = Blueprint('medical', __name__)
 
@@ -15,6 +16,277 @@ medical_bp = Blueprint('medical', __name__)
 def _esc(s):
     """Escape HTML for print output."""
     return (s or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+
+
+def _parse_json_list(value):
+    """Decode a stored JSON list field with graceful fallback."""
+    try:
+        parsed = json.loads(value or '[]')
+        if isinstance(parsed, list):
+            return parsed
+        if isinstance(parsed, str):
+            return [parsed] if parsed else []
+    except (TypeError, ValueError):
+        pass
+    if not value:
+        return []
+    return [item.strip() for item in str(value).split(',') if item.strip()]
+
+
+def _render_patient_card_html(patient, vitals, wounds, pid):
+    """Render a printable patient care card with the shared document shell."""
+    allergies = _parse_json_list(patient.get('allergies'))
+    medications = _parse_json_list(patient.get('medications'))
+    conditions = _parse_json_list(patient.get('conditions'))
+    weight_kg = patient.get('weight_kg')
+    weight_summary = f'{weight_kg} kg / {round(weight_kg * 2.205, 1)} lb' if weight_kg else '?'
+    generated_at = time.strftime('%Y-%m-%d %H:%M')
+    allergy_summary = ', '.join(_esc(str(a)) for a in allergies) if allergies else 'NKDA (No Known Drug Allergies)'
+    allergy_chips = ''.join(
+        f'<span class="doc-chip doc-chip-alert">{_esc(str(a))}</span>' for a in allergies
+    ) or '<span class="doc-chip doc-chip-muted">NKDA</span>'
+    medication_chips = ''.join(
+        f'<span class="doc-chip">{_esc(str(m))}</span>' for m in medications
+    ) or '<span class="doc-chip doc-chip-muted">None recorded</span>'
+    condition_chips = ''.join(
+        f'<span class="doc-chip">{_esc(str(c))}</span>' for c in conditions
+    ) or '<span class="doc-chip doc-chip-muted">None recorded</span>'
+
+    vitals_rows = ''
+    for entry in vitals:
+        systolic = entry.get('bp_systolic')
+        diastolic = entry.get('bp_diastolic')
+        bp = f'{systolic}/{diastolic}' if systolic or diastolic else '-'
+        heart_rate = entry.get('heart_rate') or entry.get('pulse') or '-'
+        spo2 = f'{entry.get("spo2")}%' if entry.get('spo2') not in (None, '') else '-'
+        pain = f'{entry.get("pain_level")}/10' if entry.get('pain_level') not in (None, '') else '-'
+        vitals_rows += (
+            f'<tr><td>{_esc(str(entry.get("created_at", "")))}</td><td>{_esc(bp)}</td>'
+            f'<td>{_esc(str(heart_rate))}</td><td>{_esc(str(entry.get("resp_rate") or "-"))}</td>'
+            f'<td>{_esc(str(entry.get("temp_f") or "-"))}</td><td>{_esc(spo2)}</td>'
+            f'<td>{_esc(pain)}</td><td>{_esc(str(entry.get("gcs") or "-"))}</td>'
+            f'<td>{_esc(entry.get("notes", "")) or "-"}</td></tr>'
+        )
+    vitals_html = (
+        '<div class="doc-table-shell"><table><thead><tr><th>Time</th><th>BP</th><th>Heart Rate</th><th>Resp</th><th>Temp</th><th>SpO2</th><th>Pain</th><th>GCS</th><th>Notes</th></tr></thead>'
+        f'<tbody>{vitals_rows}</tbody></table></div>'
+        if vitals_rows else
+        '<div class="doc-empty">No vital signs have been logged for this patient yet.</div>'
+    )
+
+    wound_rows = ''
+    for wound in wounds:
+        wound_rows += (
+            f'<tr><td>{_esc(str(wound.get("created_at", "")))}</td>'
+            f'<td>{_esc(wound.get("location", "")) or "-"}</td>'
+            f'<td>{_esc(wound.get("wound_type", "")) or "-"}</td>'
+            f'<td>{_esc(wound.get("severity", "")) or "-"}</td>'
+            f'<td>{_esc(wound.get("description", "")) or "-"}</td>'
+            f'<td>{_esc(wound.get("treatment", "")) or "-"}</td></tr>'
+        )
+    wounds_html = (
+        '<div class="doc-table-shell"><table><thead><tr><th>Time</th><th>Location</th><th>Type</th><th>Severity</th><th>Description</th><th>Treatment</th></tr></thead>'
+        f'<tbody>{wound_rows}</tbody></table></div>'
+        if wound_rows else
+        '<div class="doc-empty">No wound entries have been documented.</div>'
+    )
+
+    notes_html = (
+        f'<section class="doc-section"><h2 class="doc-section-title">Clinical Notes</h2><div class="doc-note-box">{_esc(patient.get("notes", ""))}</div></section>'
+        if patient.get('notes') else ''
+    )
+
+    body = f'''<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Immediate Alerts</h2>
+      <div class="doc-note-box">{allergy_summary}</div>
+      <div class="doc-chip-list" style="margin-top:12px;">{allergy_chips}</div>
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Patient Snapshot</h2>
+      <div class="doc-chip-list">
+        <span class="doc-chip">Age {patient.get("age") or "?"}</span>
+        <span class="doc-chip">Sex { _esc(patient.get("sex") or "?") }</span>
+        <span class="doc-chip">Weight { _esc(str(weight_summary)) }</span>
+        <span class="doc-chip">Blood { _esc(patient.get("blood_type") or "?") }</span>
+      </div>
+      <div class="doc-note-box" style="margin-top:12px;">Portable patient care snapshot for treatment, transfer, and print use.</div>
+    </div>
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Current Medications</h2>
+      <div class="doc-chip-list">{medication_chips}</div>
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Conditions</h2>
+      <div class="doc-chip-list">{condition_chips}</div>
+    </div>
+  </div>
+</section>
+{notes_html}
+<section class="doc-section">
+  <h2 class="doc-section-title">Vital Signs History</h2>
+  {vitals_html}
+</section>
+<section class="doc-section">
+  <h2 class="doc-section-title">Wound Log</h2>
+  {wounds_html}
+</section>
+<section class="doc-section">
+  <div class="doc-footer">
+    <span>Generated by NOMAD Field Desk.</span>
+    <span>Prepared {generated_at}</span>
+  </div>
+</section>'''
+
+    return render_print_document(
+        f'Patient Care Card - {patient["name"]}',
+        'Portable patient care snapshot for treatment, transfer, and print use.',
+        body,
+        eyebrow='NOMAD Field Desk Patient Care Card',
+        meta_items=[f'Generated {generated_at}', f'Patient ID {patient.get("id") or pid}'],
+        stat_items=[
+            ('Age', patient.get('age') or '?'),
+            ('Blood', patient.get('blood_type') or '?'),
+            ('Vitals', len(vitals)),
+            ('Wounds', len(wounds)),
+        ],
+        accent_start='#15324a',
+        accent_end='#2e6480',
+        max_width='980px',
+    )
+
+
+def _render_handoff_report_html(
+    patient,
+    vitals,
+    wounds,
+    *,
+    from_provider,
+    to_provider,
+    situation,
+    background,
+    assessment,
+    recommendation,
+    generated_at,
+):
+    """Render a printable SBAR handoff report with the shared document shell."""
+    allergies = _parse_json_list(patient.get('allergies'))
+    conditions = _parse_json_list(patient.get('conditions'))
+    medications = _parse_json_list(patient.get('medications'))
+    recommendation_text = recommendation or 'Continue current treatment plan.'
+    patient_meta_html = ''.join(
+        f'<div class="doc-panel"><h2 class="doc-section-title">{_esc(str(label))}</h2><div class="doc-note-box">{_esc(str(value))}</div></div>'
+        for label, value in [
+            ('Triage', patient.get('triage_category') or 'Unassigned'),
+            ('Age', patient.get('age') or '?'),
+            ('Blood Type', patient.get('blood_type') or '?'),
+            ('Allergies', ', '.join(str(a) for a in allergies) or 'NKDA'),
+        ]
+    )
+    vitals_rows = ''.join(
+        f'<tr><td>{_esc(str(v.get("created_at", "")))}</td><td>{_esc(str(v.get("heart_rate") or v.get("pulse") or "-"))}</td>'
+        f'<td>{_esc((f"{v.get("bp_systolic") or ""}/{v.get("bp_diastolic") or ""}").strip("/") or "-")}</td>'
+        f'<td>{_esc(str(v.get("resp_rate") or "-"))}</td><td>{_esc(str(v.get("spo2") or "-"))}</td><td>{_esc(str(v.get("temp_f") or "-"))}</td></tr>'
+        for v in vitals[:5]
+    )
+    vitals_html = (
+        '<div class="doc-table-shell"><table><thead><tr><th>Time</th><th>HR</th><th>BP</th><th>RR</th><th>SpO2</th><th>Temp</th></tr></thead>'
+        f'<tbody>{vitals_rows}</tbody></table></div>'
+        if vitals_rows else
+        '<div class="doc-empty">No recent vitals are recorded in this handoff window.</div>'
+    )
+    wound_rows = ''.join(
+        f'<tr><td>{_esc(str(w.get("created_at", "")))}</td><td>{_esc(str(w.get("wound_type", "")) or "-")}</td>'
+        f'<td>{_esc(str(w.get("location", "")) or "-")}</td><td>{_esc(str(w.get("treatment", "")) or "-")}</td></tr>'
+        for w in wounds
+    )
+    wounds_html = (
+        '<div class="doc-table-shell"><table><thead><tr><th>Time</th><th>Type</th><th>Location</th><th>Treatment</th></tr></thead>'
+        f'<tbody>{wound_rows}</tbody></table></div>'
+        if wound_rows else
+        '<div class="doc-empty">No wound entries are attached to this patient.</div>'
+    )
+    medication_chips = ''.join(f'<span class="doc-chip">{_esc(str(m))}</span>' for m in medications) or '<span class="doc-chip doc-chip-muted">None recorded</span>'
+    condition_chips = ''.join(f'<span class="doc-chip">{_esc(str(c))}</span>' for c in conditions) or '<span class="doc-chip doc-chip-muted">None recorded</span>'
+
+    body = f'''<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Transfer Lane</h2>
+      <div class="doc-note-box">From {_esc(from_provider)} to {_esc(to_provider)}</div>
+      <div class="doc-chip-list" style="margin-top:12px;">
+        <span class="doc-chip">Prepared {generated_at}</span>
+        <span class="doc-chip">Patient {_esc(patient["name"])}</span>
+      </div>
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Patient Snapshot</h2>
+      <div class="doc-grid-2">{patient_meta_html}</div>
+    </div>
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel"><h2 class="doc-section-title">Situation</h2><div class="doc-note-box">{_esc(situation)}</div></div>
+    <div class="doc-panel"><h2 class="doc-section-title">Background</h2><div class="doc-note-box">{_esc(background)}</div></div>
+    <div class="doc-panel"><h2 class="doc-section-title">Assessment</h2><div class="doc-note-box">{_esc(assessment)}</div></div>
+    <div class="doc-panel"><h2 class="doc-section-title">Recommendation</h2><div class="doc-note-box">{_esc(recommendation_text)}</div></div>
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Conditions</h2>
+      <div class="doc-chip-list">{condition_chips}</div>
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Medications</h2>
+      <div class="doc-chip-list">{medication_chips}</div>
+    </div>
+  </div>
+</section>
+<section class="doc-section">
+  <h2 class="doc-section-title">Recent Vitals</h2>
+  {vitals_html}
+</section>
+<section class="doc-section">
+  <h2 class="doc-section-title">Wound Log</h2>
+  {wounds_html}
+</section>
+<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Provider Signature</h2>
+      <div class="doc-note-box" style="min-height:88px;"></div>
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Date / Time</h2>
+      <div class="doc-note-box" style="min-height:88px;">__________________</div>
+    </div>
+  </div>
+</section>'''
+
+    return render_print_document(
+        f'SBAR Handoff - {patient["name"]}',
+        'Structured patient transfer summary for rapid briefing, print handoff, and chart carry-forward.',
+        body,
+        eyebrow='NOMAD Field Desk Transfer Brief',
+        meta_items=[f'Prepared {generated_at}', f'From {from_provider} to {to_provider}'],
+        stat_items=[
+            ('Triage', patient.get('triage_category') or 'Unassigned'),
+            ('Age', patient.get('age') or '?'),
+            ('Blood', patient.get('blood_type') or '?'),
+            ('Wounds', len(wounds)),
+        ],
+        accent_start='#10263d',
+        accent_end='#255777',
+        max_width='980px',
+    )
 
 
 # ─── Drug Interactions Database ──────────────────────────────────────
@@ -290,48 +562,8 @@ def api_patient_card(pid):
     vitals = [dict(r) for r in db.execute('SELECT * FROM vitals_log WHERE patient_id = ? ORDER BY created_at DESC LIMIT 20', (pid,)).fetchall()]
     wounds = [dict(r) for r in db.execute('SELECT * FROM wound_log WHERE patient_id = ? ORDER BY created_at DESC LIMIT 100', (pid,)).fetchall()]
     db.close()
-
-    p = dict(patient)
-    allergies = json.loads(p.get('allergies') or '[]')
-    medications = json.loads(p.get('medications') or '[]')
-    conditions = json.loads(p.get('conditions') or '[]')
-    weight_lbs = round(p['weight_kg'] * 2.205, 1) if p.get('weight_kg') else '?'
-
-    html = f'''<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Patient Card \u2014 {_esc(p["name"])}</title>
-    <style>body{{font-family:'Segoe UI',sans-serif;padding:20px;max-width:800px;margin:0 auto;font-size:12px;line-height:1.6;}}
-    h1{{font-size:18px;border-bottom:2px solid #333;padding-bottom:4px;}}h2{{font-size:14px;color:#555;margin-top:16px;border-bottom:1px solid #ccc;padding-bottom:3px;}}
-    .grid{{display:grid;grid-template-columns:1fr 1fr;gap:8px;}}
-    .field{{margin-bottom:4px;}}.label{{font-weight:700;color:#333;}}.warn{{color:red;font-weight:700;}}
-    table{{border-collapse:collapse;width:100%;margin:8px 0;font-size:11px;}}th,td{{border:1px solid #ccc;padding:4px 8px;text-align:left;}}th{{background:#f0f0f0;}}
-    @media print{{body{{padding:10px;}}}} </style></head><body>
-    <h1>Patient Care Card \u2014 {_esc(p["name"])}</h1>
-    <div class="grid">
-      <div class="field"><span class="label">Age:</span> {p.get("age") or "?"}</div>
-      <div class="field"><span class="label">Sex:</span> {p.get("sex") or "?"}</div>
-      <div class="field"><span class="label">Weight:</span> {p.get("weight_kg") or "?"} kg ({weight_lbs} lbs)</div>
-      <div class="field"><span class="label">Blood Type:</span> {_esc(p.get("blood_type") or "?")}</div>
-    </div>
-    <div class="field warn">Allergies: {", ".join(_esc(a) for a in allergies) if allergies else "NKDA (No Known Drug Allergies)"}</div>
-    <div class="field"><span class="label">Current Medications:</span> {", ".join(_esc(m) for m in medications) if medications else "None"}</div>
-    <div class="field"><span class="label">Conditions:</span> {", ".join(_esc(c) for c in conditions) if conditions else "None"}</div>
-    {f'<div class="field"><span class="label">Notes:</span> {_esc(p.get("notes",""))}</div>' if p.get("notes") else ""}
-    '''
-
-    if vitals:
-        html += '<h2>Vital Signs History</h2><table><thead><tr><th>Time</th><th>BP</th><th>Pulse</th><th>Resp</th><th>Temp</th><th>SpO2</th><th>Pain</th><th>GCS</th><th>Notes</th></tr></thead><tbody>'
-        for v in vitals:
-            bp = f'{v["bp_systolic"]}/{v["bp_diastolic"]}' if v.get('bp_systolic') else '-'
-            html += f'<tr><td>{_esc(str(v["created_at"]))}</td><td>{_esc(bp)}</td><td>{v.get("pulse") or "-"}</td><td>{v.get("resp_rate") or "-"}</td><td>{v.get("temp_f") or "-"}</td><td>{v.get("spo2") or "-"}%</td><td>{v.get("pain_level") or "-"}/10</td><td>{v.get("gcs") or "-"}</td><td>{_esc(v.get("notes",""))}</td></tr>'
-        html += '</tbody></table>'
-
-    if wounds:
-        html += '<h2>Wound Log</h2><table><thead><tr><th>Time</th><th>Location</th><th>Type</th><th>Severity</th><th>Description</th><th>Treatment</th></tr></thead><tbody>'
-        for w in wounds:
-            html += f'<tr><td>{_esc(str(w["created_at"]))}</td><td>{_esc(w.get("location",""))}</td><td>{_esc(w.get("wound_type",""))}</td><td>{_esc(w.get("severity",""))}</td><td>{_esc(w.get("description",""))}</td><td>{_esc(w.get("treatment",""))}</td></tr>'
-        html += '</tbody></table>'
-
-    html += f'<p style="margin-top:16px;font-size:9px;color:#999;">Generated by Project N.O.M.A.D. \u2014 {time.strftime("%Y-%m-%d %H:%M")}</p></body></html>'
-    return html
+    html = _render_patient_card_html(dict(patient), vitals, wounds, pid)
+    return Response(html, mimetype='text/html')
 
 
 # ─── Drug Interactions Check ────────────────────────────────────────
@@ -520,56 +752,35 @@ def api_medical_handoff(pid):
         wounds = [dict(r) for r in db.execute('SELECT * FROM wound_log WHERE patient_id = ? ORDER BY created_at DESC LIMIT 100', (pid,)).fetchall()]
 
         p = dict(patient)
-        allergies = json.loads(p.get('allergies', '[]') or '[]')
-        conditions = json.loads(p.get('conditions', '[]') or '[]')
-        medications = json.loads(p.get('medications', '[]') or '[]')
+        allergies = _parse_json_list(p.get('allergies'))
+        conditions = _parse_json_list(p.get('conditions'))
+        medications = _parse_json_list(p.get('medications'))
 
         data = request.get_json() or {}
-        from datetime import datetime
-        now = datetime.now().strftime('%Y-%m-%d %H:%M')
+        now = time.strftime('%Y-%m-%d %H:%M')
 
-        situation = data.get('situation', f'Patient {p["name"]}, triage: {p.get("triage_category","unassigned")}')
-        background = data.get('background', f'Age: {p.get("age","?")}. Blood type: {p.get("blood_type","?")}. Allergies: {", ".join(allergies) or "NKDA"}. Conditions: {", ".join(conditions) or "None"}. Medications: {", ".join(medications) or "None"}.')
-        assessment = data.get('assessment', f'{len(wounds)} wounds documented. Latest vitals: {"available" if vitals else "none recorded"}.')
-        recommendation = data.get('recommendation', '')
-
-        from html import escape as esc
-        report_html = f'''<!DOCTYPE html><html><head><meta charset="UTF-8"><title>SBAR Handoff \u2014 {esc(p["name"])}</title>
-<style>
-body {{ font-family: 'Courier New', monospace; margin: 0; padding: 12px; font-size: 11px; color: #000; }}
-h1 {{ font-size: 14px; text-align: center; border-bottom: 3px solid #000; padding-bottom: 4px; margin: 0 0 8px; }}
-h2 {{ font-size: 11px; background: #333; color: #fff; padding: 3px 8px; margin: 8px 0 4px; }}
-table {{ width: 100%; border-collapse: collapse; }}
-th, td {{ border: 1px solid #999; padding: 3px 6px; font-size: 10px; }}
-th {{ background: #eee; font-weight: 700; }}
-.section {{ margin-bottom: 8px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; }}
-.label {{ font-weight: 700; }}
-@media print {{ @page {{ margin: 10mm; }} }}
-</style></head><body>
-<h1>SBAR PATIENT HANDOFF \u2014 {esc(p["name"])}</h1>
-<div style="text-align:center;font-size:10px;margin-bottom:8px;">{esc(now)} | From: {esc(data.get("from_provider","___"))} \u2192 To: {esc(data.get("to_provider","___"))}</div>
-<div class="section"><span class="label">S \u2014 SITUATION:</span> {esc(situation)}</div>
-<div class="section"><span class="label">B \u2014 BACKGROUND:</span> {esc(background)}</div>
-<div class="section"><span class="label">A \u2014 ASSESSMENT:</span> {esc(assessment)}</div>
-<div class="section"><span class="label">R \u2014 RECOMMENDATION:</span> {esc(recommendation or "Continue current treatment plan.")}</div>'''
-
-        if vitals:
-            report_html += '<h2>RECENT VITALS</h2><table><tr><th>Time</th><th>HR</th><th>BP</th><th>RR</th><th>SpO2</th><th>Temp</th></tr>'
-            for v in vitals[:5]:
-                report_html += f'<tr><td>{esc(str(v.get("created_at","")))}</td><td>{esc(str(v.get("heart_rate","")))}</td><td>{esc(str(v.get("bp_systolic","")))}/{esc(str(v.get("bp_diastolic","")))}</td><td>{esc(str(v.get("resp_rate","")))}</td><td>{esc(str(v.get("spo2","")))}</td><td>{esc(str(v.get("temp_f","")))}</td></tr>'
-            report_html += '</table>'
-
-        if wounds:
-            report_html += '<h2>WOUND LOG</h2><table><tr><th>Time</th><th>Type</th><th>Location</th><th>Treatment</th></tr>'
-            for w in wounds:
-                report_html += f'<tr><td>{esc(str(w.get("created_at","")))}</td><td>{esc(str(w.get("wound_type","")))}</td><td>{esc(str(w.get("location","")))}</td><td>{esc(str(w.get("treatment","")))}</td></tr>'
-            report_html += '</table>'
-
-        report_html += '<div style="margin-top:12px;border-top:2px solid #000;padding-top:6px;font-size:10px;">Provider signature: _________________________ Date/Time: _____________</div></body></html>'
+        from_provider = data.get('from_provider') or data.get('sending_provider') or '___'
+        to_provider = data.get('to_provider') or data.get('receiving_provider') or '___'
+        situation = data.get('situation') or data.get('chief_concern') or f'Patient {p["name"]}, triage: {p.get("triage_category","unassigned")}'
+        background = data.get('background') or data.get('history') or f'Age: {p.get("age","?")}. Blood type: {p.get("blood_type","?")}. Allergies: {", ".join(allergies) or "NKDA"}. Conditions: {", ".join(conditions) or "None"}. Medications: {", ".join(medications) or "None"}.'
+        assessment = data.get('assessment') or data.get('condition_summary') or f'{len(wounds)} wounds documented. Latest vitals: {"available" if vitals else "none recorded"}.'
+        recommendation = data.get('recommendation') or data.get('plan') or ''
+        report_html = _render_handoff_report_html(
+            p,
+            vitals,
+            wounds,
+            from_provider=from_provider,
+            to_provider=to_provider,
+            situation=situation,
+            background=background,
+            assessment=assessment,
+            recommendation=recommendation,
+            generated_at=now,
+        )
 
         # Save to DB
         db.execute('INSERT INTO handoff_reports (patient_id, from_provider, to_provider, situation, background, assessment, recommendation, report_html) VALUES (?,?,?,?,?,?,?,?)',
-                   (pid, data.get('from_provider', ''), data.get('to_provider', ''), situation, background, assessment, recommendation, report_html))
+                   (pid, from_provider, to_provider, situation, background, assessment, recommendation, report_html))
         db.commit()
         rid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
 

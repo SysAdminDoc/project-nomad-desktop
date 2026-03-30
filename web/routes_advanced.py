@@ -18,6 +18,7 @@ from flask import jsonify, request, Response
 
 from db import get_db, db_session, log_activity
 from services import ollama
+from web.print_templates import render_print_document
 
 log = logging.getLogger('nomad.web')
 
@@ -52,6 +53,16 @@ def _prune_expired():
     cutoff = time.time() - 30
     while _undo_stack and _undo_stack[0]['timestamp'] < cutoff:
         _undo_stack.popleft()
+
+
+def _is_expired_date(value):
+    """Return True when a YYYY-MM-DD date is in the past."""
+    if not value:
+        return False
+    try:
+        return datetime.strptime(value, '%Y-%m-%d').date() < datetime.now().date()
+    except (TypeError, ValueError):
+        return False
 
 
 def register_advanced_routes(app):
@@ -187,7 +198,7 @@ def register_advanced_routes(app):
 
         context = '\n\n'.join(ctx_parts) if ctx_parts else 'No operational data recorded yet.'
 
-        system_prompt = f"""You are a military-style intelligence officer generating a SITREP (Situation Report) for a survival/preparedness command center called N.O.M.A.D.
+        system_prompt = f"""You are a military-style intelligence officer generating a SITREP (Situation Report) for a preparedness and field-operations workspace called NOMAD Field Desk.
 
 Generate a formatted SITREP in markdown using this exact structure:
 
@@ -451,118 +462,41 @@ RULES:
 
         now = datetime.now().strftime('%Y-%m-%d %H:%M')
         date_str = datetime.now().strftime('%d %B %Y')
-
-        html = f'''<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Operations Binder — {esc(node_name)}</title>
-<style>
-* {{ margin: 0; padding: 0; box-sizing: border-box; }}
-body {{ font-family: 'Courier New', Courier, monospace; font-size: 10px; color: #000; line-height: 1.4; }}
-h1 {{ font-size: 20px; margin-bottom: 4px; }}
-h2 {{ font-size: 14px; background: #222; color: #fff; padding: 4px 8px; margin: 12px 0 6px; page-break-after: avoid; }}
-h3 {{ font-size: 11px; margin: 8px 0 4px; border-bottom: 1px solid #999; }}
-table {{ width: 100%; border-collapse: collapse; margin-bottom: 8px; }}
-th, td {{ border: 1px solid #999; padding: 2px 5px; font-size: 9px; text-align: left; }}
-th {{ background: #ddd; font-weight: 700; }}
-.cover {{ text-align: center; padding: 120px 40px; page-break-after: always; }}
-.cover h1 {{ font-size: 36px; border-bottom: 4px solid #000; padding-bottom: 8px; display: inline-block; }}
-.cover .date {{ font-size: 16px; margin-top: 20px; }}
-.cover .subtitle {{ font-size: 14px; margin-top: 8px; color: #555; }}
-.toc {{ page-break-after: always; padding: 20px; }}
-.toc h2 {{ background: none; color: #000; border-bottom: 2px solid #000; padding: 0 0 4px; }}
-.toc ol {{ padding-left: 20px; font-size: 12px; line-height: 2; }}
-.section {{ padding: 10px 15px; }}
-.page-break {{ page-break-before: always; }}
-.card {{ border: 2px solid #000; border-radius: 4px; padding: 6px 8px; margin-bottom: 6px; page-break-inside: avoid; }}
-.card h3 {{ border: none; margin: 0 0 4px; }}
-.field {{ margin-bottom: 2px; }}
-.label {{ font-weight: 700; }}
-.status-good {{ color: #060; }}
-.status-warn {{ color: #960; }}
-.status-bad {{ color: #c00; }}
-.map-placeholder {{ border: 2px dashed #999; padding: 20px; text-align: center; color: #666; margin: 8px 0; }}
-@media print {{
-    body {{ margin: 0; }}
-    @page {{ size: letter; margin: 15mm; }}
-    .no-print {{ display: none; }}
-}}
-@media screen {{
-    body {{ max-width: 8.5in; margin: 0 auto; padding: 10px; background: #f5f5f5; }}
-    .section {{ background: #fff; margin-bottom: 10px; border: 1px solid #ccc; }}
-}}
-</style>
-</head>
-<body>
-
-<!-- COVER PAGE -->
-<div class="cover">
-<h1>OPERATIONS BINDER</h1>
-<div class="subtitle">N.O.M.A.D. Survival Command Center</div>
-<div class="date" style="font-size:20px; margin-top:30px;">{esc(node_name)}</div>
-<div class="date">{esc(date_str)}</div>
-<div style="margin-top:60px; font-size:10px; color:#999;">Generated {esc(now)} &mdash; CONFIDENTIAL</div>
-</div>
-
-<!-- TABLE OF CONTENTS -->
-<div class="toc">
-<h2>TABLE OF CONTENTS</h2>
-<ol>
-<li>Emergency Contacts Directory</li>
-<li>Frequency Reference Card</li>
-<li>Medical Patient Cards</li>
-<li>Inventory Summary</li>
-<li>Active Checklists</li>
-<li>Waypoints &amp; Rally Points</li>
-<li>Emergency Procedures</li>
-<li>Family Emergency Plan</li>
-</ol>
-</div>
-
-<!-- 1. EMERGENCY CONTACTS -->
-<div class="section page-break">
-<h2>1. EMERGENCY CONTACTS DIRECTORY</h2>'''
-
+        contacts_html = '<div class="doc-empty">No contacts registered.</div>'
         if contacts:
-            html += '''<table>
-<tr><th>Name</th><th>Callsign</th><th>Role</th><th>Phone</th><th>Email</th><th>Freq</th><th>Blood</th><th>Rally Point</th></tr>'''
+            contacts_html = '<div class="doc-table-shell"><table><thead><tr><th>Name</th><th>Callsign</th><th>Role</th><th>Phone</th><th>Email</th><th>Freq</th><th>Blood</th><th>Rally Point</th></tr></thead><tbody>'
             for c in contacts:
-                html += (f'<tr><td>{esc(c["name"])}</td><td>{esc(c.get("callsign","") or "")}</td>'
-                         f'<td>{esc(c.get("role","") or "")}</td><td>{esc(c.get("phone","") or "")}</td>'
-                         f'<td>{esc(c.get("email","") or "")}</td><td>{esc(c.get("freq","") or "")}</td>'
-                         f'<td>{esc(c.get("blood_type","") or "")}</td>'
-                         f'<td>{esc(c.get("rally_point","") or "")}</td></tr>')
-            html += '</table>'
-        else:
-            html += '<p style="color:#999;">No contacts registered.</p>'
+                contacts_html += (
+                    f'<tr><td class="doc-strong">{esc(c["name"])}</td><td>{esc(c.get("callsign","") or "-")}</td>'
+                    f'<td>{esc(c.get("role","") or "-")}</td><td>{esc(c.get("phone","") or "-")}</td>'
+                    f'<td>{esc(c.get("email","") or "-")}</td><td>{esc(c.get("freq","") or "-")}</td>'
+                    f'<td>{esc(c.get("blood_type","") or "-")}</td><td>{esc(c.get("rally_point","") or "-")}</td></tr>'
+                )
+            contacts_html += '</tbody></table></div>'
 
-        # 2. FREQUENCY REFERENCE
-        html += '''</div>
-<div class="section page-break">
-<h2>2. FREQUENCY REFERENCE CARD</h2>'''
+        freq_html = '<div class="doc-table-shell"><table><thead><tr><th>Service</th><th>Freq (MHz)</th><th>Mode</th><th>Description</th></tr></thead><tbody>'
         if freqs:
-            html += '<table><tr><th>Frequency</th><th>Mode</th><th>Service</th><th>Description</th></tr>'
             for f in freqs:
-                html += (f'<tr><td>{esc(str(f["frequency"]))}</td><td>{esc(f.get("mode","") or "")}</td>'
-                         f'<td>{esc(f["service"])}</td><td>{esc(f.get("description","") or "")}</td></tr>')
-            html += '</table>'
+                freq_html += (
+                    f'<tr><td class="doc-strong">{esc(f["service"])}</td><td>{esc(str(f["frequency"]))}</td>'
+                    f'<td>{esc(f.get("mode","") or "-")}</td><td>{esc(f.get("description","") or "-")}</td></tr>'
+                )
         else:
-            html += '''<p style="color:#666;">No custom frequencies in database. Standard reference:</p>
-<table><tr><th>Service</th><th>Freq (MHz)</th><th>Notes</th></tr>
-<tr><td>FRS Ch 1</td><td>462.5625</td><td>Family Radio primary</td></tr>
-<tr><td>MURS Ch 1</td><td>151.820</td><td>No license required</td></tr>
-<tr><td>2m Call</td><td>146.520</td><td>National simplex calling</td></tr>
-<tr><td>70cm Call</td><td>446.000</td><td>National simplex calling</td></tr>
-<tr><td>CB Ch 9</td><td>27.065</td><td>Emergency channel</td></tr>
-<tr><td>NOAA WX</td><td>162.550</td><td>Weather broadcast</td></tr>
-</table>'''
+            fallback_freqs = [
+                ('FRS Ch 1', '462.5625', 'FM', 'Family Radio primary'),
+                ('MURS Ch 1', '151.820', 'FM', 'No license required'),
+                ('2m Call', '146.520', 'FM', 'National simplex calling'),
+                ('70cm Call', '446.000', 'FM', 'National simplex calling'),
+                ('CB Ch 9', '27.065', 'AM', 'Emergency channel'),
+                ('NOAA WX', '162.550', 'WX', 'Weather broadcast'),
+            ]
+            for service, freq, mode, notes in fallback_freqs:
+                freq_html += f'<tr><td class="doc-strong">{service}</td><td>{freq}</td><td>{mode}</td><td>{notes}</td></tr>'
+        freq_html += '</tbody></table></div>'
 
-        # 3. MEDICAL PATIENT CARDS
-        html += '''</div>
-<div class="section page-break">
-<h2>3. MEDICAL PATIENT CARDS</h2>'''
+        patient_cards_html = '<div class="doc-empty">No patients registered.</div>'
         if patients:
+            patient_cards_html = '<div class="doc-grid-2">'
             for p in patients:
                 try:
                     allergies = json.loads(p.get('allergies') or '[]')
@@ -576,61 +510,57 @@ th {{ background: #ddd; font-weight: 700; }}
                     medications = json.loads(p.get('medications') or '[]')
                 except (json.JSONDecodeError, TypeError):
                     medications = []
-                html += f'''<div class="card">
-<h3>{esc(p["name"])}</h3>
-<div class="field"><span class="label">Age:</span> {esc(str(p.get("age") or "—"))} | <span class="label">Sex:</span> {esc(str(p.get("sex") or "—"))} | <span class="label">Weight:</span> {esc(str(p.get("weight_kg") or "?"))}kg | <span class="label">Blood:</span> {esc(str(p.get("blood_type") or "—"))}</div>
-<div class="field"><span class="label">Allergies:</span> {esc(", ".join(str(a) for a in allergies)) if allergies else "NKDA"}</div>
-<div class="field"><span class="label">Conditions:</span> {esc(", ".join(str(c) for c in conditions)) if conditions else "None"}</div>
-<div class="field"><span class="label">Medications:</span> {esc(", ".join(str(m) for m in medications)) if medications else "None"}</div>
-<div class="field"><span class="label">Notes:</span> {esc(str(p.get("notes") or "—"))}</div>
+                allergy_html = ''.join(f'<span class="doc-chip doc-chip-alert">{esc(str(a))}</span>' for a in allergies) or '<span class="doc-chip doc-chip-muted">NKDA</span>'
+                condition_html = ''.join(f'<span class="doc-chip">{esc(str(c))}</span>' for c in conditions) or '<span class="doc-chip doc-chip-muted">None recorded</span>'
+                medication_html = ''.join(f'<span class="doc-chip">{esc(str(m))}</span>' for m in medications) or '<span class="doc-chip doc-chip-muted">None recorded</span>'
+                patient_cards_html += f'''<div class="doc-panel doc-panel-strong">
+  <h2 class="doc-section-title">{esc(p["name"])}</h2>
+  <div class="doc-chip-list">
+    <span class="doc-chip">Age: {esc(str(p.get("age") or "-"))}</span>
+    <span class="doc-chip">Sex: {esc(str(p.get("sex") or "-"))}</span>
+    <span class="doc-chip">Weight: {esc(str(p.get("weight_kg") or "?"))} kg</span>
+    <span class="doc-chip">Blood: {esc(str(p.get("blood_type") or "-"))}</span>
+  </div>
+  <div style="margin-top:12px;" class="doc-chip-list">{allergy_html}</div>
+  <div style="margin-top:12px;" class="doc-chip-list">{condition_html}</div>
+  <div style="margin-top:12px;" class="doc-chip-list">{medication_html}</div>
+  <div style="margin-top:12px;" class="doc-note-box">{esc(str(p.get("notes") or "No additional notes recorded."))}</div>
 </div>'''
-        else:
-            html += '<p style="color:#999;">No patients registered.</p>'
+            patient_cards_html += '</div>'
 
-        # 4. INVENTORY SUMMARY
-        html += '''</div>
-<div class="section page-break">
-<h2>4. INVENTORY SUMMARY</h2>'''
+        inventory_cards = '<div class="doc-empty">No inventory items.</div>'
         if inventory:
-            # Group by category
             categories = {}
             for item in inventory:
                 cat = item.get('category', 'other') or 'other'
                 categories.setdefault(cat, []).append(item)
+            inventory_cards = '<div class="doc-grid-2">'
             for cat in sorted(categories.keys()):
                 items = categories[cat]
-                html += f'<h3>{esc(cat.upper())} ({len(items)} items)</h3>'
-                html += '<table><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Location</th><th>Expiration</th></tr>'
+                table_html = '<div class="doc-table-shell"><table><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Location</th><th>Expiration</th></tr></thead><tbody>'
                 for item in items:
                     exp = item.get('expiration', '') or ''
-                    exp_class = ''
-                    if exp:
-                        try:
-                            if datetime.strptime(exp, '%Y-%m-%d') < datetime.now():
-                                exp_class = ' class="status-bad"'
-                        except ValueError:
-                            pass
-                    html += (f'<tr><td>{esc(item["name"])}</td><td>{esc(str(item["quantity"]))}</td>'
-                             f'<td>{esc(item.get("unit","") or "")}</td>'
-                             f'<td>{esc(item.get("location","") or "")}</td>'
-                             f'<td{exp_class}>{esc(exp) if exp else "—"}</td></tr>')
-                html += '</table>'
-        else:
-            html += '<p style="color:#999;">No inventory items.</p>'
+                    exp_class = ' class="doc-alert"' if exp and _is_expired_date(exp) else ''
+                    table_html += (
+                        f'<tr><td class="doc-strong">{esc(item["name"])}</td><td>{esc(str(item["quantity"]))}</td>'
+                        f'<td>{esc(item.get("unit","") or "-")}</td><td>{esc(item.get("location","") or "-")}</td>'
+                        f'<td{exp_class}>{esc(exp) if exp else "-"}</td></tr>'
+                    )
+                table_html += '</tbody></table></div>'
+                inventory_cards += f'<div class="doc-panel"><h2 class="doc-section-title">{esc(cat.upper())} ({len(items)})</h2>{table_html}</div>'
+            inventory_cards += '</div>'
 
-        # 5. ACTIVE CHECKLISTS
-        html += '''</div>
-<div class="section page-break">
-<h2>5. ACTIVE CHECKLISTS</h2>'''
+        checklist_cards = '<div class="doc-empty">No checklists.</div>'
         if checklists:
+            checklist_cards = '<div class="doc-grid-2">'
             for cl in checklists:
-                html += f'<h3>{esc(cl["name"])}</h3>'
                 try:
                     items = json.loads(cl.get('items') or '[]')
                 except (json.JSONDecodeError, TypeError):
                     items = []
+                panel = f'<div class="doc-panel"><h2 class="doc-section-title">{esc(cl["name"])}</h2>'
                 if items:
-                    html += '<table><tr><th style="width:30px;">Done</th><th>Task</th></tr>'
+                    panel += '<div class="doc-table-shell"><table><thead><tr><th style="width:60px;">Done</th><th>Task</th></tr></thead><tbody>'
                     for item in items:
                         if isinstance(item, dict):
                             text = item.get('text', item.get('name', str(item)))
@@ -638,63 +568,130 @@ th {{ background: #ddd; font-weight: 700; }}
                         else:
                             text = str(item)
                             done = False
-                        check = '&#9745;' if done else '&#9744;'
-                        html += f'<tr><td style="text-align:center;">{check}</td><td>{esc(str(text))}</td></tr>'
-                    html += '</table>'
+                        check = 'Done' if done else 'Open'
+                        panel += f'<tr><td class="doc-strong">{check}</td><td>{esc(str(text))}</td></tr>'
+                    panel += '</tbody></table></div>'
                 else:
-                    html += '<p style="color:#999;">No items.</p>'
-        else:
-            html += '<p style="color:#999;">No checklists.</p>'
+                    panel += '<div class="doc-empty">No items.</div>'
+                panel += '</div>'
+                checklist_cards += panel
+            checklist_cards += '</div>'
 
-        # 6. WAYPOINTS
-        html += '''</div>
-<div class="section page-break">
-<h2>6. WAYPOINTS &amp; RALLY POINTS</h2>'''
+        waypoint_html = '<div class="doc-empty">No waypoints registered.</div>'
         if waypoints:
-            html += '<table><tr><th>Name</th><th>Latitude</th><th>Longitude</th><th>Category</th><th>Notes</th></tr>'
+            waypoint_html = '<div class="doc-table-shell"><table><thead><tr><th>Name</th><th>Latitude</th><th>Longitude</th><th>Category</th><th>Notes</th></tr></thead><tbody>'
             for wp in waypoints:
-                html += (f'<tr><td>{esc(wp["name"])}</td><td>{wp["lat"]:.6f}</td><td>{wp["lng"]:.6f}</td>'
-                         f'<td>{esc(wp.get("category","") or "")}</td>'
-                         f'<td>{esc(wp.get("notes","") or "")}</td></tr>')
-            html += '</table>'
-            # Rally point map placeholder
+                lat = f'{wp["lat"]:.6f}' if wp.get('lat') is not None else '-'
+                lng = f'{wp["lng"]:.6f}' if wp.get('lng') is not None else '-'
+                waypoint_html += (
+                    f'<tr><td class="doc-strong">{esc(wp["name"])}</td><td>{lat}</td><td>{lng}</td>'
+                    f'<td>{esc(wp.get("category","") or "-")}</td><td>{esc(wp.get("notes","") or "-")}</td></tr>'
+                )
+            waypoint_html += '</tbody></table></div>'
             rally = [w for w in waypoints if (w.get('category', '') or '').lower() in ('rally', 'rally point', 'rallypoint')]
             if rally:
-                html += '<div class="map-placeholder">Rally Point Map — Print map from the Maps tab for full detail</div>'
-        else:
-            html += '<p style="color:#999;">No waypoints registered.</p>'
+                waypoint_html += '<div style="margin-top:12px;" class="doc-note-box">Rally points are present. Print the dedicated map view from the Maps workspace for terrain detail and route overlays.</div>'
 
-        # 7. EMERGENCY PROCEDURES
-        html += '''</div>
-<div class="section page-break">
-<h2>7. EMERGENCY PROCEDURES</h2>'''
+        procedure_html = '<div class="doc-empty">No emergency procedures are documented yet.</div>'
         if procedures:
+            procedure_html = '<div class="doc-grid-2">'
             for proc in procedures:
-                html += f'<div class="card"><h3>{esc(proc["title"])}</h3>'
                 content = proc.get('content', '') or ''
-                html += f'<div style="white-space:pre-wrap;font-size:9px;">{esc(content)}</div></div>'
-        else:
-            html += '<p style="color:#999;">No emergency procedures documented. Create notes with "emergency" or "procedure" in the title.</p>'
+                procedure_html += f'<div class="doc-panel"><h2 class="doc-section-title">{esc(proc["title"])}</h2><div class="doc-note-box">{esc(content)}</div></div>'
+            procedure_html += '</div>'
 
-        # 8. FAMILY EMERGENCY PLAN
-        html += '''</div>
-<div class="section page-break">
-<h2>8. FAMILY EMERGENCY PLAN</h2>'''
-        if family_plan:
-            html += f'<div style="white-space:pre-wrap;">{esc(family_plan)}</div>'
-        else:
-            html += '<p style="color:#999;">No family emergency plan configured. Save one in Settings.</p>'
+        family_plan_html = f'<div class="doc-note-box">{esc(family_plan)}</div>' if family_plan else '<div class="doc-empty">No family emergency plan is configured. Save one in Settings.</div>'
 
-        html += f'''</div>
+        toc_html = '''<div class="doc-kv">
+  <div class="doc-kv-row"><div class="doc-kv-key">1</div><div>Emergency Contacts Directory</div></div>
+  <div class="doc-kv-row"><div class="doc-kv-key">2</div><div>Frequency Reference</div></div>
+  <div class="doc-kv-row"><div class="doc-kv-key">3</div><div>Medical Patient Cards</div></div>
+  <div class="doc-kv-row"><div class="doc-kv-key">4</div><div>Inventory Summary</div></div>
+  <div class="doc-kv-row"><div class="doc-kv-key">5</div><div>Active Checklists</div></div>
+  <div class="doc-kv-row"><div class="doc-kv-key">6</div><div>Waypoints and Rally Points</div></div>
+  <div class="doc-kv-row"><div class="doc-kv-key">7</div><div>Emergency Procedures</div></div>
+  <div class="doc-kv-row"><div class="doc-kv-key">8</div><div>Family Emergency Plan</div></div>
+</div>'''
 
-<div style="text-align:center; margin-top:20px; font-size:8px; color:#999; page-break-before:always; padding-top:40px;">
-<p>End of Operations Binder &mdash; {esc(node_name)}</p>
-<p>Generated {esc(now)} by N.O.M.A.D. Survival Command Center</p>
-<p>CONFIDENTIAL &mdash; Protect accordingly</p>
-</div>
+        body = f'''<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Operations Binder Overview</h2>
+      <div class="doc-note-box">Comprehensive offline reference for contacts, frequencies, patients, supplies, rally points, procedures, and family planning. Treat as confidential operational material.</div>
+    </div>
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Contents</h2>
+      {toc_html}
+    </div>
+  </div>
+</section>
+<section class="doc-section" style="page-break-before:always;">
+  <div class="doc-grid-2">
+    <div class="doc-panel">
+      <h2 class="doc-section-title">1. Emergency Contacts Directory</h2>
+      {contacts_html}
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">2. Frequency Reference</h2>
+      {freq_html}
+    </div>
+  </div>
+</section>
+<section class="doc-section" style="page-break-before:always;">
+  <h2 class="doc-section-title">3. Medical Patient Cards</h2>
+  {patient_cards_html}
+</section>
+<section class="doc-section" style="page-break-before:always;">
+  <h2 class="doc-section-title">4. Inventory Summary</h2>
+  {inventory_cards}
+</section>
+<section class="doc-section" style="page-break-before:always;">
+  <h2 class="doc-section-title">5. Active Checklists</h2>
+  {checklist_cards}
+</section>
+<section class="doc-section" style="page-break-before:always;">
+  <h2 class="doc-section-title">6. Waypoints and Rally Points</h2>
+  {waypoint_html}
+</section>
+<section class="doc-section" style="page-break-before:always;">
+  <h2 class="doc-section-title">7. Emergency Procedures</h2>
+  {procedure_html}
+</section>
+<section class="doc-section" style="page-break-before:always;">
+  <h2 class="doc-section-title">8. Family Emergency Plan</h2>
+  {family_plan_html}
+</section>
+<section class="doc-section">
+  <div class="doc-note-box" style="border-color:#e9b7b7;background:#fff5f5;color:#7a1d1d;">
+    <div class="doc-strong" style="letter-spacing:0.12em;text-transform:uppercase;">Confidential Handling</div>
+    <div style="margin-top:6px;">Protect this binder accordingly and replace printed copies when the plan or roster changes.</div>
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-footer">
+    <span>End of Operations Binder - {esc(node_name)}</span>
+    <span>Generated {esc(now)} by NOMAD Field Desk.</span>
+  </div>
+</section>'''
 
-</body>
-</html>'''
+        html = render_print_document(
+            f'Operations Binder - {node_name}',
+            'Comprehensive binder for command-post reference, go-bag print packets, and family emergency continuity.',
+            body,
+            eyebrow='NOMAD Field Desk Operations Binder',
+            meta_items=[f'Generated {esc(now)}', f'Node {esc(node_name)}', 'Confidential'],
+            stat_items=[
+                ('Contacts', len(contacts)),
+                ('Frequencies', len(freqs)),
+                ('Patients', len(patients)),
+                ('Inventory', len(inventory)),
+                ('Checklists', len(checklists)),
+                ('Waypoints', len(waypoints)),
+            ],
+            accent_start='#13263a',
+            accent_end='#35556f',
+            max_width='1180px',
+        )
 
         return Response(html, mimetype='text/html')
 
@@ -722,6 +719,7 @@ th {{ background: #ddd; font-weight: 700; }}
             blood_type = ''
             allergies = []
             if self_patient:
+                self_patient = dict(self_patient)
                 blood_type = self_patient.get('blood_type', '') or ''
                 try:
                     medications = json.loads(self_patient.get('medications') or '[]')
@@ -754,130 +752,104 @@ th {{ background: #ddd; font-weight: 700; }}
             patient_name = self_patient['name']
         elif self_contact:
             patient_name = self_contact['name']
+        contact_list_html = ''.join(
+            f'<div style="margin-top:6px;"><span class="doc-strong">{i + 1}.</span> {esc(c["name"])}'
+            f' ({esc(c.get("role","") or "Contact")}) - {esc(c["phone"])}</div>'
+            for i, c in enumerate(ice_contacts[:3])
+        ) or '<div class="doc-empty">No emergency contacts are on file.</div>'
 
-        html = f'''<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Wallet Reference Cards</title>
-<style>
-* {{ margin: 0; padding: 0; box-sizing: border-box; }}
-body {{ font-family: 'Courier New', Courier, monospace; color: #000; padding: 10px; }}
-.card-grid {{ display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }}
-.card {{
-    width: 3.375in; height: 2.125in;
-    border: 2px solid #000; border-radius: 6px;
-    padding: 6px 8px; font-size: 7.5px; line-height: 1.3;
-    overflow: hidden; page-break-inside: avoid;
-    position: relative;
-}}
-.card h3 {{ font-size: 9px; margin: 0 0 3px; border-bottom: 1.5px solid #000; padding-bottom: 2px; text-transform: uppercase; }}
-.card .field {{ margin-bottom: 1px; }}
-.card .label {{ font-weight: 700; }}
-.card .footer {{ position: absolute; bottom: 3px; left: 8px; right: 8px; font-size: 6px; color: #888; text-align: center; }}
-.card-ice {{ border-color: #c00; }}
-.card-ice h3 {{ color: #c00; border-color: #c00; }}
-.card-blood {{ border-color: #900; }}
-.card-blood h3 {{ color: #900; border-color: #900; }}
-.card-meds {{ border-color: #069; }}
-.card-meds h3 {{ color: #069; border-color: #069; }}
-.card-rally {{ border-color: #060; }}
-.card-rally h3 {{ color: #060; border-color: #060; }}
-.card-freq {{ border-color: #339; }}
-.card-freq h3 {{ color: #339; border-color: #339; }}
-table {{ width: 100%; border-collapse: collapse; }}
-th, td {{ border: 1px solid #ccc; padding: 1px 3px; font-size: 7px; }}
-th {{ background: #eee; font-weight: 700; }}
-@media print {{
-    body {{ margin: 0; padding: 5mm; }}
-    @page {{ size: letter; margin: 10mm; }}
-}}
-</style>
-</head>
-<body>
-<div class="card-grid">
+        medication_html = ''.join(f'<span class="doc-chip">{esc(str(med))}</span>' for med in medications[:8]) or '<span class="doc-chip doc-chip-muted">None recorded</span>'
+        allergy_html = ''.join(f'<span class="doc-chip doc-chip-alert">{esc(str(item))}</span>' for item in allergies) or '<span class="doc-chip doc-chip-muted">NKDA</span>'
 
-<!-- ICE CARD -->
-<div class="card card-ice">
-<h3>ICE — In Case of Emergency</h3>
-<div class="field"><span class="label">Name:</span> {esc(patient_name or "_______________")}</div>
-<div class="field"><span class="label">Blood Type:</span> {esc(blood_type or "______")} | <span class="label">Allergies:</span> {esc(", ".join(str(a) for a in allergies) if allergies else "NKDA")}</div>
-<div style="margin-top:3px;"><span class="label">Emergency Contacts:</span></div>'''
-
-        for i, c in enumerate(ice_contacts):
-            html += f'<div class="field">{i+1}. {esc(c["name"])} ({esc(c.get("role","") or "")}) — {esc(c["phone"])}</div>'
-        for i in range(len(ice_contacts), 3):
-            html += f'<div class="field">{i+1}. ________________________________</div>'
-
-        html += f'''<div class="footer">Generated {esc(now)} &mdash; N.O.M.A.D.</div>
-</div>
-
-<!-- BLOOD TYPE CARD -->
-<div class="card card-blood">
-<h3>Blood Type Card</h3>
-<div style="text-align:center; margin-top:8px;">
-<div style="font-size:28px; font-weight:700; border:3px solid #900; display:inline-block; padding:6px 16px; border-radius:4px;">{esc(blood_type or "?")}</div>
-</div>
-<div style="text-align:center; margin-top:6px; font-size:9px;"><span class="label">{esc(patient_name or "Name: _______________")}</span></div>
-<div style="text-align:center; margin-top:3px;">Allergies: {esc(", ".join(str(a) for a in allergies) if allergies else "NKDA")}</div>
-<div class="footer">Generated {esc(now)} &mdash; N.O.M.A.D.</div>
-</div>
-
-<!-- MEDICATION LIST CARD -->
-<div class="card card-meds">
-<h3>Medication List</h3>
-<div class="field"><span class="label">Patient:</span> {esc(patient_name or "_______________")}</div>'''
-
-        if medications:
-            for med in medications[:8]:
-                html += f'<div class="field">&#8226; {esc(str(med))}</div>'
-        else:
-            html += '<div class="field" style="color:#999;">No medications recorded.</div>'
-
-        html += f'''<div class="footer">Generated {esc(now)} &mdash; N.O.M.A.D.</div>
-</div>
-
-<!-- RALLY POINT CARD -->
-<div class="card card-rally">
-<h3>Rally Points</h3>'''
-
+        rally_html = '<div class="doc-empty">No rally points are configured.</div>'
         if rally_points:
-            html += '<table><tr><th>Point</th><th>Lat</th><th>Lng</th></tr>'
+            rally_html = '<div class="doc-table-shell"><table><thead><tr><th>Point</th><th>Lat</th><th>Lng</th></tr></thead><tbody>'
             for rp in rally_points:
-                html += f'<tr><td>{esc(rp["name"])}</td><td>{rp["lat"]:.5f}</td><td>{rp["lng"]:.5f}</td></tr>'
-            html += '</table>'
-        else:
-            html += '''<div class="field">Primary: ________________________________</div>
-<div class="field">Alternate: ________________________________</div>
-<div class="field">Contingency: ________________________________</div>'''
+                rally_html += f'<tr><td class="doc-strong">{esc(rp["name"])}</td><td>{rp["lat"]:.5f}</td><td>{rp["lng"]:.5f}</td></tr>'
+            rally_html += '</tbody></table></div>'
 
-        html += f'''<div class="footer">Generated {esc(now)} &mdash; N.O.M.A.D.</div>
-</div>
-
-<!-- FREQUENCY QUICK-REF CARD -->
-<div class="card card-freq">
-<h3>Frequency Quick Reference</h3>'''
-
+        freq_html = '<div class="doc-table-shell"><table><thead><tr><th>Service</th><th>Freq</th><th>Mode</th></tr></thead><tbody>'
         if custom_freqs:
-            html += '<table><tr><th>Service</th><th>Freq</th><th>Mode</th></tr>'
             for f in custom_freqs:
-                html += f'<tr><td>{esc(f["service"])}</td><td>{esc(str(f["frequency"]))}</td><td>{esc(f.get("mode","") or "")}</td></tr>'
-            html += '</table>'
+                freq_html += f'<tr><td class="doc-strong">{esc(f["service"])}</td><td>{esc(str(f["frequency"]))}</td><td>{esc(f.get("mode","") or "-")}</td></tr>'
         else:
-            html += '''<table><tr><th>Service</th><th>Freq</th></tr>
-<tr><td>FRS Ch 1</td><td>462.5625</td></tr>
-<tr><td>MURS Ch 1</td><td>151.820</td></tr>
-<tr><td>2m Call</td><td>146.520</td></tr>
-<tr><td>CB Ch 9</td><td>27.065</td></tr>
-<tr><td>NOAA WX</td><td>162.550</td></tr>
-</table>'''
+            fallback_freqs = [
+                ('FRS Ch 1', '462.5625', 'FM'),
+                ('MURS Ch 1', '151.820', 'FM'),
+                ('2m Call', '146.520', 'FM'),
+                ('CB Ch 9', '27.065', 'AM'),
+                ('NOAA WX', '162.550', 'WX'),
+            ]
+            for service, freq, mode in fallback_freqs:
+                freq_html += f'<tr><td class="doc-strong">{service}</td><td>{freq}</td><td>{mode}</td></tr>'
+        freq_html += '</tbody></table></div>'
 
-        html += f'''<div class="footer">Generated {esc(now)} &mdash; N.O.M.A.D.</div>
-</div>
+        body = f'''<section class="doc-section">
+  <h2 class="doc-section-title">Wallet Card Sheet</h2>
+  <div class="doc-grid-3">
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">ICE Card</h2>
+      <div class="doc-note-box" style="background:#fff;border-style:solid;">
+        <div class="doc-strong" style="font-size:18px;">{esc(patient_name or "Unassigned")}</div>
+        <div style="margin-top:10px;" class="doc-chip-list">
+          <span class="doc-chip">Blood: {esc(blood_type or "?")}</span>
+          <span class="doc-chip">Allergies</span>
+        </div>
+        <div style="margin-top:10px;" class="doc-chip-list">{allergy_html}</div>
+        <div style="margin-top:12px;">
+          <div class="doc-section-title" style="margin-bottom:6px;">Emergency Contacts</div>
+          {contact_list_html}
+        </div>
+      </div>
+    </div>
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Blood Type Card</h2>
+      <div class="doc-note-box" style="background:#fff;border-style:solid;text-align:center;">
+        <div style="font-size:44px;line-height:1;font-weight:800;color:#7a1520;">{esc(blood_type or "?")}</div>
+        <div style="margin-top:12px;" class="doc-strong">{esc(patient_name or "Name pending")}</div>
+        <div class="doc-chip-list" style="margin-top:10px;justify-content:center;">{allergy_html}</div>
+      </div>
+    </div>
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Medication Card</h2>
+      <div class="doc-note-box" style="background:#fff;border-style:solid;">
+        <div class="doc-strong">Patient: {esc(patient_name or "Unassigned")}</div>
+        <div style="margin-top:12px;" class="doc-chip-list">{medication_html}</div>
+      </div>
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Rally Card</h2>
+      {rally_html}
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Frequency Card</h2>
+      {freq_html}
+    </div>
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-footer">
+    <span>Reference-card sheet for laminating, go-bags, and glovebox carry.</span>
+    <span>NOMAD Field Desk</span>
+  </div>
+</section>'''
 
-</div><!-- end card-grid -->
-</body>
-</html>'''
+        html = render_print_document(
+            'Wallet Reference Cards',
+            'Compact carry-card sheet combining ICE info, blood type, medications, rally points, and quick comms references.',
+            body,
+            eyebrow='NOMAD Field Desk Reference Cards',
+            meta_items=[f'Generated {esc(now)}', 'Letter print layout'],
+            stat_items=[
+                ('ICE Contacts', len(ice_contacts)),
+                ('Rally Points', len(rally_points)),
+                ('Custom Freqs', len(custom_freqs)),
+                ('Patient', patient_name or 'Unassigned'),
+            ],
+            accent_start='#23243c',
+            accent_end='#5d375d',
+            max_width='1160px',
+        )
 
         return Response(html, mimetype='text/html')
 
@@ -913,132 +885,118 @@ th {{ background: #eee; font-weight: 700; }}
 
         now = datetime.now().strftime('%Y-%m-%d %H:%M')
         date_str = datetime.now().strftime('%d %B %Y')
-
-        html = f'''<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>SOI — {esc(node_name)}</title>
-<style>
-* {{ margin: 0; padding: 0; box-sizing: border-box; }}
-body {{ font-family: 'Courier New', Courier, monospace; font-size: 10px; color: #000; line-height: 1.4; padding: 15px; }}
-.header {{ text-align: center; border: 3px solid #000; padding: 12px; margin-bottom: 15px; }}
-.header h1 {{ font-size: 18px; letter-spacing: 2px; }}
-.header .classification {{ font-size: 12px; color: #c00; font-weight: 700; margin-top: 4px; letter-spacing: 3px; }}
-.header .meta {{ font-size: 9px; margin-top: 6px; color: #555; }}
-h2 {{ font-size: 12px; background: #000; color: #fff; padding: 3px 8px; margin: 12px 0 6px; letter-spacing: 1px; }}
-h3 {{ font-size: 10px; margin: 8px 0 4px; border-bottom: 1px solid #000; }}
-table {{ width: 100%; border-collapse: collapse; margin-bottom: 10px; }}
-th, td {{ border: 1px solid #666; padding: 2px 5px; font-size: 9px; }}
-th {{ background: #ddd; font-weight: 700; text-transform: uppercase; }}
-.time-slot {{ display: inline-block; border: 1px solid #000; padding: 1px 4px; margin: 1px; font-size: 8px; }}
-.destruction {{ border: 2px solid #c00; padding: 8px; margin-top: 15px; text-align: center; color: #c00; font-weight: 700; }}
-@media print {{
-    body {{ margin: 0; padding: 10mm; }}
-    @page {{ size: letter; margin: 12mm; }}
-}}
-</style>
-</head>
-<body>
-
-<div class="header">
-<div class="classification">RESTRICTED</div>
-<h1>SIGNAL OPERATING INSTRUCTIONS</h1>
-<div class="meta">
-Node: {esc(node_name)} ({esc(node_id)}) | Effective: {esc(date_str)} | Generated: {esc(now)}
-</div>
-<div class="classification">RESTRICTED</div>
-</div>
-
-<h2>SECTION 1 — FREQUENCY ASSIGNMENTS</h2>'''
-
+        frequency_html = '<div class="doc-empty">No frequencies are configured yet. Add them in Comms > Frequencies.</div>'
         if freqs:
-            html += '''<table>
-<tr><th>Freq (MHz)</th><th>Mode</th><th>BW</th><th>Service/Net</th><th>Description</th><th>Notes</th></tr>'''
+            frequency_html = '<div class="doc-table-shell"><table><thead><tr><th>Freq (MHz)</th><th>Mode</th><th>BW</th><th>Service / Net</th><th>Description</th><th>Notes</th></tr></thead><tbody>'
             for f in freqs:
-                html += (f'<tr><td>{esc(str(f["frequency"]))}</td><td>{esc(f.get("mode","") or "")}</td>'
-                         f'<td>{esc(f.get("bandwidth","") or "")}</td><td>{esc(f["service"])}</td>'
-                         f'<td>{esc(f.get("description","") or "")}</td>'
-                         f'<td>{esc(f.get("notes","") or "")}</td></tr>')
-            html += '</table>'
-        else:
-            html += '''<p style="color:#666;">No frequencies in database. Add them in the Comms &gt; Frequencies tab.</p>
-<table><tr><th>Freq</th><th>Mode</th><th>Service</th></tr>
-<tr><td>462.5625</td><td>FM</td><td>FRS Ch 1 (Primary)</td></tr>
-<tr><td>146.520</td><td>FM</td><td>2m National Calling</td></tr>
-<tr><td>446.000</td><td>FM</td><td>70cm National Calling</td></tr>
-<tr><td>27.065</td><td>AM</td><td>CB Ch 9 (Emergency)</td></tr>
-</table>'''
+                frequency_html += (
+                    f'<tr><td>{esc(str(f["frequency"]))}</td><td>{esc(f.get("mode","") or "-")}</td>'
+                    f'<td>{esc(f.get("bandwidth","") or "-")}</td><td class="doc-strong">{esc(f["service"])}</td>'
+                    f'<td>{esc(f.get("description","") or "-")}</td><td>{esc(f.get("notes","") or "-")}</td></tr>'
+                )
+            frequency_html += '</tbody></table></div>'
 
-        html += '<h2>SECTION 2 — CALL SIGN MATRIX</h2>'
-
+        contact_html = '<div class="doc-empty">No contacts with callsigns are registered.</div>'
         if contacts:
-            html += '''<table>
-<tr><th>Callsign</th><th>Operator</th><th>Role</th><th>Primary Freq</th></tr>'''
+            contact_html = '<div class="doc-table-shell"><table><thead><tr><th>Callsign</th><th>Operator</th><th>Role</th><th>Primary Freq</th></tr></thead><tbody>'
             for c in contacts:
-                html += (f'<tr><td><strong>{esc(c.get("callsign","") or "—")}</strong></td>'
-                         f'<td>{esc(c["name"])}</td><td>{esc(c.get("role","") or "")}</td>'
-                         f'<td>{esc(c.get("freq","") or "—")}</td></tr>')
-            html += '</table>'
-        else:
-            html += '<p style="color:#666;">No contacts with callsigns registered.</p>'
+                contact_html += (
+                    f'<tr><td class="doc-strong">{esc(c.get("callsign","") or "-")}</td><td>{esc(c["name"])}</td>'
+                    f'<td>{esc(c.get("role","") or "-")}</td><td>{esc(c.get("freq","") or "-")}</td></tr>'
+                )
+            contact_html += '</tbody></table></div>'
 
-        html += '<h2>SECTION 3 — RADIO PROFILES / CHANNEL PLANS</h2>'
-
+        profile_html = '<div class="doc-empty">No radio profiles are configured.</div>'
         if profiles:
+            profile_html = ''
             for prof in profiles:
-                html += f'<h3>{esc(prof["name"])}' + (f' ({esc(prof["radio_model"])})' if prof.get('radio_model') else '') + '</h3>'
+                heading = esc(prof["name"]) + (f' ({esc(prof["radio_model"])})' if prof.get('radio_model') else '')
                 try:
                     channels = json.loads(prof.get('channels') or '[]')
                 except (json.JSONDecodeError, TypeError):
                     channels = []
+                panel = f'<div class="doc-panel"><h2 class="doc-section-title">{heading}</h2>'
                 if channels:
-                    html += '<table><tr><th>Ch</th><th>Freq</th><th>Name/Service</th></tr>'
+                    panel += '<div class="doc-table-shell"><table><thead><tr><th>Ch</th><th>Freq</th><th>Name / Service</th></tr></thead><tbody>'
                     for i, ch in enumerate(channels):
                         if isinstance(ch, dict):
-                            html += (f'<tr><td>{i+1}</td>'
-                                     f'<td>{esc(str(ch.get("frequency", ch.get("freq",""))))}</td>'
-                                     f'<td>{esc(str(ch.get("name", ch.get("service",""))))}</td></tr>')
+                            panel += (
+                                f'<tr><td>{i + 1}</td><td>{esc(str(ch.get("frequency", ch.get("freq","")))) or "-"}</td>'
+                                f'<td>{esc(str(ch.get("name", ch.get("service","")))) or "-"}</td></tr>'
+                            )
                         else:
-                            html += f'<tr><td>{i+1}</td><td colspan="2">{esc(str(ch))}</td></tr>'
-                    html += '</table>'
+                            panel += f'<tr><td>{i + 1}</td><td colspan="2">{esc(str(ch))}</td></tr>'
+                    panel += '</tbody></table></div>'
                 else:
-                    html += '<p style="color:#999;">No channels programmed.</p>'
-        else:
-            html += '<p style="color:#666;">No radio profiles configured.</p>'
+                    panel += '<div class="doc-empty">No channels programmed.</div>'
+                panel += '</div>'
+                profile_html += panel
 
-        html += '''<h2>SECTION 4 — NET SCHEDULE / TIME SLOTS</h2>
-<table>
-<tr><th>Time (Local)</th><th>Net</th><th>Purpose</th></tr>
-<tr><td>0600</td><td>Morning Check-in</td><td>Accountability &amp; weather</td></tr>
-<tr><td>1200</td><td>Midday SITREP</td><td>Status updates</td></tr>
-<tr><td>1800</td><td>Evening Net</td><td>Planning &amp; coordination</td></tr>
-<tr><td>2100</td><td>Night Watch</td><td>Security check-in</td></tr>
-</table>
-<p style="font-size:8px;color:#666;margin-top:4px;">Modify schedule as needed. All times local. Monitor primary freq continuously.</p>
+        body = f'''<section class="doc-section">
+  <div class="doc-note-box" style="border-color:#e9b7b7;background:#fff5f5;color:#7a1d1d;">
+    <div class="doc-strong" style="letter-spacing:0.12em;text-transform:uppercase;">Restricted</div>
+    <div style="margin-top:6px;">Carry only as needed. Destroy when compromised, superseded, or no longer operationally relevant.</div>
+  </div>
+</section>
+<section class="doc-section">
+  <h2 class="doc-section-title">Section 1 - Frequency Assignments</h2>
+  {frequency_html}
+</section>
+<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Section 2 - Call Sign Matrix</h2>
+      {contact_html}
+    </div>
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Section 4 - Net Schedule</h2>
+      <div class="doc-table-shell"><table><thead><tr><th>Time (Local)</th><th>Net</th><th>Purpose</th></tr></thead><tbody>
+        <tr><td>0600</td><td class="doc-strong">Morning Check-in</td><td>Accountability and weather</td></tr>
+        <tr><td>1200</td><td class="doc-strong">Midday SITREP</td><td>Status updates</td></tr>
+        <tr><td>1800</td><td class="doc-strong">Evening Net</td><td>Planning and coordination</td></tr>
+        <tr><td>2100</td><td class="doc-strong">Night Watch</td><td>Security check-in</td></tr>
+      </tbody></table></div>
+      <div style="margin-top:10px;" class="doc-note-box">All times are local. Modify as needed and monitor the primary net continuously when conditions warrant it.</div>
+    </div>
+  </div>
+</section>
+<section class="doc-section">
+  <h2 class="doc-section-title">Section 3 - Radio Profiles / Channel Plans</h2>
+  <div class="doc-grid-2">{profile_html}</div>
+</section>
+<section class="doc-section">
+  <h2 class="doc-section-title">Section 5 - Authentication &amp; Procedures</h2>
+  <div class="doc-table-shell"><table><thead><tr><th>Procedure</th><th>Protocol</th></tr></thead><tbody>
+    <tr><td class="doc-strong">Station Identification</td><td>Use callsign at the start and end of each transmission.</td></tr>
+    <tr><td class="doc-strong">Emergency Traffic</td><td>&quot;BREAK BREAK BREAK&quot; - all routine traffic stands by.</td></tr>
+    <tr><td class="doc-strong">Priority Traffic</td><td>Use a &quot;PRIORITY&quot; prefix so routine traffic yields.</td></tr>
+    <tr><td class="doc-strong">Radio Check</td><td>&quot;[Callsign], radio check, over&quot; - respond with signal quality.</td></tr>
+    <tr><td class="doc-strong">Relay Request</td><td>Ask the nearest station to &quot;RELAY TO [callsign]&quot; when direct comms fail.</td></tr>
+  </tbody></table></div>
+</section>
+<section class="doc-section">
+  <div class="doc-footer">
+    <span>SOI generated {esc(now)} for {esc(node_name)} ({esc(node_id)}).</span>
+    <span>Restricted handling.</span>
+  </div>
+</section>'''
 
-<h2>SECTION 5 — AUTHENTICATION &amp; PROCEDURES</h2>
-<table>
-<tr><th>Procedure</th><th>Protocol</th></tr>
-<tr><td>Station Identification</td><td>Callsign at start and end of each transmission</td></tr>
-<tr><td>Emergency Traffic</td><td>"BREAK BREAK BREAK" — all stations stand by</td></tr>
-<tr><td>Priority Traffic</td><td>"PRIORITY" prefix — routine traffic yields</td></tr>
-<tr><td>Radio Check</td><td>"[Callsign], radio check, over" — respond with signal quality</td></tr>
-<tr><td>Relay Request</td><td>"RELAY TO [callsign]" via nearest station</td></tr>
-</table>'''
-
-        html += f'''
-<div class="destruction">
-DESTROY THIS DOCUMENT WHEN COMPROMISED OR SUPERSEDED<br>
-Do not transmit contents over unsecured channels
-</div>
-
-<div style="text-align:center; margin-top:12px; font-size:8px; color:#999;">
-SOI Generated {esc(now)} by N.O.M.A.D. &mdash; {esc(node_name)} ({esc(node_id)})
-</div>
-
-</body>
-</html>'''
+        html = render_print_document(
+            f'SOI - {node_name}',
+            'Signal operating instructions for frequency assignments, callsign mapping, channel plans, net schedules, and radio procedures.',
+            body,
+            eyebrow='NOMAD Field Desk Communications',
+            meta_items=[f'Effective {date_str}', f'Generated {now}', f'Node ID {node_id}', 'Restricted'],
+            stat_items=[
+                ('Frequencies', len(freqs)),
+                ('Operators', len(contacts)),
+                ('Profiles', len(profiles)),
+                ('Primary Node', node_name),
+            ],
+            accent_start='#151515',
+            accent_end='#444444',
+            max_width='1180px',
+        )
 
         return Response(html, mimetype='text/html')
 
@@ -1047,29 +1005,33 @@ SOI Generated {esc(now)} by N.O.M.A.D. &mdash; {esc(node_name)} ({esc(node_id)})
     @app.route('/api/print/medical-flipbook')
     def api_print_medical_flipbook():
         """Generate a printable pocket-sized medical reference flipbook."""
-        html = '''<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Medical Reference Flipbook — Project N.O.M.A.D.</title>
+        html = '''<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Medical Reference Flipbook — NOMAD Field Desk</title>
 <style>
 @page { size: 4in 6in; margin: 0.25in; }
-body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 9px; line-height: 1.4; margin: 0; padding: 0; color: #111; }
-.page { width: 3.5in; min-height: 5.5in; padding: 0.25in; page-break-after: always; border: 1px solid #ccc; margin: 4px auto; }
-@media print { .page { border: none; margin: 0; } }
-h1 { font-size: 14px; text-align: center; border-bottom: 2px solid #333; padding-bottom: 4px; margin: 0 0 8px 0; }
-h2 { font-size: 11px; color: #c00; border-bottom: 1px solid #c00; padding-bottom: 2px; margin: 8px 0 4px 0; }
-h3 { font-size: 10px; margin: 6px 0 2px 0; color: #333; }
-table { width: 100%; border-collapse: collapse; font-size: 8px; margin: 4px 0; }
-th, td { border: 1px solid #999; padding: 2px 4px; text-align: left; }
-th { background: #eee; font-weight: bold; }
-.warn { color: #c00; font-weight: bold; }
-.note { font-size: 8px; color: #555; font-style: italic; margin: 2px 0; }
-ul { margin: 2px 0; padding-left: 14px; }
-li { margin: 1px 0; }
-.footer { font-size: 7px; color: #999; text-align: center; margin-top: 8px; }
+body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 9px; line-height: 1.45; margin: 0; padding: 12px; color: #162233; background: #e9eef4; }
+.page { width: 3.5in; min-height: 5.5in; padding: 0.28in; page-break-after: always; border: 1px solid #d4dee8; border-radius: 18px; margin: 10px auto; background: linear-gradient(180deg, #fbfdff 0%, #f4f8fb 100%); box-shadow: 0 16px 40px rgba(15, 23, 42, 0.14); position: relative; overflow: hidden; }
+.page::before { content: ""; position: absolute; inset: 0 auto auto 0; width: 100%; height: 10px; background: linear-gradient(90deg, #7a1d2a 0%, #b2404d 100%); }
+@media print { body { padding: 0; background: #fff; } .page { border: none; border-radius: 0; margin: 0; box-shadow: none; } .page::before { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+h1 { font-size: 16px; text-align: center; border-bottom: 2px solid #1b3954; padding-bottom: 6px; margin: 0 0 10px 0; color: #152f47; letter-spacing: 0.05em; }
+h2 { font-size: 11px; color: #7a1d2a; border-bottom: 1px solid #d7a7af; padding-bottom: 2px; margin: 10px 0 5px 0; text-transform: uppercase; letter-spacing: 0.05em; }
+h3 { font-size: 10px; margin: 7px 0 3px 0; color: #28445d; }
+table { width: 100%; border-collapse: collapse; font-size: 8px; margin: 5px 0; }
+th, td { border: 1px solid #cad6e2; padding: 3px 4px; text-align: left; }
+th { background: #eaf1f7; font-weight: bold; color: #30475f; }
+.warn { color: #9d2131; font-weight: bold; }
+.note { font-size: 8px; color: #586b80; font-style: italic; margin: 3px 0; }
+ul, ol { margin: 3px 0; padding-left: 16px; }
+li { margin: 2px 0; }
+.footer { font-size: 7px; color: #66778a; text-align: center; margin-top: 10px; border-top: 1px solid #dbe4ed; padding-top: 6px; }
+.cover-mark { text-align: center; font-size: 8px; text-transform: uppercase; letter-spacing: 0.18em; color: #7a1d2a; margin-top: 14px; }
+.cover-subtitle { text-align: center; font-size: 10px; margin: 12px 0; color: #41586f; }
 </style></head><body>
 
 <!-- Page 1: Cover + Vital Sign Ranges -->
 <div class="page">
+<div class="cover-mark">Field Medical Quick Reference</div>
 <h1>MEDICAL REFERENCE<br>POCKET FLIPBOOK</h1>
-<p style="text-align:center;font-size:10px;margin:12px 0;">Project N.O.M.A.D. — Offline Medical Quick Reference</p>
+<p class="cover-subtitle">NOMAD Field Desk pocket guide for treatment, triage, and handoff support.</p>
 
 <h2>Normal Vital Sign Ranges</h2>
 <table>
@@ -1413,7 +1375,7 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
 </div>
 
 <div class="footer" style="margin-top:16px;">
-<strong>Project N.O.M.A.D.</strong> — Offline Medical Reference Flipbook<br>
+<strong>NOMAD Field Desk</strong> — Offline Medical Reference Flipbook<br>
 ''' + f'Generated {__import__("time").strftime("%Y-%m-%d %H:%M")}' + '''<br>
 <em>This is a reference guide, not a substitute for medical training. Seek professional care when available.</em>
 </div>

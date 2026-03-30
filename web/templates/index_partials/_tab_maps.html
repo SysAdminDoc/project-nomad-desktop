@@ -1,0 +1,145 @@
+  <!-- Maps Tab -->
+  <div id="tab-maps" class="tab-content tab-vcenter workspace-stack">
+    <div class="map-command-deck map-surface">
+      <div class="map-command-deck-head">
+        <div class="map-command-copy">
+          <div class="section-header-label map-command-kicker">FIELD NAVIGATION</div>
+          <h2 class="map-command-title">Build an offline map room that is useful when the network is not.</h2>
+          <p class="map-command-text">Switch between live map work, regional downloads, route planning, and atlas output from one workspace instead of bouncing between separate map utilities.</p>
+        </div>
+        <div class="map-command-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-map-action="toggle-map-view">Open Live Map</button>
+          <button type="button" class="btn btn-sm" data-map-action="generate-map-atlas">Build Atlas</button>
+          <button type="button" class="btn btn-sm" data-map-action="toggle-map-sources">Browse Sources</button>
+        </div>
+      </div>
+      <div class="map-command-chips">
+        <span class="map-command-chip">Regional downloads</span>
+        <span class="map-command-chip">Waypoints &amp; GPX</span>
+        <span class="map-command-chip">Bookmarks &amp; routes</span>
+        <span class="map-command-chip">Print-ready atlas</span>
+      </div>
+    </div>
+    <div class="map-controls workspace-toolbar">
+      <span class="map-controls-title">Offline Maps</span>
+      <button class="btn btn-sm" id="map-toggle-btn" data-map-action="toggle-map-view">Show Map</button>
+      <button class="btn btn-sm is-hidden" data-map-action="drop-pin" id="pin-btn">Drop Pin</button>
+      <button class="btn btn-sm is-hidden" id="measure-btn" data-map-action="toggle-measure">Measure</button>
+      <button class="btn btn-sm btn-primary is-hidden" data-map-action="save-waypoint" id="save-wp-btn">Save Waypoint</button>
+      <button class="btn btn-sm is-hidden" data-map-action="start-draw-zone" id="draw-zone-btn">Draw Zone</button>
+      <button class="btn btn-sm is-hidden" data-map-action="start-draw-property" id="property-btn">Property</button>
+      <button class="btn btn-sm is-hidden" data-map-action="clear-pins" id="clear-pins-btn">Clear Pins</button>
+      <button class="btn btn-sm is-hidden" data-map-action="print-map-view" id="print-map-btn">Print</button>
+      <button class="btn btn-sm" data-map-action="print-map" title="Print current map view">Print</button>
+      <button class="btn btn-sm is-hidden" data-map-action="save-map-bookmark" id="bookmark-btn">Bookmark</button>
+      <button class="btn btn-sm is-hidden" data-map-action="calc-bearing-distance" id="bearing-btn">Bearing</button>
+      <button class="btn btn-sm" data-map-action="toggle-map-measure" id="map-measure-btn" title="Measure distance on map">Measure</button>
+      <button class="btn btn-sm" data-map-action="cycle-map-style" id="style-btn" title="Change map style">Style</button>
+      <button class="btn btn-sm" data-map-action="toggle-garden-overlay" title="Toggle garden plot overlay" id="garden-overlay-btn">Garden</button>
+      <button class="btn btn-sm" data-map-action="toggle-supply-chain-overlay" title="Toggle supply chain overlay" id="supply-chain-btn">Supply Chain</button>
+      <button class="btn btn-sm" data-map-action="generate-map-atlas" title="Generate printable map atlas">Atlas</button>
+      <button class="btn btn-sm" data-map-action="toggle-contour-overlay" title="Toggle elevation contour lines" id="contour-btn">Contours</button>
+      <a class="btn btn-sm is-hidden" href="/api/waypoints/export-gpx" id="gpx-btn">Export GPX</a>
+      <select id="map-tile-selector" name="map_tile_source" class="map-tile-select" data-change-action="map-tile-source" aria-label="Map tile source" title="Select map tile source">
+        <option value="auto">Auto (Match Theme)</option>
+        <option value="offline">Local / Offline</option>
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="eink">High Contrast B&amp;W</option>
+        <option value="satellite">Satellite</option>
+        <option value="terrain">Terrain</option>
+      </select>
+      <span id="map-coords" class="map-coords"></span>
+    </div>
+    <div id="map-viewer" class="map-viewer-shell workspace-stack is-hidden">
+      <div class="map-search">
+        <input id="map-search-input" type="search" name="map_search" autocomplete="off" aria-label="Search location on map" placeholder="Search location or enter lat,lng...">
+        <button type="button" data-map-action="search-map" aria-label="Search map location">Go</button>
+      </div>
+              <div class="map-geocode-shell">
+                <input id="geocode-input" type="search" name="geocode_search" class="input map-geocode-input" aria-label="Geocode search" placeholder="Search locations..." data-input-action="geocode-search" autocomplete="off">
+<div id="geocode-results" class="map-geocode-results is-hidden"></div>
+              </div>
+      <div id="measure-result" class="map-measure-pill workspace-callout map-measure-panel is-hidden">
+  Distance: <strong id="measure-distance">0</strong> km (<span id="measure-distance-mi">0</span> mi) &mdash; <button class="btn btn-sm btn-ghost map-measure-clear-btn" data-map-action="clear-measure">Clear</button>
+</div>
+      <div id="map-container" class="map-wrap"></div>
+      <div id="elevation-profile-panel" class="workspace-stack map-elevation-panel is-hidden">
+        <div class="workspace-toolbar workspace-heading-row">
+          <span class="section-header-label">ELEVATION PROFILE</span>
+          <div class="section-divider section-divider-grow"></div>
+        </div>
+        <canvas id="elevation-canvas" class="workspace-canvas map-elevation-canvas" width="600" height="150"></canvas>
+        <div id="elevation-stats" class="workspace-metric-row"></div>
+      </div>
+    </div>
+    <div id="map-management">
+      <div class="map-management-grid">
+        <div class="settings-card map-surface">
+          <h3 class="workspace-toolbar workspace-heading-row">Download Regional Maps <button class="help-icon" data-help="maps" title="Maps guide">?</button>
+            <button class="btn btn-sm btn-primary" data-map-action="download-all-maps">Download All Regions</button>
+          </h3>
+          <p class="map-download-copy">Download offline maps for your region. Select an area below and it will be available for navigation without internet. The download tool is installed automatically on first use.</p>
+          <div id="map-download-status" class="map-download-status is-hidden">
+            <div class="workspace-toolbar workspace-heading-row">
+              <span id="map-dl-label">Downloading...</span>
+              <span id="map-dl-pct" class="map-download-pct"></span>
+            </div>
+            <div class="map-progress-track">
+              <div id="map-dl-bar" class="map-progress-bar is-zero-width"></div>
+            </div>
+          </div>
+          <div class="region-grid" id="region-grid"></div>
+        </div>
+        <div class="settings-card map-surface">
+          <h3>Downloaded Maps</h3>
+          <div id="map-files-list"><span class="workspace-empty-copy">No maps downloaded yet.</span></div>
+          <h3 class="map-section-title">Import Maps</h3>
+          <div class="workspace-toolbar map-action-row">
+            <input id="map-url-input" type="url" name="map_download_url" class="map-import-input" autocomplete="url" aria-label="Map download URL" placeholder="Paste a map download URL...">
+            <button class="btn btn-sm btn-primary" data-map-action="download-map-url">Download URL</button>
+          </div>
+          <div class="workspace-toolbar map-action-row">
+            <input id="map-file-input" name="map_file_path" class="map-import-input" autocomplete="off" aria-label="Local map file path" placeholder="Local map file path">
+            <button class="btn btn-sm" data-map-action="import-map-file">Import File</button>
+          </div>
+          <h3 class="map-section-title">Waypoint Distances</h3>
+          <div id="wp-distance-matrix" class="workspace-copy workspace-copy-scroll workspace-copy-compact"><span class="workspace-empty-copy">Save waypoints to see distance matrix.</span></div>
+          <div class="workspace-toolbar map-action-row">
+            <button class="btn btn-sm" data-map-action="refresh-waypoint-distances">Refresh</button>
+            <a class="btn btn-sm" href="/api/waypoints/export-gpx">Export GPX</a>
+            <input type="file" id="gpx-import-input" name="gpx_import_file" accept=".gpx" data-change-action="import-gpx-file" class="is-hidden">
+            <button class="btn btn-sm" data-click-target="gpx-import-input">Import GPX</button>
+          </div>
+        </div>
+      </div>
+      <!-- Saved Routes -->
+      <div class="settings-card map-surface workspace-stack-section">
+        <h3 class="workspace-toolbar workspace-heading-row">Saved Routes <button class="btn btn-sm" data-map-action="load-saved-routes">Refresh</button></h3>
+        <div id="saved-routes-list"><span class="workspace-empty-copy">No routes saved yet. Create routes by selecting waypoints.</span></div>
+            <div id="elevation-profile-chart" class="map-surface-inline workspace-stack-section map-elevation-detail is-hidden">
+              <div class="workspace-toolbar workspace-heading-row">
+                <span class="map-elevation-title">Elevation Profile</span>
+                <button class="btn btn-sm map-inline-close-btn" data-map-action="hide-elevation-profile">Close</button>
+              </div>
+              <canvas id="elevation-canvas-detail" class="map-elevation-canvas"></canvas>
+              <div id="elevation-detail-stats" class="workspace-metric-row"></div>
+            </div>
+      </div>
+      <!-- Map Bookmarks -->
+      <div class="settings-card map-surface workspace-stack-section">
+        <h3 class="workspace-toolbar workspace-heading-row">Map Bookmarks <button class="btn btn-sm" data-map-action="render-map-bookmarks">Refresh</button></h3>
+        <div id="map-bookmarks-list"><span class="workspace-empty-copy">No bookmarks saved. Click Bookmark while viewing the map.</span></div>
+      </div>
+      <!-- Alternative Map Sources Catalog -->
+      <div class="settings-card map-surface workspace-stack-section">
+        <h3 class="workspace-toolbar workspace-heading-row">
+          Alternative Map Sources
+          <button class="btn btn-sm" data-map-action="toggle-map-sources">Show/Hide</button>
+        </h3>
+        <p class="map-import-copy">Additional map data from various providers. Most files work directly with the built-in map viewer.</p>
+        <div id="map-sources-catalog" hidden></div>
+      </div>
+    </div>
+  </div>
+

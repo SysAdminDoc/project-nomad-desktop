@@ -30,7 +30,7 @@ DOC_CATEGORIES = ['medical', 'property', 'vehicle', 'financial', 'legal', 'refer
 # ─── Helper Functions ───────────────────────────────────────────────
 
 def get_kb_upload_dir():
-    path = os.path.join(get_data_base(), 'ProjectNOMAD', 'kb_uploads')
+    path = os.path.join(get_data_dir(), 'kb_uploads')
     os.makedirs(path, exist_ok=True)
     return path
 

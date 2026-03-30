@@ -1,5 +1,5 @@
 /**
- * IndexedDB Offline Data Sync for N.O.M.A.D.
+ * IndexedDB offline data sync for NOMAD Field Desk.
  * Caches critical data tables for offline access.
  */
 

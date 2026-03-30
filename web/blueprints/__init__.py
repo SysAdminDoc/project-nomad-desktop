@@ -1,1 +1,1 @@
-"""Flask blueprints for N.O.M.A.D. route modules."""
+"""Flask blueprints for NOMAD Field Desk route modules."""

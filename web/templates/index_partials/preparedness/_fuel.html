@@ -1,0 +1,55 @@
+    <div id="psub-fuel" class="prep-sub">
+      <div class="prep-section prep-resource-shell">
+      <div class="prep-command-bar">
+        <div>
+          <div class="prep-command-note">Reserve fuel and rotation tracking</div>
+          <div class="prep-note-block">Track reserve fuel, shelf life, and stabilizer use without crowding the workspace.</div>
+        </div>
+        <div class="prep-command-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="open-fuel-form">+ Add Fuel</button>
+        </div>
+      </div>
+      <div id="fuel-summary" class="prep-resource-summary-grid"></div>
+      <div id="fuel-table" class="prep-resource-table-shell"></div>
+      <!-- Add/Edit Modal -->
+      <div id="fuel-modal" class="modal-overlay prep-resource-modal-overlay is-hidden" data-backdrop-close="fuel-modal">
+        <div class="modal-card prep-resource-modal-card">
+          <div class="modal-header prep-secondary-heading">
+            <h3 id="fuel-modal-title">Add Fuel Entry</h3>
+            <button type="button" class="modal-close" data-prep-action="close-fuel-form" aria-label="Close fuel form">&times;</button>
+          </div>
+          <div class="modal-body prep-resource-modal-form">
+          <input type="hidden" id="fuel-id" name="fuel_id">
+          <div class="prep-form-grid prep-form-grid-2 prep-ops-form-grid">
+            <label class="prep-field prep-field-span-2"><span class="prep-field-label">Fuel Type *</span>
+              <select id="fuel-type" name="fuel_type" class="prep-field-control">
+                <option>Gasoline (Regular)</option><option>Gasoline (Premium)</option><option>Diesel</option>
+                <option>Propane</option><option>Kerosene</option><option>Ethanol</option>
+                <option>Butane</option><option>White Gas</option><option>Wood (cords)</option><option>Charcoal</option>
+              </select>
+            </label>
+            <label class="prep-field"><span class="prep-field-label">Quantity</span><input type="number" id="fuel-qty" name="fuel_qty" min="0" step="0.1" value="5" class="prep-field-control"></label>
+            <label class="prep-field"><span class="prep-field-label">Unit</span>
+              <select id="fuel-unit" name="fuel_unit" class="prep-field-control">
+                <option>gallons</option><option>liters</option><option>lbs</option><option>cords</option><option>bags</option>
+              </select>
+            </label>
+            <label class="prep-field"><span class="prep-field-label">Container</span><input type="text" id="fuel-container" name="fuel_container" class="prep-field-control" placeholder="5-gal Jerry can"></label>
+            <label class="prep-field"><span class="prep-field-label">Location</span><input type="text" id="fuel-location" name="fuel_location" class="prep-field-control" placeholder="Garage, shed..."></label>
+            <label class="prep-field"><span class="prep-field-label">Date Stored</span><input type="date" id="fuel-stored" name="fuel_stored" class="prep-field-control"></label>
+            <label class="prep-field"><span class="prep-field-label">Expires / Rotate By</span><input type="date" id="fuel-expires" name="fuel_expires" class="prep-field-control"></label>
+            <label class="prep-modal-check prep-field-span-2"><input type="checkbox" id="fuel-stabilizer" name="fuel_stabilizer"><span>Fuel stabilizer added (extends shelf life to 2 years)</span></label>
+            <label class="prep-field prep-field-span-2"><span class="prep-field-label">Notes</span><textarea id="fuel-notes" name="fuel_notes" rows="2" class="prep-field-control prep-ops-textarea"></textarea></label>
+          </div>
+          <div class="prep-form-actions prep-resource-actions">
+            <button type="button" class="btn btn-sm btn-ghost" data-prep-action="close-fuel-form">Cancel</button>
+            <button type="button" class="btn btn-sm btn-primary" data-prep-action="save-fuel">Save</button>
+          </div>
+          </div>
+        </div>
+      </div>
+      <div class="prep-note-block prep-resource-note">
+        <strong>Shelf Life Reference:</strong> Gasoline: 3–6 months untreated, up to 2 years with stabilizer &bull; Diesel: 6–12 months &bull; Propane: indefinite (sealed) &bull; Kerosene: 2–5 years &bull; Store in approved containers away from heat sources.
+      </div>
+      </div>
+    </div><!-- /psub-fuel -->

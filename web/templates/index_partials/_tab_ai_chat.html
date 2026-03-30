@@ -1,0 +1,169 @@
+  <!-- AI Chat Tab -->
+  <div id="tab-ai-chat" class="tab-content tab-vcenter">
+    <div class="chat-layout">
+      <div class="convo-sidebar">
+        <div class="convo-sidebar-header">
+          <span>Conversations</span>
+          <button class="btn btn-sm btn-primary" data-chat-action="new-conversation">+ New</button>
+        </div>
+        <div class="convo-search">
+          <input id="convo-search" type="search" name="conversation_search" autocomplete="off" aria-label="Search conversations" placeholder="Search chats..." data-input-action="filter-convos">
+        </div>
+        <div class="convo-list" id="convo-list"><div class="sidebar-empty-state">Your conversations will appear here</div></div>
+        <div class="convo-sidebar-footer">
+          <button class="btn btn-sm btn-danger workspace-btn-block" data-chat-action="delete-all-convos">Delete All</button>
+        </div>
+      </div>
+      <div class="chat-container">
+        <div class="chat-header">
+          <div class="chat-header-shell">
+            <div class="chat-header-intro">
+              <div class="section-header-label chat-header-kicker">COPILOT WORKSPACE</div>
+              <div class="chat-header-title-row">
+                <div class="chat-header-title">Plan, analyze, and decide from one calm workspace.</div>
+                <div class="chat-header-state">Private + Local</div>
+              </div>
+              <div class="chat-header-copy">Use models, presets, memory, and your local knowledge base without leaving the app.</div>
+            </div>
+          <div class="chat-header-left chat-header-control-strip">
+            <select id="model-select" name="chat_model" aria-label="Select AI model"><option value="">No models</option></select>
+            <select class="preset-select" id="system-preset" name="system_preset" data-change-action="apply-preset" title="Choose how the AI responds" aria-label="Choose AI response preset">
+              <option value="">General (no special role)</option>
+              <option disabled>--- Everyday ---</option>
+              <option value="assistant">General Assistant</option>
+              <option value="teacher">Teacher / Tutor</option>
+              <option value="coding">Coding Helper</option>
+              <option value="analyst">Data Analyst</option>
+              <option disabled>--- Preparedness ---</option>
+              <option value="survival">Survival Expert</option>
+              <option value="homesteader">Homesteading &amp; Self-Reliance</option>
+              <option value="water_specialist">Water &amp; Sanitation</option>
+              <option value="forager">Foraging &amp; Wild Food</option>
+              <option value="solar_expert">Solar &amp; Off-Grid Power</option>
+              <option value="land_nav">Land Navigation</option>
+              <option value="tactical">Security &amp; Safety</option>
+              <option value="nuclear">Nuclear Preparedness</option>
+              <option disabled>--- Medical ---</option>
+              <option value="medical">Medical Advisor</option>
+              <option value="field_medic">Field Medic</option>
+              <option value="herbalist">Medicinal Plants &amp; Herbs</option>
+              <option disabled>--- Communications ---</option>
+              <option value="ham_radio">HAM &amp; Emergency Radio</option>
+              <option disabled>--- Practice Scenarios ---</option>
+              <option value="scenario_grid">Scenario: Grid Down</option>
+              <option value="scenario_medical">Scenario: Medical Emergency</option>
+              <option value="scenario_evacuation">Scenario: Evacuation</option>
+              <option disabled>--- Advanced ---</option>
+              <option value="custom">Write Your Own Prompt...</option>
+            </select>
+            <button class="btn btn-sm" data-chat-action="toggle-model-picker">+ Download AI Model</button>
+            <button class="btn btn-sm" data-chat-action="export-conversation" title="Export to Markdown">Export</button>
+            <div class="chat-branch-shell">
+              <button class="btn btn-sm is-hidden" id="branches-btn" data-chat-action="toggle-branch-panel" title="View conversation branches">Branches <span id="branches-count-badge" class="convo-branch-badge is-hidden">0</span></button>
+              <div class="branch-panel" id="branch-panel"></div>
+            </div>
+            <div class="ai-memory-shell">
+              <button class="btn btn-sm" type="button" id="ai-memory-toggle-btn" data-ai-memory-action="toggle" aria-expanded="false" aria-controls="ai-memory-panel" title="AI Memory">Memory</button>
+              <div id="ai-memory-panel" class="ai-memory-panel" role="dialog" aria-label="AI memory facts">
+                <div class="ai-memory-heading">AI Memory Facts</div>
+                <div id="ai-memory-list" class="ai-memory-list" aria-live="polite"><div class="settings-inline-status settings-inline-status-muted">Loading…</div></div>
+                <div class="ai-memory-input-row">
+                  <input id="ai-memory-input" name="memory_fact" class="ai-memory-input" autocomplete="off" aria-label="Add AI memory fact" placeholder="Add a memory fact…">
+                  <button class="btn btn-sm btn-primary" type="button" data-ai-memory-action="add">Add</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          </div>
+          <div id="pull-progress-bar" class="chat-header-progress is-hidden">
+            <div class="progress-bar"><div class="fill is-zero-width" id="pull-fill"></div></div>
+            <div class="progress-info"><span id="pull-detail">...</span><span id="pull-pct">0%</span></div>
+          </div>
+        </div>
+        <div id="model-picker-panel" class="chat-inline-panel is-hidden">
+          <div class="chat-inline-panel-header">
+            <span class="chat-inline-panel-title">Download an AI Model <button class="help-icon" data-help="models-guide" title="Which model should I choose?">?</button> <span class="chat-inline-panel-note">(downloaded once, works forever offline)</span></span>
+            <div class="chat-inline-panel-actions">
+              <button class="btn btn-sm btn-primary" data-chat-action="pull-all-models" title="Download all recommended models one at a time">Download All Recommended</button>
+              <button class="btn btn-sm btn-ghost chat-inline-close-btn" type="button" data-chat-action="toggle-model-picker" aria-label="Close model download panel">x</button>
+            </div>
+          </div>
+          <div id="model-picker-list" class="chat-inline-panel-grid"></div>
+          <div class="chat-inline-panel-row">
+            <input id="custom-model-input" name="custom_model_name" class="chat-inline-input" autocomplete="off" aria-label="Custom model name" placeholder="Or type a model name (e.g. phi3:mini)">
+            <button class="btn btn-sm btn-primary" data-chat-action="pull-custom-model">Download</button>
+          </div>
+        </div>
+        <div id="custom-prompt-panel" class="chat-inline-panel is-hidden">
+          <div class="chat-inline-panel-header">
+            <span class="chat-inline-panel-title">Custom System Prompt</span>
+            <button class="btn btn-sm btn-ghost chat-inline-close-btn" type="button" data-chat-action="toggle-custom-prompt" aria-label="Close custom prompt editor">x</button>
+          </div>
+          <textarea id="custom-prompt-text" name="custom_prompt_text" class="chat-inline-textarea" placeholder="e.g. You are a preparedness expert. Always prioritize practical survival advice..."></textarea>
+          <div class="chat-inline-panel-actions">
+            <button class="btn btn-sm btn-primary" data-chat-action="save-custom-prompt">Save & Apply</button>
+            <button class="btn btn-sm" data-chat-action="clear-custom-prompt">Clear</button>
+          </div>
+        </div>
+        <div class="kb-panel" id="kb-panel">
+          <label class="kb-toggle" title="When enabled, the AI can see your inventory, contacts, weather, and alerts to give personalized advice"><input type="checkbox" id="sit-context-toggle" name="include_prep_data"> Include My Prep Data</label>
+          <label class="kb-toggle"><input type="checkbox" id="kb-toggle" name="use_document_library" data-change-action="toggle-kb"> My Documents</label>
+          <input type="file" id="kb-file-input" name="kb_document_upload" accept=".pdf,.txt,.md,.csv" data-change-action="upload-kb-file" class="is-hidden">
+          <button class="btn btn-sm" data-click-target="kb-file-input">Upload Doc</button>
+          <button class="btn btn-sm" data-chat-action="analyze-all-docs" title="AI: classify, summarize, and extract entities from all documents">Analyze All</button>
+          <span id="kb-status-badge" class="chat-status-badge"></span>
+          <div class="kb-docs kb-docs-list-shell is-hidden" id="kb-docs-list"></div>
+        </div>
+        <div class="branch-banner is-hidden" id="branch-banner">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v12"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+          <span id="branch-banner-text">Viewing branch</span>
+          <button class="branch-return-btn" data-chat-action="return-main-conversation">Return to main</button>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+          <div class="empty-state" id="chat-empty">
+            <div class="icon chat-empty-icon-shell">
+              <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" class="chat-empty-icon"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <p class="chat-empty-heading">Your Private AI Assistant</p>
+            <p class="chat-empty-copy">Runs entirely on your computer — nothing sent to the internet. Try a starter below or type your own question.</p>
+            <div class="chat-empty-highlights">
+              <span class="chat-empty-highlight">Local models</span>
+              <span class="chat-empty-highlight">Prep-aware answers</span>
+              <span class="chat-empty-highlight">Offline friendly</span>
+            </div>
+            <div class="chat-starter-grid">
+              <button class="btn btn-sm chat-starter-btn" data-starter-prompt="What should I prioritize in my preparedness plan?">What to prioritize?</button>
+              <button class="btn btn-sm chat-starter-btn" data-starter-prompt="How do I purify water if I run out of filters?">Water purification</button>
+              <button class="btn btn-sm chat-starter-btn" data-starter-prompt="What are the signs of a medical emergency I should watch for?">Medical warning signs</button>
+              <button class="btn btn-sm chat-starter-btn" data-starter-prompt="Help me plan a 14-day food supply for 4 people on a budget">Food planning</button>
+              <button class="btn btn-sm chat-starter-btn" data-starter-prompt="What radio should I get for emergency communications?">Radio recommendations</button>
+              <button class="btn btn-sm chat-starter-btn" data-starter-prompt="How do I build a basic solar power system for essential devices?">Solar power basics</button>
+              <button class="btn btn-sm chat-starter-btn" data-starter-prompt="What are the most likely emergency scenarios in my area and how do I prepare?">Threat assessment</button>
+              <button class="btn btn-sm chat-starter-btn" data-starter-prompt="Create a weekly training schedule to improve my survival skills">Training schedule</button>
+              <button class="btn btn-sm chat-starter-btn" data-starter-prompt="How do I set up a rain water collection system at my house?">Rainwater collection</button>
+              <button class="btn btn-sm chat-starter-btn" data-starter-prompt="What are the best crops to grow for maximum calories per square foot?">High-calorie crops</button>
+              <button class="btn btn-sm chat-starter-btn" data-starter-prompt="Help me create an emergency communication plan for my family of 4">Family comms plan</button>
+              <button class="btn btn-sm chat-starter-btn" data-starter-prompt="What should I look for when choosing a bug-out location?">Bug-out location</button>
+            </div>
+          </div>
+        </div>
+        <div id="chat-file-context" class="chat-context-strip is-hidden">
+          <span id="chat-file-name"></span>
+          <button type="button" class="chat-file-clear" data-chat-action="clear-chat-file" aria-label="Remove attached chat file">x</button>
+        </div>
+        <div id="chat-image-preview" class="chat-context-strip is-hidden"></div>
+        <div class="chat-input-area" id="chat-input-area">
+          <input type="file" id="chat-file-input" name="chat_file" accept=".pdf,.txt,.md,.csv,.log,.json,.xml" data-change-action="handle-chat-file-select" class="is-hidden">
+          <button class="btn btn-sm btn-ghost chat-attach-btn" data-click-target="chat-file-input" title="Attach file for AI context" aria-label="Attach file">&#128206;</button>
+          <input type="file" id="chat-image-input" name="chat_image" accept="image/*" data-change-action="preview-chat-image" class="is-hidden">
+          <button type="button" class="btn btn-sm btn-ghost chat-attach-btn" data-click-target="chat-image-input" aria-label="Send image to AI" title="Send image to multimodal model">&#128247;</button>
+          <textarea id="chat-input" name="chat_input" aria-label="Chat message input" placeholder="Type a message... (Enter to send, Shift+Enter for newline, drop files)" rows="1"></textarea>
+          <button class="btn btn-primary" data-chat-action="send-chat" id="send-btn">Send</button>
+          <button class="btn btn-stop is-hidden" data-chat-action="stop-chat" id="stop-btn">Stop</button>
+          <button class="btn btn-sm is-hidden" data-chat-action="regenerate-chat" id="regen-btn" title="Regenerate last response">Retry</button>
+          <span id="chat-stats" class="chat-stats"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+

@@ -1,0 +1,215 @@
+    <!-- Sub: Medical Module -->
+    <div id="psub-medical" class="prep-sub">
+    <div class="prep-section prep-utility-section prep-medical-workspace">
+      <div class="prep-command-bar prep-medical-header">
+        <div>
+          <div class="prep-command-note">Medical</div>
+          <h3 class="prep-utility-title">Medical Desk</h3>
+          <div class="prep-status-copy">Keep triage, quick references, supply readiness, and patient intake within one operating surface.</div>
+        </div>
+        <button class="help-icon" data-help="medical-guide" title="Medical module guide">?</button>
+      </div>
+
+      <div id="expiring-meds-panel" class="prep-data-shell prep-utility-shell prep-med-panel">
+        <div class="prep-utility-header prep-utility-header-compact">
+          <div>
+            <div class="prep-command-note">Readiness</div>
+            <h4 class="prep-utility-subtitle">Expiring Medications</h4>
+          </div>
+        </div>
+        <div id="expiring-meds-list" class="prep-record-list prep-expiring-list"></div>
+      </div>
+
+      <div class="prep-data-shell prep-utility-shell prep-med-panel">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Reference</div>
+            <h4 class="prep-utility-subtitle">Medical Quick Reference</h4>
+          </div>
+        </div>
+        <div class="prep-tab-strip prep-med-ref-strip">
+          <button type="button" class="btn btn-sm prep-utility-tab" id="med-ref-vital_signs" data-med-ref="vital_signs">Vital Signs</button>
+          <button type="button" class="btn btn-sm prep-utility-tab" id="med-ref-drug_dosages" data-med-ref="drug_dosages">Drug Dosages</button>
+          <button type="button" class="btn btn-sm prep-utility-tab" id="med-ref-triage" data-med-ref="triage">START Triage</button>
+          <button type="button" class="btn btn-sm prep-utility-tab" id="med-ref-burns" data-med-ref="burns">Burns (Rule of 9s)</button>
+          <button type="button" class="btn btn-sm prep-utility-tab" id="med-ref-bleeding" data-med-ref="bleeding">Hemorrhage Control</button>
+        </div>
+        <div id="med-ref-content" class="prep-data-shell prep-med-ref-shell is-hidden"></div>
+      </div>
+
+      <div class="prep-data-shell prep-utility-shell prep-med-panel">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Mass Casualty</div>
+            <h4 class="prep-utility-subtitle">Triage Board</h4>
+          </div>
+          <div class="prep-command-actions">
+            <button type="button" class="btn btn-sm prep-utility-tab" data-prep-action="load-triage-board">Refresh</button>
+            <button type="button" class="btn btn-sm btn-primary" data-app-frame-title="TCCC Protocol" data-app-frame-url="/api/medical/tccc-protocol">TCCC March</button>
+          </div>
+        </div>
+        <div id="triage-board" class="prep-triage-grid">
+          <div class="prep-empty-block prep-empty-state-wide">Click Refresh to load the triage board.</div>
+        </div>
+      </div>
+
+      <div class="prep-data-shell prep-utility-shell prep-med-panel">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Protocol</div>
+            <h4 class="prep-utility-subtitle">TCCC March Flow</h4>
+          </div>
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="start-tccc-flow">Start Assessment</button>
+        </div>
+        <div id="tccc-flow" class="prep-tccc-shell" hidden>
+          <div id="tccc-step" class="prep-data-shell prep-tccc-step"></div>
+          <div class="prep-command-actions prep-tccc-actions">
+            <button type="button" class="btn btn-sm" data-prep-action="tccc-prev" id="tccc-prev-btn" hidden>Back</button>
+            <button type="button" class="btn btn-sm" data-prep-action="tccc-reset">Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="prep-data-shell prep-utility-shell prep-med-panel">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Inventory</div>
+            <h4 class="prep-utility-subtitle">Medical Supply Status</h4>
+          </div>
+          <button type="button" class="btn btn-sm prep-utility-tab" data-prep-action="load-medical-supplies">Refresh</button>
+        </div>
+        <div id="med-supplies-status" class="prep-med-supply-grid">
+          <div class="prep-empty-block prep-empty-state-wide">Loading medical supplies...</div>
+        </div>
+      </div>
+
+      <div class="prep-command-bar prep-med-patient-bar">
+        <div>
+          <div class="prep-command-note">Patients</div>
+          <h4 class="prep-utility-subtitle">Patient Intake</h4>
+          <div class="prep-status-copy">Track patients, vitals, wounds, allergies, and medications. Drug interaction checking stays close to intake.</div>
+        </div>
+        <div class="prep-command-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="show-patient-form">+ Add Patient</button>
+          <button type="button" class="btn btn-sm" data-prep-action="add-patient-from-contacts">Import from Contacts</button>
+        </div>
+      </div>
+
+      <div id="patient-form" class="prep-form-shell prep-data-shell prep-med-patient-form is-hidden">
+        <div class="prep-form-grid prep-form-grid-4 prep-med-patient-grid">
+          <label class="prep-field"><span class="prep-field-label">Name *</span><input id="pt-name" name="pt_name" class="prep-field-control"></label>
+          <label class="prep-field"><span class="prep-field-label">Age</span><input id="pt-age" name="pt_age" class="prep-field-control" type="number" min="0" max="120"></label>
+          <label class="prep-field"><span class="prep-field-label">Weight (kg)</span><input id="pt-weight" name="pt_weight" class="prep-field-control" type="number" min="1" max="300" step="0.1"></label>
+          <label class="prep-field"><span class="prep-field-label">Sex</span><select id="pt-sex" name="pt_sex" class="prep-field-control"><option value="">-</option><option>Male</option><option>Female</option></select></label>
+          <label class="prep-field"><span class="prep-field-label">Blood Type</span><select id="pt-blood" name="pt_blood" class="prep-field-control"><option value="">Unknown</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></label>
+          <label class="prep-field prep-field-span-2"><span class="prep-field-label">Allergies (comma-separated)</span><input id="pt-allergies" name="pt_allergies" class="prep-field-control" placeholder="Penicillin, Sulfa, Latex…"></label>
+          <label class="prep-field"><span class="prep-field-label">Current Medications</span><input id="pt-meds" name="pt_meds" class="prep-field-control" placeholder="Lisinopril, Metformin…"></label>
+          <label class="prep-field"><span class="prep-field-label">Conditions</span><input id="pt-conditions" name="pt_conditions" class="prep-field-control" placeholder="Diabetes, Hypertension…"></label>
+        </div>
+        <div class="prep-secondary-block">
+          <label class="prep-field"><span class="prep-field-label">Notes</span><input id="pt-notes" name="pt_notes" class="prep-field-control" placeholder="Additional medical info…"></label>
+        </div>
+        <input type="hidden" id="pt-edit-id" name="pt_edit_id" value="">
+        <div class="prep-form-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="save-patient">Save Patient</button>
+          <button type="button" class="btn btn-sm" data-prep-action="hide-patient-form">Cancel</button>
+          <button type="button" class="btn btn-sm" data-prep-action="check-drug-interactions" id="interaction-check-btn" title="Check drug interactions for this patient's medications">Check Interactions</button>
+        </div>
+        <div id="interaction-results" class="prep-secondary-block is-hidden"></div>
+      </div>
+
+      <div class="prep-data-shell prep-utility-shell prep-med-panel">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Calculator</div>
+            <h4 class="prep-utility-subtitle">Dosage Calculator</h4>
+          </div>
+        </div>
+        <div class="prep-form-grid prep-form-grid-4 prep-med-dosage-grid">
+          <label class="prep-field"><span class="prep-field-label">Drug *</span><select id="dc-drug" name="dc_drug" class="prep-field-control"><option value="">Select drug…</option></select></label>
+          <label class="prep-field"><span class="prep-field-label">Patient (optional)</span><select id="dc-patient" name="dc_patient" class="prep-field-control"><option value="">Manual entry</option></select></label>
+          <label class="prep-field"><span class="prep-field-label">Age</span><input id="dc-age" name="dc_age" class="prep-field-control" type="number" min="0" max="120" placeholder="Years"></label>
+          <label class="prep-field"><span class="prep-field-label">Weight (kg)</span><input id="dc-weight" name="dc_weight" class="prep-field-control" type="number" min="1" max="300" step="0.1" placeholder="kg"></label>
+        </div>
+        <div class="prep-form-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="calculate-dosage">Calculate Dosage</button>
+        </div>
+        <div id="dosage-results" class="prep-secondary-block is-hidden"></div>
+      </div>
+
+      <div id="patient-list" class="prep-patient-grid">
+        <div class="prep-empty-block prep-empty-state-wide">No patients registered. Click "+ Add Patient" or "Import from Contacts" to start.</div>
+      </div>
+
+      <!-- Vitals Form (shown when viewing a patient) -->
+      <div id="vitals-panel" class="prep-data-shell prep-utility-shell prep-med-detail-panel is-hidden">
+        <div class="prep-command-bar prep-med-detail-header">
+          <div>
+            <div class="prep-command-note">Patient Detail</div>
+            <h3 id="vitals-patient-name" class="prep-utility-title">Patient Vitals</h3>
+          </div>
+          <div class="prep-command-actions">
+            <button type="button" class="btn btn-sm" data-shell-action="open-active-patient-card" title="Print patient care card">Print Card</button>
+            <button type="button" class="btn btn-sm" data-prep-action="close-vitals-panel">Close</button>
+          </div>
+        </div>
+        <div id="vitals-allergy-banner" class="prep-med-alert-banner is-hidden"></div>
+
+        <details class="prep-data-shell prep-med-collapsible">
+          <summary class="prep-med-collapsible-summary"><span>&#9654;</span> Record Vital Signs</summary>
+          <div class="prep-form-grid prep-form-grid-4 prep-med-vitals-grid">
+            <label class="prep-field"><span class="prep-field-label">BP Sys</span><input id="v-bps" name="v_bps" class="prep-field-control" type="number" min="40" max="300" placeholder="120"></label>
+            <label class="prep-field"><span class="prep-field-label">BP Dia</span><input id="v-bpd" name="v_bpd" class="prep-field-control" type="number" min="20" max="200" placeholder="80"></label>
+            <label class="prep-field"><span class="prep-field-label">Pulse</span><input id="v-pulse" name="v_pulse" class="prep-field-control" type="number" min="20" max="250" placeholder="72"></label>
+            <label class="prep-field"><span class="prep-field-label">Resp</span><input id="v-resp" name="v_resp" class="prep-field-control" type="number" min="4" max="60" placeholder="16"></label>
+            <label class="prep-field"><span class="prep-field-label">Temp F</span><input id="v-temp" name="v_temp" class="prep-field-control" type="number" min="90" max="110" step="0.1" placeholder="98.6"></label>
+            <label class="prep-field"><span class="prep-field-label">SpO2%</span><input id="v-spo2" name="v_spo2" class="prep-field-control" type="number" min="50" max="100" placeholder="98"></label>
+            <label class="prep-field"><span class="prep-field-label">Pain 0-10</span><input id="v-pain" name="v_pain" class="prep-field-control" type="number" min="0" max="10" placeholder="0"></label>
+            <label class="prep-field"><span class="prep-field-label">GCS 3-15</span><input id="v-gcs" name="v_gcs" class="prep-field-control" type="number" min="3" max="15" placeholder="15"></label>
+            <label class="prep-field prep-field-span-3"><span class="prep-field-label">Notes</span><input id="v-notes" name="v_notes" class="prep-field-control" placeholder="Optional"></label>
+            <div class="prep-med-vitals-submit"><button type="button" class="btn btn-sm btn-primary" data-prep-action="log-vitals">Log Vitals</button></div>
+          </div>
+        </details>
+
+        <div class="prep-data-shell prep-utility-shell prep-med-history-shell">
+          <div class="prep-utility-header prep-utility-header-compact">
+            <div>
+              <div class="prep-command-note">History</div>
+              <h4 class="prep-utility-subtitle">Vitals Log</h4>
+            </div>
+          </div>
+          <div class="prep-table-wrap"><table class="freq-table prep-data-table" id="vitals-table"><thead><tr><th>Time</th><th>BP</th><th>Pulse</th><th>Resp</th><th>Temp</th><th>SpO2</th><th>Pain</th><th>GCS</th><th>Notes</th></tr></thead><tbody id="vitals-tbody"></tbody></table></div>
+        </div>
+
+        <div id="vitals-trend-panel" class="prep-data-shell prep-chart-shell prep-med-trend-panel is-hidden">
+          <div class="prep-chart-title">Vital Signs Trend</div>
+          <canvas id="vitals-canvas" width="600" height="180" class="prep-chart-canvas prep-med-vitals-canvas"></canvas>
+        </div>
+
+        <div class="prep-data-shell prep-utility-shell prep-med-wound-shell">
+          <div class="prep-utility-header">
+            <div>
+              <div class="prep-command-note">Trauma</div>
+              <h4 class="prep-utility-subtitle">Wound Log</h4>
+            </div>
+            <button type="button" class="btn btn-sm" data-prep-action="show-wound-form">+ Log Wound</button>
+          </div>
+          <div id="wound-form" class="prep-form-shell prep-data-shell prep-med-wound-form is-hidden">
+            <div class="prep-form-grid prep-form-grid-4 prep-med-wound-grid">
+              <label class="prep-field"><span class="prep-field-label">Body Location</span><input id="w-loc" name="w_loc" class="prep-field-control" placeholder="Left forearm"></label>
+              <label class="prep-field"><span class="prep-field-label">Type</span><select id="w-type" name="w_type" class="prep-field-control"><option>Laceration</option><option>Puncture</option><option>Abrasion</option><option>Burn</option><option>Blunt</option><option>Gunshot</option><option>Bite</option><option>Other</option></select></label>
+              <label class="prep-field"><span class="prep-field-label">Severity</span><select id="w-sev" name="w_sev" class="prep-field-control"><option value="minor">Minor</option><option value="moderate">Moderate</option><option value="severe">Severe</option><option value="critical">Critical</option></select></label>
+              <label class="prep-field"><span class="prep-field-label">Photo</span><input type="file" id="wound-photo-input" name="wound_photo_input" class="prep-field-control" accept="image/*" capture="environment"></label>
+              <label class="prep-field prep-field-span-2"><span class="prep-field-label">Description</span><input id="w-desc" name="w_desc" class="prep-field-control" placeholder="2cm laceration, clean edges…"></label>
+              <label class="prep-field prep-field-span-2"><span class="prep-field-label">Treatment Given</span><input id="w-treat" name="w_treat" class="prep-field-control" placeholder="Cleaned, steri-strips, gauze…"></label>
+            </div>
+            <div class="prep-form-actions">
+              <button type="button" class="btn btn-sm btn-primary" data-prep-action="log-wound">Log</button>
+              <button type="button" class="btn btn-sm" data-prep-action="hide-wound-form">Cancel</button>
+            </div>
+          </div>
+          <div id="wound-list" class="prep-record-list prep-med-wound-list"></div>
+        </div>
+      </div>
+    </div>
+    </div><!-- /psub-medical -->

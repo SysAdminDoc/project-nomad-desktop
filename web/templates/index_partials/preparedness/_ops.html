@@ -1,0 +1,230 @@
+    <!-- Sub: Operations -->
+    <div id="psub-ops" class="prep-sub">
+    <div class="prep-section">
+      <h3>Operations Center</h3>
+      <div class="prep-ops-grid">
+
+        <!-- Emergency Broadcast -->
+        <div class="settings-card prep-utility-shell prep-ops-shell prep-ops-span-full">
+          <h3 class="prep-utility-header prep-utility-header-compact"><span class="prep-utility-subtitle prep-ops-alert-title">Emergency Broadcast (All LAN Devices)</span></h3>
+          <div class="prep-toolbar-row prep-ops-toolbar">
+            <select id="bcast-severity" name="bcast_severity" class="preset-select prep-toolbar-select prep-toolbar-select-tight">
+              <option value="warning">Warning</option>
+              <option value="critical">Critical</option>
+              <option value="info">Info</option>
+            </select>
+            <input id="bcast-msg" name="bcast_msg" class="prep-toolbar-input prep-toolbar-input-wide" placeholder="Emergency message to all connected devices…" data-enter-action="send-broadcast">
+            <button type="button" class="btn btn-sm btn-danger" data-prep-action="send-broadcast">Broadcast</button>
+            <button type="button" class="btn btn-sm" data-prep-action="clear-broadcast">Clear Alert</button>
+          </div>
+        </div>
+
+        <!-- Infrastructure Status -->
+        <div class="settings-card prep-utility-shell prep-ops-shell">
+          <h3 class="prep-utility-header prep-utility-header-compact"><span class="prep-utility-subtitle">Infrastructure Status</span></h3>
+          <div id="infra-status" class="prep-status-list"></div>
+        </div>
+
+        <!-- Vehicle Readiness -->
+        <div class="settings-card prep-utility-shell prep-ops-shell">
+          <h3 class="prep-utility-header prep-utility-header-compact"><span class="prep-utility-subtitle">Vehicle Readiness</span></h3>
+          <div class="prep-toolbar-row prep-ops-toolbar prep-ops-toolbar-compact">
+            <input id="veh-name" name="veh_name" class="prep-toolbar-input" placeholder="Vehicle name…" data-enter-action="add-vehicle">
+            <input id="veh-fuel" name="veh_fuel" type="number" min="0" max="100" value="100" class="prep-toolbar-input prep-toolbar-input-compact" placeholder="Fuel%" data-enter-action="add-vehicle">
+            <button type="button" class="btn btn-sm btn-primary text-size-10" data-prep-action="add-vehicle">Add</button>
+          </div>
+          <div id="vehicle-list"></div>
+        </div>
+
+        <!-- SITREP Generator -->
+        <div class="settings-card prep-utility-shell prep-ops-shell prep-ops-span-full">
+          <h3 class="prep-utility-header prep-utility-header-compact"><span class="prep-utility-subtitle">SITREP Generator (Situation Report)</span><button class="help-icon" data-help="glossary" title="What is a SITREP?">?</button></h3>
+          <div class="prep-form-grid prep-form-grid-2 prep-ops-form-grid">
+            <div class="prep-field"><label class="prep-field-label">Date/Time Group</label><input id="sitrep-dtg" name="sitrep_dtg" class="prep-field-control" placeholder="Auto-filled"></div>
+            <div class="prep-field"><label class="prep-field-label">Location</label><input id="sitrep-loc" name="sitrep_loc" class="prep-field-control" placeholder="Grid ref or description"></div>
+            <div class="prep-field"><label class="prep-field-label">1. Situation (what happened)</label><textarea id="sitrep-sit" name="sitrep_sit" rows="2" class="prep-field-control prep-ops-textarea"></textarea></div>
+            <div class="prep-field"><label class="prep-field-label">2. Casualties/Injuries</label><input id="sitrep-cas" name="sitrep_cas" class="prep-field-control" placeholder="None / count / details"></div>
+            <div class="prep-field"><label class="prep-field-label">3. Supplies Status</label><input id="sitrep-sup" name="sitrep_sup" class="prep-field-control" placeholder="Green/Yellow/Red + details"></div>
+            <div class="prep-field"><label class="prep-field-label">4. Comms Status</label><input id="sitrep-comms" name="sitrep_comms" class="prep-field-control" placeholder="Equipment operational / degraded / down"></div>
+            <div class="prep-field"><label class="prep-field-label">5. Requests/Needs</label><input id="sitrep-req" name="sitrep_req" class="prep-field-control" placeholder="Medical, supplies, evacuation, etc."></div>
+            <div class="prep-field"><label class="prep-field-label">6. Plan/Intent</label><input id="sitrep-plan" name="sitrep_plan" class="prep-field-control" placeholder="Next actions, timeline"></div>
+          </div>
+          <div class="prep-form-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-prep-action="generate-sitrep">Generate SITREP</button>
+            <button type="button" class="btn btn-sm" data-prep-action="copy-sitrep">Copy to Clipboard</button>
+            <button type="button" class="btn btn-sm" data-prep-action="fill-sitrep-dtg">Auto-fill DTG</button>
+            <button type="button" class="btn btn-sm" data-prep-action="generate-ai-sitrep" title="AI-generated situation report from all system data">AI SITREP</button>
+          </div>
+          <pre id="sitrep-output" class="prep-output-shell is-hidden"></pre>
+        </div>
+
+        <!-- Cipher Tool -->
+        <div class="settings-card prep-utility-shell prep-ops-shell">
+          <h3 class="prep-utility-header prep-utility-header-compact"><span class="prep-utility-subtitle">Message Cipher (Encryption)</span></h3>
+          <div class="prep-ops-copy">
+            <div class="prep-toolbar-row prep-ops-toolbar prep-ops-toolbar-compact">
+              <select id="cipher-type" name="cipher_type" class="prep-toolbar-select prep-toolbar-select-wide" data-change-action="run-cipher">
+                <option value="caesar">Caesar Cipher</option>
+                <option value="reverse">Reverse Text</option>
+                <option value="atbash">Atbash Cipher</option>
+              </select>
+              <label class="prep-inline-meta" for="cipher-shift">Shift:</label>
+              <input id="cipher-shift" name="cipher_shift" type="number" value="13" min="1" max="25" class="prep-toolbar-input prep-toolbar-input-compact" data-input-action="run-cipher">
+            </div>
+            <textarea id="cipher-input" name="cipher_input" rows="3" class="prep-field-control prep-ops-textarea prep-ops-mono-field" placeholder="Type message to encrypt…" data-input-action="run-cipher"></textarea>
+            <div class="prep-inline-meta">Encrypted:</div>
+            <button type="button" id="cipher-output" class="cipher-output-btn prep-output-button" data-prep-action="copy-cipher-output" title="Copy encrypted message" aria-label="Copy encrypted message" aria-live="polite"></button>
+            <div class="prep-note-block">Pre-agree on cipher type and shift number with your group. ROT13 (shift=13) is self-reversing.</div>
+          </div>
+        </div>
+
+        <!-- Bleach Calculator -->
+        <div class="settings-card prep-utility-shell prep-ops-shell">
+          <h3 class="prep-utility-header prep-utility-header-compact"><span class="prep-utility-subtitle">Bleach/Disinfection Calculator</span></h3>
+          <div class="prep-ops-copy">
+            <div class="prep-toolbar-row prep-ops-toolbar prep-ops-toolbar-compact">
+              <div class="prep-field"><label class="prep-field-label">Bleach %</label>
+                <select id="bleach-pct" name="bleach_pct" class="prep-toolbar-select prep-toolbar-select-tight" data-change-action="calc-bleach">
+                  <option value="6">6% (standard)</option>
+                  <option value="8.25">8.25% (concentrated)</option>
+                </select></div>
+              <div class="prep-field"><label class="prep-field-label">Water (gallons)</label>
+                <input id="bleach-gal" name="bleach_gal" type="number" value="1" min="0.25" step="0.25" class="prep-toolbar-input prep-toolbar-input-compact" data-input-action="calc-bleach"></div>
+              <div class="prep-field"><label class="prep-field-label">Water clarity</label>
+                <select id="bleach-clarity" name="bleach_clarity" class="prep-toolbar-select prep-toolbar-select-tight" data-change-action="calc-bleach">
+                  <option value="clear">Clear</option>
+                  <option value="cloudy">Cloudy/turbid</option>
+                </select></div>
+            </div>
+            <div class="calc-result" id="bleach-result"></div>
+            <div class="prep-note-heading">Surface Disinfection</div>
+            <div class="prep-note-block">
+              <div>General surfaces: 1/3 cup bleach per gallon water. Wipe, let sit 1 min.</div>
+              <div>Norovirus/blood: 1 cup bleach per gallon water. Let sit 10 min.</div>
+              <div>Mold: 1 cup bleach per gallon water. Scrub, let dry completely.</div>
+            </div>
+            <div class="prep-warning-copy">Use ONLY plain unscented sodium hypochlorite bleach. Never mix bleach with ammonia, vinegar, or other cleaners - toxic gas.</div>
+          </div>
+        </div>
+        <!-- Threat Assessment Matrix -->
+        <div class="settings-card layout-span-full">
+          <h3 class="text-size-13">Threat Assessment Matrix</h3>
+          <div class="copy-dim-note-block">Evaluate threats by likelihood and impact. Click cells to cycle. Saved locally.</div>
+<div id="threat-matrix" class="threat-matrix-shell"></div>
+        </div>
+
+        <!-- After-Action Review -->
+        <div class="settings-card prep-utility-shell prep-ops-shell prep-ops-span-full">
+          <h3 class="prep-utility-header prep-utility-header-compact"><span class="prep-utility-subtitle">After-Action Review (AAR)</span></h3>
+          <div class="prep-form-grid prep-form-grid-2 prep-ops-form-grid">
+            <div class="prep-field"><label class="prep-field-label">Event/Incident</label><input id="aar-event" name="aar_event" class="prep-field-control" placeholder="What was the event/exercise/incident?"></div>
+            <div class="prep-field"><label class="prep-field-label">Date</label><input id="aar-date" name="aar_date" type="date" class="prep-field-control"></div>
+            <div class="prep-field"><label class="prep-field-label">1. What was planned?</label><textarea id="aar-planned" name="aar_planned" rows="2" class="prep-field-control prep-ops-textarea" placeholder="What was the intended outcome/plan?"></textarea></div>
+            <div class="prep-field"><label class="prep-field-label">2. What actually happened?</label><textarea id="aar-happened" name="aar_happened" rows="2" class="prep-field-control prep-ops-textarea" placeholder="What were the actual results?"></textarea></div>
+            <div class="prep-field"><label class="prep-field-label">3. What went well?</label><textarea id="aar-well" name="aar_well" rows="2" class="prep-field-control prep-ops-textarea" placeholder="Sustains - what to keep doing"></textarea></div>
+            <div class="prep-field"><label class="prep-field-label">4. What needs improvement?</label><textarea id="aar-improve" name="aar_improve" rows="2" class="prep-field-control prep-ops-textarea" placeholder="Improves - what to change"></textarea></div>
+            <div class="prep-field prep-field-span-2"><label class="prep-field-label">5. Action items</label><textarea id="aar-actions" name="aar_actions" rows="2" class="prep-field-control prep-ops-textarea" placeholder="Specific actions, assigned to whom, by when"></textarea></div>
+          </div>
+          <div class="prep-form-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-prep-action="generate-aar">Generate Report</button>
+            <button type="button" class="btn btn-sm" data-prep-action="copy-aar">Copy to Clipboard</button>
+          </div>
+          <pre id="aar-output" class="prep-output-shell is-hidden"></pre>
+        </div>
+      </div>
+
+      <!-- Home Security Hardening -->
+      <div class="settings-card prep-utility-shell prep-ops-shell layout-margin-top-16">
+        <h3 class="prep-utility-header prep-utility-header-compact"><span class="prep-utility-subtitle">Home Security Hardening Assessment</span><button class="help-icon" data-help="security-guide" title="Security guide">?</button></h3>
+        <div class="prep-note-block">Score your home security. Click items to mark complete. Focus on highest-impact items first.</div>
+        <div id="home-security-list" class="prep-home-security-grid"></div>
+        <div id="home-security-score" class="prep-score-shell"></div>
+      </div>
+
+      <!-- ICS Forms -->
+      <div class="settings-card prep-form-shell prep-ics-shell layout-margin-top-16">
+        <h3 class="prep-secondary-heading"><span>ICS / NIMS Forms</span></h3>
+        <div class="prep-note-block">Standard Incident Command System forms used by ARES, CERT, and emergency management agencies. Fill, review, and print without crowding the workspace.</div>
+        <div class="prep-toolbar-row prep-ics-tabs">
+          <button type="button" class="btn btn-sm btn-primary" id="ics-tab-213" data-prep-action="show-ics-tab" data-ics-tab="213" aria-pressed="true">ICS-213 General Message</button>
+          <button type="button" class="btn btn-sm" id="ics-tab-309" data-prep-action="show-ics-tab" data-ics-tab="309" aria-pressed="false">ICS-309 Comms Log</button>
+          <button type="button" class="btn btn-sm" id="ics-tab-214" data-prep-action="show-ics-tab" data-ics-tab="214" aria-pressed="false">ICS-214 Activity Log</button>
+        </div>
+
+        <!-- ICS-213 General Message -->
+        <div id="ics-213-panel" class="prep-ics-panel">
+          <div class="prep-note-block">ICS-213 is used for written communications between units during an incident. Complete the form, then print a clean handoff copy.</div>
+          <div class="prep-form-grid prep-form-grid-2 prep-ops-form-grid">
+            <label class="prep-field"><span class="prep-field-label">To</span><input id="ics213-to" name="ics213_to" class="prep-field-control" placeholder="Name / Position / ICS Section"></label>
+            <label class="prep-field"><span class="prep-field-label">From</span><input id="ics213-from" name="ics213_from" class="prep-field-control" placeholder="Name / Position / ICS Section"></label>
+            <label class="prep-field"><span class="prep-field-label">Subject</span><input id="ics213-subject" name="ics213_subject" class="prep-field-control" placeholder="Message subject"></label>
+            <label class="prep-field"><span class="prep-field-label">Date / Time</span><input id="ics213-datetime" name="ics213_datetime" class="prep-field-control" placeholder="YYYY-MM-DD HH:MM"></label>
+            <label class="prep-field"><span class="prep-field-label">Incident Name</span><input id="ics213-incident" name="ics213_incident" class="prep-field-control" placeholder="Operation / Incident name"></label>
+            <label class="prep-field"><span class="prep-field-label">Priority</span>
+              <select id="ics213-priority" name="ics213_priority" class="prep-field-control">
+                <option>Routine</option><option>Priority</option><option>Immediate</option>
+              </select>
+            </label>
+          </div>
+          <label class="prep-field"><span class="prep-field-label">Message</span><textarea id="ics213-message" name="ics213_message" rows="5" class="prep-field-control prep-ops-textarea prep-ics-message" placeholder="Message text..."></textarea></label>
+          <div class="prep-form-grid prep-form-grid-2 prep-ops-form-grid">
+            <label class="prep-field"><span class="prep-field-label">Reply By</span><input id="ics213-replyby" name="ics213_replyby" class="prep-field-control" placeholder="Reply deadline (optional)"></label>
+            <label class="prep-field"><span class="prep-field-label">Reply (if response)</span><input id="ics213-reply" name="ics213_reply" class="prep-field-control" placeholder="Response text (if applicable)"></label>
+          </div>
+          <div class="prep-form-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-prep-action="print-ics213">Print ICS-213</button>
+            <button type="button" class="btn btn-sm" data-prep-action="clear-ics213">Clear</button>
+          </div>
+        </div>
+
+        <!-- ICS-309 Comms Log -->
+        <div id="ics-309-panel" class="prep-ics-panel is-hidden">
+          <div class="prep-note-block">ICS-309 is the communications log for recording radio traffic during an incident. Keep entries readable and easy to scan for later review.</div>
+          <div class="prep-form-grid prep-form-grid-3 prep-ops-form-grid">
+            <label class="prep-field"><span class="prep-field-label">Incident Name</span><input id="ics309-incident" name="ics309_incident" class="prep-field-control"></label>
+            <label class="prep-field"><span class="prep-field-label">Operator Name</span><input id="ics309-operator" name="ics309_operator" class="prep-field-control"></label>
+            <label class="prep-field"><span class="prep-field-label">Station / Freq</span><input id="ics309-station" name="ics309_station" class="prep-field-control" placeholder="e.g. W1ABC / 146.520 MHz"></label>
+          </div>
+          <div class="prep-ics-entry-shell">
+            <div class="prep-note-heading">Add Log Entry</div>
+            <div class="prep-toolbar-row prep-ops-toolbar prep-ops-toolbar-compact">
+              <label class="prep-field"><span class="prep-field-label">Time</span><input id="ics309-time" name="ics309_time" class="prep-toolbar-input prep-toolbar-input-compact" placeholder="14:30"></label>
+              <label class="prep-field"><span class="prep-field-label">From</span><input id="ics309-from" name="ics309_from" class="prep-toolbar-input prep-toolbar-input-compact" placeholder="Callsign/unit"></label>
+              <label class="prep-field"><span class="prep-field-label">To</span><input id="ics309-to" name="ics309_to" class="prep-toolbar-input prep-toolbar-input-compact" placeholder="Callsign/unit"></label>
+              <label class="prep-field"><span class="prep-field-label">Message</span><input id="ics309-msg" name="ics309_msg" class="prep-toolbar-input prep-toolbar-input-wide" placeholder="Traffic content..." data-enter-action="add-ics309-entry"></label>
+              <button type="button" class="btn btn-sm btn-primary" data-prep-action="add-ics309-entry">Add</button>
+            </div>
+          </div>
+          <div id="ics309-entries" class="prep-table-wrap prep-ics-table-shell"></div>
+          <div class="prep-form-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-prep-action="print-ics309">Print ICS-309</button>
+            <button type="button" class="btn btn-sm" data-prep-action="clear-ics309">Clear Log</button>
+          </div>
+        </div>
+
+        <!-- ICS-214 Activity Log -->
+        <div id="ics-214-panel" class="prep-ics-panel is-hidden">
+          <div class="prep-note-block">ICS-214 tracks personnel assignments and notable activities during an incident. Keep the log concise enough to scan quickly during a shift change.</div>
+          <div class="prep-form-grid prep-form-grid-2 prep-ops-form-grid">
+            <label class="prep-field"><span class="prep-field-label">Incident Name</span><input id="ics214-incident" name="ics214_incident" class="prep-field-control"></label>
+            <label class="prep-field"><span class="prep-field-label">Unit / Team Name</span><input id="ics214-unit" name="ics214_unit" class="prep-field-control"></label>
+            <label class="prep-field"><span class="prep-field-label">Unit Leader</span><input id="ics214-leader" name="ics214_leader" class="prep-field-control"></label>
+            <label class="prep-field"><span class="prep-field-label">Operational Period</span><input id="ics214-period" name="ics214_period" class="prep-field-control" placeholder="e.g. 2024-03-15 0600-1800"></label>
+          </div>
+          <div class="prep-ics-entry-shell">
+            <div class="prep-note-heading">Add Activity</div>
+            <div class="prep-toolbar-row prep-ops-toolbar prep-ops-toolbar-compact">
+              <label class="prep-field"><span class="prep-field-label">Time</span><input id="ics214-time" name="ics214_time" class="prep-toolbar-input prep-toolbar-input-compact" placeholder="HH:MM"></label>
+              <label class="prep-field"><span class="prep-field-label">Notable Activity</span><input id="ics214-activity" name="ics214_activity" class="prep-toolbar-input prep-toolbar-input-wide" placeholder="Activity description..." data-enter-action="add-ics214-entry"></label>
+              <button type="button" class="btn btn-sm btn-primary" data-prep-action="add-ics214-entry">Add</button>
+            </div>
+          </div>
+          <div id="ics214-entries" class="prep-table-wrap prep-ics-table-shell"></div>
+          <div class="prep-form-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-prep-action="print-ics214">Print ICS-214</button>
+            <button type="button" class="btn btn-sm" data-prep-action="clear-ics214">Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div><!-- /psub-ops -->

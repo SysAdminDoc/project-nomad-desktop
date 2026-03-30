@@ -1,0 +1,46 @@
+    <!-- Sub: Analytics Dashboard -->
+    <div id="psub-analytics" class="prep-sub">
+      <div class="prep-section prep-analytics-shell">
+      <div class="prep-command-bar">
+        <div>
+          <div class="prep-command-note">Trend monitoring and historical context</div>
+          <div class="prep-note-block">Review inventory, consumption, weather, power, and medical trends in a cleaner chart workspace.</div>
+        </div>
+        <div class="prep-command-actions">
+          <button type="button" class="btn btn-sm" data-prep-action="load-analytics-dashboard">Refresh</button>
+        </div>
+      </div>
+      <div id="analytics-dashboard" class="prep-analytics-grid">
+        <!-- Inventory Trends -->
+        <div class="prep-chart-shell">
+          <h4 class="prep-chart-title">Inventory Trends (30 Days)</h4>
+          <canvas id="chart-inventory-trends" class="prep-chart-canvas"></canvas>
+          <div class="prep-analytics-split">
+            <div class="prep-analytics-donut"><canvas id="chart-inventory-categories"></canvas></div>
+            <div id="inventory-stats" class="prep-inline-stats prep-analytics-stats"></div>
+          </div>
+        </div>
+        <!-- Consumption / Burn Rate -->
+        <div class="prep-chart-shell">
+          <h4 class="prep-chart-title">Consumption / Burn Rate</h4>
+          <canvas id="chart-consumption-rate" class="prep-chart-canvas"></canvas>
+          <div id="consumption-stats" class="prep-inline-stats prep-analytics-stats"></div>
+        </div>
+        <!-- Weather History -->
+        <div class="prep-chart-shell">
+          <h4 class="prep-chart-title">Weather History (30 Days)</h4>
+          <canvas id="chart-weather-history" class="prep-chart-canvas"></canvas>
+        </div>
+        <!-- Power Dashboard -->
+        <div class="prep-chart-shell">
+          <h4 class="prep-chart-title">Power Trends (30 Days)</h4>
+          <canvas id="chart-power-history" class="prep-chart-canvas"></canvas>
+        </div>
+        <!-- Medical Vitals -->
+        <div id="analytics-vitals-card" class="prep-chart-shell is-hidden">
+          <h4 class="prep-chart-title">Medical Vitals</h4>
+          <div id="chart-vitals-container" class="prep-vitals-grid"></div>
+        </div>
+      </div>
+      </div>
+    </div><!-- /psub-analytics -->
