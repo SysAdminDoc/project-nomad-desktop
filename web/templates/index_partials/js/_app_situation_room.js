@@ -55,6 +55,9 @@ function _sitroomRefreshPanels() {
   loadSitroomCyber();
   loadSitroomThinkTanks();
   loadSitroomOsint();
+  loadSitroomMonitors();
+  loadSitroomEconCal();
+  loadSitroomDebt();
   _checkCriticalAlerts();
   loadSitroomLiveChannels();
 }
@@ -190,6 +193,10 @@ const _DATA_CENTERS = [
   {lat:-23.55,lng:-46.63,name:'Sao Paulo, Brazil'},{lat:45.50,lng:-73.57,name:'Montreal, Canada'},
   {lat:47.61,lng:-122.33,name:'Seattle WA, US'},{lat:33.75,lng:-84.39,name:'Atlanta GA, US'},
   {lat:41.88,lng:-87.63,name:'Chicago IL, US'},{lat:32.78,lng:-96.80,name:'Dallas TX, US'},
+  {lat:50.08,lng:8.58,name:'Frankfurt DE2, Germany'},{lat:55.75,lng:37.62,name:'Moscow, Russia'},
+  {lat:39.91,lng:116.39,name:'Beijing, China'},{lat:-33.45,lng:-70.67,name:'Santiago, Chile'},
+  {lat:6.52,lng:3.38,name:'Lagos, Nigeria'},{lat:30.04,lng:31.24,name:'Cairo, Egypt'},
+  {lat:-1.29,lng:36.82,name:'Nairobi, Kenya'},{lat:35.69,lng:51.39,name:'Tehran, Iran'},
 ];
 
 const _PIPELINE_HUBS = [
@@ -1398,6 +1405,105 @@ function _showSitroomAlert(type, message) {
   setTimeout(() => { if (toast.parentElement) toast.remove(); }, 15000);
 }
 
+/* ─── AI Strategic Briefing ─── */
+async function _generateAiBriefing() {
+  const el = document.getElementById('sitroom-ai-briefing');
+  if (!el) return;
+  el.innerHTML = '<div class="sr-empty"><div class="sr-radar"></div>Generating intelligence briefing...</div>';
+  try {
+    const resp = await fetch('/api/sitroom/ai-briefing', {method:'POST', headers:{'Content-Type':'application/json'}});
+    const d = await resp.json();
+    if (d.briefing) {
+      let h = escapeHtml(d.briefing);
+      h = h.replace(/^### (.*?)$/gm, '<h4>$1</h4>');
+      h = h.replace(/^## (.*?)$/gm, '<h3 style="color:#4aedc4;margin:8px 0 4px;font-size:11px;letter-spacing:0.06em">$1</h3>');
+      h = h.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      h = h.replace(/\n/g, '<br>');
+      el.innerHTML = '<div style="padding:10px 12px;font-size:11px;line-height:1.55;color:#c8ccd0">' + h + '</div>';
+    } else {
+      el.innerHTML = '<div class="sr-empty">Briefing generation failed</div>';
+    }
+  } catch(e) {
+    el.innerHTML = '<div class="sr-empty">Network error generating briefing</div>';
+  }
+}
+
+/* ─── Keyword Monitors ─── */
+async function loadSitroomMonitors() {
+  const d = await safeFetch('/api/sitroom/monitors', {}, null);
+  const el = document.getElementById('sitroom-monitors');
+  if (!el) return;
+  if (!d || !d.monitors?.length) { el.innerHTML = '<div class="sr-empty">No keyword monitors — click + ADD</div>'; return; }
+  el.innerHTML = d.monitors.map(m => {
+    let matchHtml = m.matches?.slice(0, 5).map(n =>
+      `<div class="sr-monitor-match">${escapeHtml(n.title)}</div>`
+    ).join('') || '';
+    return `<div class="sr-monitor-item">
+      <div class="sr-monitor-kw">
+        <span style="width:8px;height:8px;border-radius:50%;background:${escapeAttr(m.color)};flex-shrink:0"></span>
+        <span class="sr-monitor-kw-text">${escapeHtml(m.keyword)}</span>
+        <span class="sr-monitor-kw-count">${m.match_count || 0}</span>
+        <span class="sr-monitor-kw-del" data-sitroom-action="delete-monitor" data-monitor-id="${m.id}">&#10005;</span>
+      </div>
+      ${matchHtml}
+    </div>`;
+  }).join('');
+}
+
+function _promptAddMonitor() {
+  const keyword = prompt('Enter keyword to monitor:');
+  if (!keyword || !keyword.trim()) return;
+  fetch('/api/sitroom/monitors', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({keyword: keyword.trim()})
+  }).then(() => loadSitroomMonitors());
+}
+
+async function _deleteMonitor(id) {
+  await fetch('/api/sitroom/monitors/' + id, {method:'DELETE'});
+  loadSitroomMonitors();
+}
+
+/* ─── Economic Calendar ─── */
+async function loadSitroomEconCal() {
+  const d = await safeFetch('/api/sitroom/economic-calendar', {}, null);
+  const el = document.getElementById('sitroom-econ-cal');
+  if (!el) return;
+  if (!d || !d.events?.length) { el.innerHTML = '<div class="sr-empty">No economic events</div>'; return; }
+  el.innerHTML = d.events.map(e => `<div class="sitroom-news-item">
+    <span class="sitroom-news-cat" data-cat="Finance">${escapeHtml(e.source_name || 'Econ')}</span>
+    <div class="sitroom-news-body">
+      <a href="${escapeAttr(e.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(e.title)}</a>
+      <div class="sitroom-news-meta">${e.published ? escapeHtml(e.published) : ''}</div>
+    </div>
+  </div>`).join('');
+}
+
+/* ─── National Debt ─── */
+async function loadSitroomDebt() {
+  const d = await safeFetch('/api/sitroom/national-debt', {}, null);
+  const el = document.getElementById('sitroom-debt');
+  if (!el) return;
+  if (!d || !d.debt?.us) { el.innerHTML = '<div class="sr-empty">No debt data</div>'; return; }
+  const total = d.debt.us.total;
+  const formatted = '$' + (total / 1e12).toFixed(3) + 'T';
+  el.innerHTML = `<div class="sr-debt-value">${formatted}</div>
+    <div class="sr-debt-label">US NATIONAL DEBT</div>
+    <div class="sr-debt-date">As of ${escapeHtml(d.debt.us.date || '')}</div>`;
+}
+
+/* ─── Story Detail Modal ─── */
+function _openStoryModal(title, category, link, description) {
+  const modal = document.getElementById('sr-story-modal');
+  if (!modal) return;
+  document.getElementById('sr-story-title').textContent = title;
+  document.getElementById('sr-story-cat').textContent = category;
+  document.getElementById('sr-story-cat').setAttribute('data-cat', category);
+  document.getElementById('sr-story-link').href = link || '#';
+  document.getElementById('sr-story-body').innerHTML = description
+    ? `<p>${escapeHtml(description)}</p>` : '<p class="sr-empty">No preview available</p>';
+  modal.hidden = false;
+}
+
 /* ─── UCDP Armed Conflicts ─── */
 async function loadSitroomUcdp() {
   const d = await safeFetch('/api/sitroom/ucdp', {}, null);
@@ -1592,6 +1698,9 @@ document.addEventListener('click', e => {
   if (a === 'toggle-map-fullscreen') _toggleMapFullscreen();
   if (a === 'toggle-globe') _toggleGlobe();
   if (a === 'export-report') _exportSitroomReport();
+  if (a === 'generate-briefing') _generateAiBriefing();
+  if (a === 'add-monitor') _promptAddMonitor();
+  if (a === 'delete-monitor') _deleteMonitor(ctrl.dataset.monitorId);
   if (a === 'toggle-layers') {
     const lp = document.getElementById('sr-layer-panel');
     if (lp) lp.classList.toggle('open');
