@@ -1,0 +1,100 @@
+/* Final theme consistency pass
+   Loaded last so both light and dark themes share one semantic color system.
+*/
+
+:is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) :is(
+  .btn-primary,
+  .btn-open-svc,
+  .voice-active,
+  .tab-badge,
+  .prep-subtab.active,
+  .media-folder-item.active,
+  .tier-tab.active,
+  .torrent-cat-btn.active,
+  .training-status-chip-success,
+  .training-status-chip-warning,
+  .training-status-chip-danger,
+  .training-status-chip-muted,
+  .media-batch-bar,
+  #copilot-dismiss:hover,
+  .skip-nav,
+  .skip-link,
+  .message.user .avatar,
+  .search-highlight
+) {
+  color: var(--text-inverse) !important;
+}
+
+:is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) :is(
+  .sit-cell[data-level="yellow"],
+  .incident-sev.warning,
+  .search-result-type.inventory
+) {
+  background: var(--warning-dim) !important;
+  color: var(--warning) !important;
+  border-color: var(--warning-border) !important;
+}
+
+:is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) :is(
+  .workspace-frame-light,
+  .shareable-data-block
+) {
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-solid) 96%, transparent), color-mix(in srgb, var(--surface2) 84%, transparent)) !important;
+}
+
+:is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) .media-card-thumb {
+  background: var(--thumb-surface) !important;
+}
+
+:is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) :is(
+  .media-card-play-icon,
+  .media-card-duration,
+  .media-batch-btn-soft,
+  .media-batch-btn-danger,
+  .media-batch-btn-muted
+) {
+  color: var(--text-inverse) !important;
+}
+
+:is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) .media-card-thumb .play-overlay {
+  background: var(--overlay-scrim) !important;
+}
+
+:is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) :is(
+  .media-card-duration,
+  .media-card-favorite:hover,
+  .media-card-favorite:focus-visible
+) {
+  background: var(--overlay-scrim-strong) !important;
+}
+
+:is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) .media-card-favorite {
+  color: color-mix(in srgb, var(--text-inverse) 76%, transparent) !important;
+  background: color-mix(in srgb, var(--overlay-scrim-strong) 72%, transparent) !important;
+}
+
+:is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) :is(
+  .text-status-green-strong,
+  .guide-status-green
+) {
+  color: var(--green) !important;
+}
+
+:is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) :is(
+  .text-status-amber-strong,
+  .text-forecast-caution,
+  .guide-status-orange
+) {
+  color: var(--warning) !important;
+}
+
+:is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) .text-status-blue-strong {
+  color: var(--info) !important;
+}
+
+:is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) .text-muted-strong {
+  color: var(--text-muted) !important;
+}

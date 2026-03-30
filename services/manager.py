@@ -1,5 +1,5 @@
 """
-Cross-platform process manager for N.O.M.A.D. services.
+Cross-platform process manager for NOMAD Field Desk services.
 Downloads, installs, starts, and stops services as native processes.
 Includes dependency graph, auto-restart, download resume, GPU detection.
 """

@@ -1,4 +1,4 @@
-"""Shared mutable state for N.O.M.A.D. routes.
+"""Shared mutable state for NOMAD Field Desk routes.
 
 This module holds all cross-route state (locks, caches, tracking dicts)
 so that Flask Blueprints can import it without closure dependencies.

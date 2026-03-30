@@ -12,7 +12,7 @@ import logging
 from flask import Blueprint, request, jsonify, Response
 
 from db import get_db, get_db_path, log_activity
-from config import get_data_dir, set_data_dir
+from config import APP_DISPLAY_NAME, APP_EXECUTABLE_BASENAME, APP_STORAGE_DIRNAME, get_data_dir, set_data_dir
 from platform_utils import get_data_base
 from services import ollama, kiwix, cyberchef, kolibri, qdrant, stirling, flatnotes
 from services.manager import (
@@ -23,6 +23,13 @@ from web.state import _wizard_state, _auto_backup_timer, _update_state
 import web.state as _state
 
 log = logging.getLogger('nomad.web')
+
+STARTUP_VALUE_NAME = APP_EXECUTABLE_BASENAME
+LEGACY_STARTUP_VALUE_NAMES = ('ProjectNOMAD',)
+MAC_AUTOSTART_LABEL = 'com.sysadmindoc.nomadfielddesk'
+LEGACY_MAC_AUTOSTART_LABEL = 'com.sysadmindoc.projectnomad'
+LINUX_AUTOSTART_FILENAME = f'{APP_EXECUTABLE_BASENAME}.desktop'
+LEGACY_LINUX_AUTOSTART_FILENAMES = ('ProjectNOMAD.desktop',)
 
 
 def _get_version():
@@ -182,7 +189,7 @@ def api_set_data_dir():
     if not path:
         return jsonify({'error': 'No path provided'}), 400
     try:
-        full_path = os.path.join(path, 'ProjectNOMAD')
+        full_path = os.path.join(path, APP_STORAGE_DIRNAME)
         os.makedirs(full_path, exist_ok=True)
         # Test write
         test_file = os.path.join(full_path, '.write_test')
@@ -593,10 +600,19 @@ def _get_autostart_path():
     if sys.platform == 'win32':
         return 'registry'
     elif sys.platform == 'darwin':
-        return os.path.expanduser('~/Library/LaunchAgents/com.sysadmindoc.projectnomad.plist')
+        return os.path.expanduser(f'~/Library/LaunchAgents/{MAC_AUTOSTART_LABEL}.plist')
     else:  # Linux
         xdg = os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config'))
-        return os.path.join(xdg, 'autostart', 'ProjectNOMAD.desktop')
+        return os.path.join(xdg, 'autostart', LINUX_AUTOSTART_FILENAME)
+
+
+def _get_legacy_autostart_paths():
+    if sys.platform == 'win32':
+        return list(LEGACY_STARTUP_VALUE_NAMES)
+    if sys.platform == 'darwin':
+        return [os.path.expanduser(f'~/Library/LaunchAgents/{LEGACY_MAC_AUTOSTART_LABEL}.plist')]
+    xdg = os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config'))
+    return [os.path.join(xdg, 'autostart', name) for name in LEGACY_LINUX_AUTOSTART_FILENAMES]
 
 @system_bp.route('/api/startup')
 def api_startup_get():
@@ -606,12 +622,20 @@ def api_startup_get():
             import winreg
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
                                  r'Software\Microsoft\Windows\CurrentVersion\Run', 0, winreg.KEY_READ)
-            winreg.QueryValueEx(key, 'ProjectNOMAD')
-            winreg.CloseKey(key)
-            return jsonify({'enabled': True, 'platform': 'windows'})
+            try:
+                for value_name in (STARTUP_VALUE_NAME, *LEGACY_STARTUP_VALUE_NAMES):
+                    try:
+                        winreg.QueryValueEx(key, value_name)
+                        return jsonify({'enabled': True, 'platform': 'windows'})
+                    except FileNotFoundError:
+                        continue
+            finally:
+                winreg.CloseKey(key)
+            return jsonify({'enabled': False, 'platform': 'windows'})
         else:
             path = _get_autostart_path()
-            return jsonify({'enabled': os.path.isfile(path), 'platform': sys.platform})
+            enabled = os.path.isfile(path) or any(os.path.isfile(p) for p in _get_legacy_autostart_paths())
+            return jsonify({'enabled': enabled, 'platform': sys.platform})
     except Exception:
         return jsonify({'enabled': False, 'platform': sys.platform})
 
@@ -629,14 +653,15 @@ def api_startup_set():
                                  r'Software\Microsoft\Windows\CurrentVersion\Run', 0, winreg.KEY_SET_VALUE)
             if enabled:
                 if getattr(sys, 'frozen', False):
-                    winreg.SetValueEx(key, 'ProjectNOMAD', 0, winreg.REG_SZ, f'"{exe_path}"')
+                    winreg.SetValueEx(key, STARTUP_VALUE_NAME, 0, winreg.REG_SZ, f'"{exe_path}"')
                 else:
-                    winreg.SetValueEx(key, 'ProjectNOMAD', 0, winreg.REG_SZ, f'"{sys.executable}" "{exe_path}"')
+                    winreg.SetValueEx(key, STARTUP_VALUE_NAME, 0, winreg.REG_SZ, f'"{sys.executable}" "{exe_path}"')
             else:
-                try:
-                    winreg.DeleteValue(key, 'ProjectNOMAD')
-                except FileNotFoundError:
-                    pass
+                for value_name in (STARTUP_VALUE_NAME, *LEGACY_STARTUP_VALUE_NAMES):
+                    try:
+                        winreg.DeleteValue(key, value_name)
+                    except FileNotFoundError:
+                        pass
             winreg.CloseKey(key)
 
         elif sys.platform == 'darwin':
@@ -653,7 +678,7 @@ def api_startup_set():
 <plist version="1.0">
 <dict>
 <key>Label</key>
-<string>com.sysadmindoc.projectnomad</string>
+<string>{MAC_AUTOSTART_LABEL}</string>
 <key>ProgramArguments</key>
 <array>
     {program_args}
@@ -663,8 +688,9 @@ def api_startup_set():
 </dict>
 </plist>''')
             else:
-                if os.path.isfile(plist_path):
-                    os.remove(plist_path)
+                for candidate in [plist_path, *_get_legacy_autostart_paths()]:
+                    if os.path.isfile(candidate):
+                        os.remove(candidate)
 
         else:  # Linux
             desktop_path = _get_autostart_path()
@@ -677,15 +703,16 @@ def api_startup_set():
                 with open(desktop_path, 'w') as f:
                     f.write(f'''[Desktop Entry]
 Type=Application
-Name=Project N.O.M.A.D.
-Comment=Offline Survival Command Center
+Name={APP_DISPLAY_NAME}
+Comment=Desktop-first offline preparedness and field operations workspace
 Exec={exec_line}
 Terminal=false
 X-GNOME-Autostart-enabled=true
 ''')
             else:
-                if os.path.isfile(desktop_path):
-                    os.remove(desktop_path)
+                for candidate in [desktop_path, *_get_legacy_autostart_paths()]:
+                    if os.path.isfile(candidate):
+                        os.remove(candidate)
 
         return jsonify({'status': 'ok', 'enabled': enabled})
     except Exception as e:

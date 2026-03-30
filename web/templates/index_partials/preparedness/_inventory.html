@@ -1,0 +1,74 @@
+    <!-- Sub: Inventory -->
+    <div id="psub-inventory" class="prep-sub">
+    <div class="prep-section">
+      <h3 class="prep-heading"><span>Supply Inventory</span><span class="prep-heading-actions"><button class="help-icon" data-help="inventory-guide" title="Inventory best practices">?</button> <button class="btn btn-sm" data-app-frame-title="Inventory Report" data-app-frame-url="/api/inventory/print" title="Printable inventory list">Print</button></span></h3>
+      <p class="prep-section-note">Track stock, burn rate, expiry pressure, and replenishment posture from one operating board instead of scattered lists.</p>
+      <div id="inv-alerts" class="prep-alert-strip"></div>
+      <!-- Toolbar: Search & Filter -->
+      <div class="prep-toolbar prep-toolbar-row prep-data-toolbar">
+        <select id="inv-cat-filter" name="inv_cat_filter" class="preset-select prep-toolbar-select prep-toolbar-select-wide" data-change-action="load-inventory">
+          <option value="">All Categories</option>
+        </select>
+        <input id="inv-search" type="search" name="inv_search" class="prep-toolbar-input prep-text-input" placeholder="Search supplies..." data-input-action="load-inventory" autocomplete="off" aria-label="Search supplies">
+        <button class="btn btn-sm btn-primary" data-prep-action="show-inv-form">+ Add Item</button>
+        <button class="btn btn-sm" data-prep-action="voice-add-inventory" title="Voice add item" aria-label="Voice add inventory item">&#127908;</button>
+        <button class="btn btn-sm" data-prep-action="open-barcode-scanner" title="Scan barcode / UPC to add item" aria-label="Open barcode scanner">&#9783; Barcode</button>
+        <button class="btn btn-sm" data-prep-action="open-receipt-scanner" title="Scan a receipt to bulk-add items" aria-label="Open receipt scanner">&#128424; Scan Receipt</button>
+        <button class="btn btn-sm" data-prep-action="open-vision-scanner" title="AI photo scan to identify inventory items" aria-label="Open AI vision scanner">&#128247; AI Scan</button>
+        <button class="btn btn-sm" data-prep-action="show-inv-quick-add" title="Quick-add common supplies">Quick Add</button>
+      </div>
+      <!-- Toolbar: Actions (collapsible) -->
+      <details class="prep-more-actions prep-more-actions-shell">
+        <summary class="prep-more-actions-summary">
+          <span class="prep-more-actions-chevron">&#9654;</span> More Actions (Templates, Shopping List, Import/Export, Daily Consume)
+        </summary>
+        <div class="prep-toolbar prep-toolbar-compact prep-toolbar-row">
+          <div class="prep-dropdown-wrap">
+            <button class="btn btn-sm" data-prep-action="toggle-template-dropdown" title="Apply a saved inventory template">Quick Templates</button>
+            <div id="template-dropdown" class="prep-dropdown-menu">
+              <div id="template-dropdown-items" class="prep-dropdown-items"><div class="prep-dropdown-empty">Loading templates...</div></div>
+            </div>
+          </div>
+          <button class="btn btn-sm" data-prep-action="show-shopping-list" title="Auto-generate shopping list from gaps">Shopping List</button>
+          <button class="btn btn-sm" data-prep-action="daily-consume" title="Subtract daily usage from all tracked items">Daily Consume</button>
+          <span class="prep-toolbar-divider"></span>
+          <a class="btn btn-sm" href="/api/inventory/export-csv" title="Export to CSV">Export</a>
+          <input type="file" id="inv-import-file" name="inv_import_file" accept=".csv" data-change-action="import-inv-csv" class="is-hidden">
+          <button class="btn btn-sm" data-click-target="inv-import-file" title="Import from CSV">Import</button>
+        </div>
+      </details>
+      <!-- Add/Edit Form (hidden by default) -->
+      <div id="inv-form" class="prep-form-shell prep-data-shell is-hidden">
+        <div class="prep-form-grid prep-form-grid-3">
+          <div class="prep-field"><label class="prep-field-label">Name *</label><input id="inv-name" name="inv_name" class="prep-field-control"></div>
+          <div class="prep-field"><label class="prep-field-label">Category</label><select id="inv-category" name="inv_category" class="prep-field-control"></select></div>
+          <div class="prep-field"><label class="prep-field-label">Location</label><input id="inv-location" name="inv_location" class="prep-field-control" placeholder="e.g. Garage shelf 2"></div>
+          <div class="prep-field"><label class="prep-field-label">Quantity</label><input id="inv-qty" name="inv_qty" class="prep-field-control" type="number" min="0" step="0.5" value="1"></div>
+          <div class="prep-field"><label class="prep-field-label">Unit</label><input id="inv-unit" name="inv_unit" class="prep-field-control" value="ea" placeholder="ea, lbs, gal, boxes"></div>
+          <div class="prep-field"><label class="prep-field-label">Min Qty (alert)</label><input id="inv-min" name="inv_min" class="prep-field-control" type="number" min="0" step="0.5" value="0"></div>
+          <div class="prep-field"><label class="prep-field-label">Daily Usage</label><input id="inv-daily" name="inv_daily" class="prep-field-control" type="number" min="0" step="0.1" value="0" title="How much you use each day (e.g. 0.5 gallons of water per day)"></div>
+          <div class="prep-field"><label class="prep-field-label">Expiration</label><input id="inv-exp" name="inv_exp" class="prep-field-control" type="date"></div>
+          <div class="prep-field"><label class="prep-field-label">Barcode</label><input id="inv-barcode" name="inv_barcode" class="prep-field-control" placeholder="UPC/barcode"></div>
+          <div class="prep-field"><label class="prep-field-label">Lot #</label><input id="inv-lot" name="inv_lot" class="prep-field-control" placeholder="Batch/lot number"></div>
+          <div class="prep-field"><label class="prep-field-label">Cost per unit</label><input id="inv-cost" name="inv_cost" class="prep-field-control" type="number" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="prep-field"><label class="prep-field-label">Notes</label><input id="inv-notes" name="inv_notes" class="prep-field-control" placeholder="Optional notes"></div>
+        </div>
+        <input type="hidden" id="inv-edit-id" name="inv_edit_id" value="">
+        <div class="prep-form-actions">
+          <button class="btn btn-sm btn-primary" data-prep-action="save-inv-item">Save</button>
+          <button class="btn btn-sm" data-prep-action="hide-inv-form">Cancel</button>
+        </div>
+      </div>
+      <!-- Inventory Visualization -->
+      <div id="inv-viz" class="inventory-viz-shell"></div>
+      <!-- Supply Consumption Tracker -->
+      <div id="burn-rate-dash" class="utility-summary-result"></div>
+      <div id="inv-table-wrap" class="prep-table-wrap">
+        <table class="freq-table prep-data-table" id="inv-table">
+          <thead><tr><th>Name</th><th>Cat</th><th>Qty</th><th>Days Left</th><th>Cost</th><th>Location</th><th>Lot</th><th>Expires</th><th>Notes</th><th class="prep-actions-col"></th></tr></thead>
+          <tbody id="inv-tbody"><tr><td colspan="10" class="prep-table-empty">No items yet. Click "+ Add Item" to start tracking supplies.</td></tr></tbody>
+          <tfoot id="inv-tfoot"></tfoot>
+        </table>
+      </div>
+    </div>
+    </div><!-- /psub-inventory -->

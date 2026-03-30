@@ -1,0 +1,65 @@
+  <div id="tab-benchmark" class="tab-content tab-vcenter benchmark-workspace settings-workspace">
+    <div class="benchmark-command-deck workspace-panel">
+      <div class="benchmark-command-deck-head">
+        <div class="benchmark-command-copy">
+          <div class="section-header-label benchmark-command-kicker">DIAGNOSTICS</div>
+          <h2 class="benchmark-command-title">Measure the machine, compare trends, and decide what to trust under load.</h2>
+          <p class="benchmark-command-text">Run full-system, storage, and inference checks from one workspace, then use the history below to spot drift before it becomes a field problem.</p>
+        </div>
+        <div class="benchmark-command-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-benchmark-mode="full">Run Full Benchmark</button>
+          <button type="button" class="btn btn-sm" data-benchmark-mode="ai">AI Only</button>
+          <button type="button" class="btn btn-sm" data-benchmark-action="run-storage">Storage I/O Test</button>
+        </div>
+      </div>
+      <div class="benchmark-command-pills">
+        <span class="benchmark-command-pill">CPU</span>
+        <span class="benchmark-command-pill">Memory</span>
+        <span class="benchmark-command-pill">Storage</span>
+        <span class="benchmark-command-pill">Inference</span>
+        <span class="benchmark-command-pill">Trend history</span>
+      </div>
+    </div>
+    <div class="settings-grid settings-workspace-grid benchmark-workspace-grid">
+      <div class="settings-card settings-hero-card benchmark-hero-card layout-span-full">
+        <div class="benchmark-hero-copy">
+          <div class="workspace-kicker">RUN DIAGNOSTICS</div>
+          <h3>System Diagnostics <button class="help-icon" data-help="benchmark" title="What is this?">?</button></h3>
+          <p class="benchmark-intro">
+            Measure CPU, memory, disk, and AI inference performance, then compare how this machine trends over time.
+          </p>
+        </div>
+        <div class="benchmark-toolbar workspace-toolbar benchmark-toolbar-shell">
+          <div class="benchmark-toolbar-group">
+            <button class="btn btn-primary" data-benchmark-mode="full" id="bench-run-btn">Run Full Benchmark</button>
+            <button class="btn" data-benchmark-mode="system">System Only</button>
+            <button class="btn" data-benchmark-mode="ai">AI Only</button>
+          </div>
+          <div class="benchmark-toolbar-group benchmark-toolbar-group-secondary">
+            <button class="btn btn-sm" data-benchmark-action="run-ai" id="bench-ai-btn">AI Inference Test</button>
+            <button class="btn btn-sm" data-benchmark-action="run-storage" id="bench-storage-btn">Storage I/O Test</button>
+          </div>
+          <label class="benchmark-inline-field" title="Label this machine for score comparison">
+            <span class="benchmark-label">Machine Label</span>
+            <input id="builder-tag" name="builder_tag" class="benchmark-tag-input" placeholder="e.g. Base Camp PC" data-input-action="save-builder-tag">
+          </label>
+        </div>
+        <div id="bench-progress" class="benchmark-progress benchmark-progress-shell is-hidden">
+          <div class="progress-bar"><div class="fill is-zero-width" id="bench-fill"></div></div>
+          <div class="progress-info"><span id="bench-stage">...</span><span id="bench-pct">0%</span></div>
+        </div>
+        <div id="bench-results" class="benchmark-results workspace-stack"><div class="benchmark-empty-state">Click "Run Full Benchmark" to test system performance and generate a NOMAD score (0-100).</div></div>
+      </div>
+      <div class="settings-card benchmark-history-card layout-span-full">
+        <div class="benchmark-history-head">
+          <div>
+            <div class="workspace-kicker">TREND HISTORY</div>
+            <h3>Diagnostics History</h3>
+          </div>
+          <p class="benchmark-history-copy">Compare runs over time to spot degradation before it turns into operational risk.</p>
+        </div>
+        <div id="bench-history" class="benchmark-history workspace-stack"><div class="benchmark-empty-state">No benchmarks run yet. Run one above to track your system performance over time.</div></div>
+      </div>
+    </div>
+  </div>
+

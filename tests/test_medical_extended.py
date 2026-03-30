@@ -72,6 +72,10 @@ class TestPatientCard:
         }).get_json()
         resp = client.get(f'/api/patients/{patient["id"]}/card')
         assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert 'Patient Care Card' in html
+        assert 'Immediate Alerts' in html
+        assert 'Card Test' in html
 
 
 class TestExpiringMeds:
@@ -89,6 +93,27 @@ class TestHandoff:
             'condition_summary': 'Stable',
         })
         assert resp.status_code in (200, 201)
+        data = resp.get_json()
+        assert 'SBAR Handoff - Handoff Test' in data['html']
+        assert 'From ___ to Dr. Smith' in data['html']
+        assert 'Stable' in data['html']
+
+    def test_handoff_print(self, client):
+        patient = client.post('/api/patients', json={'name': 'Print Handoff'}).get_json()
+        create_resp = client.post(f'/api/medical/handoff/{patient["id"]}', json={
+            'from_provider': 'Medic A',
+            'to_provider': 'ER Team',
+            'situation': 'Needs transfer',
+        })
+        assert create_resp.status_code in (200, 201)
+        rid = create_resp.get_json()['id']
+
+        print_resp = client.get(f'/api/medical/handoff/{rid}/print')
+        assert print_resp.status_code == 200
+        html = print_resp.get_data(as_text=True)
+        assert 'NOMAD Field Desk Transfer Brief' in html
+        assert 'From Medic A to ER Team' in html
+        assert 'Needs transfer' in html
 
 
 class TestTriageBoardExtended:

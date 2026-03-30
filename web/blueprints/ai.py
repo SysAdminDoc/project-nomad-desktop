@@ -384,7 +384,7 @@ def api_ai_quick_query():
     context = '\n\n'.join(ctx_parts) if ctx_parts else 'No data has been entered yet.'
     memory_text = get_ai_memory_text()
 
-    system = f"""You are the N.O.M.A.D. Survival Operations Copilot — an AI embedded in a tactical preparedness command center. Your role is to provide actionable intelligence based on the operator's REAL supply data, team roster, medical records, and equipment status.
+    system = f"""You are the NOMAD Survival Operations Copilot — an AI embedded in a desktop-first preparedness and field-operations workspace. Your role is to provide actionable intelligence based on the operator's REAL supply data, team roster, medical records, and equipment status.
 
 RULES:
 - Answer using ONLY the data below. Never fabricate items, quantities, or people.
@@ -888,7 +888,7 @@ def api_training_jobs_create():
     os.makedirs(modelfile_dir, exist_ok=True)
     modelfile_path = os.path.join(modelfile_dir, f'{output_model}.Modelfile')
 
-    system_prompt = "You are N.O.M.A.D., a survival and preparedness AI assistant. You provide practical, actionable advice for emergency preparedness, off-grid living, and disaster response."
+    system_prompt = "You are NOMAD, a survival and preparedness AI assistant. You provide practical, actionable advice for emergency preparedness, off-grid living, and disaster response."
     if ds:
         # Read sample records for system prompt enhancement
         try:

@@ -295,7 +295,7 @@ def api_journal_export():
     db = get_db()
     entries = [dict(r) for r in db.execute('SELECT * FROM journal ORDER BY created_at ASC').fetchall()]
     db.close()
-    md = '# N.O.M.A.D. Daily Journal\n\n'
+    md = '# NOMAD Daily Journal\n\n'
     for e in entries:
         md += f'## {e["created_at"]}\n'
         if e.get('mood'):

@@ -1,13 +1,13 @@
-; Project N.O.M.A.D. Inno Setup Script
+; NOMAD Field Desk Inno Setup Script
 ; AppVersion: 1.0.0
 
-#define MyAppName "Project N.O.M.A.D."
+#define MyAppName "NOMAD Field Desk"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "SysAdminDoc"
 #define MyAppURL "https://github.com/SysAdminDoc/project-nomad-desktop"
 #define MyAppSupportURL "https://github.com/SysAdminDoc/project-nomad-desktop/issues"
-#define MyAppExeName "ProjectNOMAD.exe"
-#define MyAppDescription "Project N.O.M.A.D. -- Your offline-first knowledge and AI command center. No Docker required."
+#define MyAppExeName "NOMADFieldDesk.exe"
+#define MyAppDescription "Desktop-first offline preparedness and field operations workspace."
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
@@ -19,11 +19,11 @@ AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppSupportURL}
 AppUpdatesURL={#MyAppURL}
 AppComments={#MyAppDescription}
-DefaultDirName={autopf}\ProjectNOMAD
+DefaultDirName={autopf}\NOMAD Field Desk
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=.
-OutputBaseFilename=ProjectNOMAD-Setup
+OutputBaseFilename=NOMAD-Setup
 SetupIconFile=icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName}
@@ -49,4 +49,4 @@ Name: "{autostartmenu}\Programs\{#MyAppName}\{#MyAppName}"; Filename: "{app}\{#M
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent shellexec; Check: not IsAdminInstallMode
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{userappdata}\ProjectNOMAD"
+Type: filesandordirs; Name: "{userappdata}\NOMADFieldDesk"

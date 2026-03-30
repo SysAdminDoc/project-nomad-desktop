@@ -1,12 +1,18 @@
 {
-  "name": "Project N.O.M.A.D.",
-  "short_name": "N.O.M.A.D.",
-  "description": "Offline Survival Command Center",
+  "name": "NOMAD Field Desk",
+  "short_name": "NOMAD",
+  "description": "Desktop-first offline preparedness and field operations workspace",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0d0d0d",
   "theme_color": "#4f9cf7",
   "icons": [
+    {
+      "src": "/static/nomad-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
     {
       "src": "/static/logo.png",
       "sizes": "192x192",

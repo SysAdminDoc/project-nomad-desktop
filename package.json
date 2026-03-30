@@ -1,6 +1,7 @@
 {
-  "name": "project-nomad-desktop",
+  "name": "nomad-field-desk",
   "private": true,
+  "description": "Desktop-first offline preparedness and field operations workspace",
   "scripts": {
     "build": "node esbuild.config.mjs",
     "dev": "echo 'Dev mode: using raw ES modules'"

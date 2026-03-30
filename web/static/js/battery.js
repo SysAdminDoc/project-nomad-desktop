@@ -1,5 +1,5 @@
 /**
- * Battery-Aware Auto-Throttling for N.O.M.A.D.
+ * Battery-aware auto-throttling for NOMAD Field Desk.
  * Reduces polling and animations when battery is low.
  */
 

@@ -1,7 +1,7 @@
 """
-Project N.O.M.A.D. Desktop v3.2.0
-Node for Offline Media, Archives, and Data
-Cross-platform desktop edition — no Docker required.
+NOMAD Field Desk desktop launcher.
+
+Desktop-first preparedness, reference, and local operations workspace.
 """
 
 import sys
@@ -47,12 +47,13 @@ _check_deps()
 import webview
 import pystray
 from PIL import Image, ImageDraw
-from config import get_data_dir
+from config import APP_DISPLAY_NAME, APP_SHORT_NAME, Config, get_data_dir
 from web.app import create_app, set_version
 from db import init_db, get_db, log_activity, backup_db
 
 VERSION = '1.0.0'
-PORT = 8080
+PORT = Config.APP_PORT
+HOST = Config.APP_HOST
 
 _tray_icon = None
 _window = None
@@ -80,9 +81,12 @@ def get_log_path():
 def create_tray_icon():
     img = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    draw.polygon([(32, 4), (60, 32), (32, 60), (4, 32)], fill='#4f9cf7')
-    draw.polygon([(32, 14), (50, 32), (32, 50), (14, 32)], fill='#0d0d0d')
-    draw.polygon([(32, 22), (42, 32), (32, 42), (22, 32)], fill='#4f9cf7')
+    draw.polygon([(32, 4), (60, 32), (32, 60), (4, 32)], fill='#d5c59d', outline='#1a221b')
+    draw.polygon([(32, 14), (50, 32), (32, 50), (14, 32)], fill='#182119')
+    draw.line([(23, 41), (32, 23), (41, 41)], fill='#90a55f', width=5, joint='curve')
+    draw.ellipse((28, 28, 36, 36), fill='#dfe7c0', outline='#1a221b', width=2)
+    draw.ellipse((20, 38, 26, 44), fill='#dfe7c0', outline='#1a221b', width=1)
+    draw.ellipse((38, 38, 44, 44), fill='#dfe7c0', outline='#1a221b', width=1)
     return img
 
 
@@ -142,11 +146,11 @@ def setup_tray():
     global _tray_icon
     icon_img = create_tray_icon()
     menu = pystray.Menu(
-        pystray.MenuItem('Show N.O.M.A.D.', tray_show_window, default=True),
+        pystray.MenuItem(f'Show {APP_DISPLAY_NAME}', tray_show_window, default=True),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem('Quit', tray_quit),
     )
-    _tray_icon = pystray.Icon('nomad', icon_img, 'Project N.O.M.A.D.', menu)
+    _tray_icon = pystray.Icon('nomad', icon_img, APP_DISPLAY_NAME, menu)
     _tray_icon.run_detached()
 
 
@@ -271,9 +275,9 @@ def main():
     set_version(VERSION)
     app = create_app()
 
-    # Start Flask — listen on 0.0.0.0 for LAN access
+    # Start Flask on a configurable host. Default to localhost for safer desktop behavior.
     flask_thread = threading.Thread(
-        target=lambda: app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False),
+        target=lambda: app.run(host=HOST, port=PORT, debug=False, use_reloader=False),
         daemon=True,
     )
     flask_thread.start()
@@ -306,15 +310,35 @@ def main():
         start_url += '?wizard=1'
 
     # Launch embedded WebView2 window with splash
-    splash_html = f'''<html><body style="margin:0;background:#060608;display:flex;align-items:center;justify-content:center;height:100vh;font-family:'Segoe UI',sans-serif;">
-    <div style="text-align:center;">
-      <div style="width:80px;height:80px;margin:0 auto 20px;">
-        <svg viewBox="0 0 64 64"><polygon points="32,4 60,32 32,60 4,32" fill="#5b9fff"/><polygon points="32,14 50,32 32,50 14,32" fill="#0d0d0d"/><polygon points="32,22 42,32 32,42 22,32" fill="#5b9fff"/></svg>
+    splash_html = f'''<html><body style="margin:0;background:radial-gradient(circle at top,#171c19 0%,#090a0c 62%);display:flex;align-items:center;justify-content:center;height:100vh;font-family:'Segoe UI',sans-serif;">
+    <div style="text-align:center;padding:32px 40px;border:1px solid rgba(235,225,198,.1);border-radius:26px;background:rgba(8,10,12,.78);box-shadow:0 28px 80px rgba(0,0,0,.38);backdrop-filter:blur(8px);">
+      <div style="width:88px;height:88px;margin:0 auto 22px;">
+        <svg viewBox="0 0 128 128">
+          <defs>
+            <linearGradient id="shell" x1="18" y1="16" x2="108" y2="112" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#f4edda"/><stop offset="1" stop-color="#d5c59d"/>
+            </linearGradient>
+            <linearGradient id="core" x1="48" y1="36" x2="82" y2="94" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#273327"/><stop offset="1" stop-color="#131914"/>
+            </linearGradient>
+            <linearGradient id="route" x1="44" y1="84" x2="84" y2="44" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#b8c98a"/><stop offset="1" stop-color="#7e9550"/>
+            </linearGradient>
+          </defs>
+          <path d="M64 8 106 64 64 120 22 64Z" fill="url(#shell)" stroke="#1a221b" stroke-width="4"/>
+          <path d="M64 24 88 64 64 104 40 64Z" fill="url(#core)" stroke="#f4edda" stroke-opacity=".18" stroke-width="2"/>
+          <path d="M64 20v15" stroke="#1a221b" stroke-linecap="round" stroke-width="4"/>
+          <path d="M46 82 64 46l18 36" stroke="url(#route)" stroke-linecap="round" stroke-linejoin="round" stroke-width="8"/>
+          <circle cx="64" cy="64" r="7" fill="#dfe7c0" stroke="#1a221b" stroke-width="3"/>
+          <circle cx="46" cy="82" r="4" fill="#dfe7c0" stroke="#1a221b" stroke-width="2"/>
+          <circle cx="82" cy="82" r="4" fill="#dfe7c0" stroke="#1a221b" stroke-width="2"/>
+        </svg>
       </div>
-      <h1 style="color:#e8e8ed;font-size:22px;font-weight:600;margin:0 0 8px;">Project N.O.M.A.D.</h1>
-      <p style="color:#55556a;font-size:13px;margin:0 0 24px;">Setting up your offline command center...</p>
-      <div style="width:200px;height:3px;background:#1e1e26;border-radius:2px;margin:0 auto;overflow:hidden;">
-        <div style="width:40%;height:100%;background:linear-gradient(90deg,#5b9fff,#b388ff);border-radius:2px;animation:load 1.5s ease infinite;"></div>
+      <div style="color:#b6c0aa;font-size:11px;letter-spacing:.22em;text-transform:uppercase;margin:0 0 10px;">Offline Field Desk</div>
+      <h1 style="color:#f6f2e6;font-size:24px;font-weight:700;letter-spacing:.04em;margin:0 0 8px;">{APP_SHORT_NAME}</h1>
+      <p style="color:#9ba58f;font-size:13px;max-width:340px;line-height:1.65;margin:0 0 24px;">Bringing your preparedness, reference, and local operations workspace online...</p>
+      <div style="width:220px;height:4px;background:#1a1f1c;border-radius:999px;margin:0 auto;overflow:hidden;">
+        <div style="width:40%;height:100%;background:linear-gradient(90deg,#b8c98a,#d5c59d);border-radius:999px;animation:load 1.5s ease infinite;"></div>
       </div>
     </div>
     <style>@keyframes load{{0%{{transform:translateX(-100%)}}100%{{transform:translateX(350%)}}}}</style>
@@ -322,7 +346,7 @@ def main():
 
     global _window
     _window = webview.create_window(
-        f'Project N.O.M.A.D. v{VERSION}',
+        f'{APP_DISPLAY_NAME} v{VERSION}',
         html=splash_html,
         width=1280,
         height=860,
@@ -349,7 +373,7 @@ def main():
         w = _window
         if w:
             try:
-                w.load_html('<html><body style="margin:0;background:#060608;display:flex;align-items:center;justify-content:center;height:100vh;font-family:Segoe UI,sans-serif;"><div style="text-align:center;"><h1 style="color:#ff6b6b;font-size:20px;">Failed to Start</h1><p style="color:#55556a;font-size:14px;">The web server did not respond. Check the log file for details.</p></div></body></html>')
+                w.load_html(f'<html><body style="margin:0;background:#060608;display:flex;align-items:center;justify-content:center;height:100vh;font-family:Segoe UI,sans-serif;"><div style="text-align:center;"><h1 style="color:#ff6b6b;font-size:20px;">{APP_SHORT_NAME} failed to start</h1><p style="color:#7f8791;font-size:14px;">The local web server did not respond. Check the log file for details.</p></div></body></html>')
             except Exception:
                 pass
 

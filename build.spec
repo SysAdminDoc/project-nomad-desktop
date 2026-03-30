@@ -1,12 +1,70 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec for Project N.O.M.A.D. Desktop
+# PyInstaller spec for NOMAD Field Desk
 # Build: pyinstaller build.spec
 
 import os
 import sys
+import importlib.util
 
 _is_windows = sys.platform == 'win32'
 _is_macos = sys.platform == 'darwin'
+
+_hiddenimports = [
+    'flask',
+    'requests',
+    'webview',
+    'pystray',
+    'PIL',
+    'psutil',
+    'PyPDF2',
+    'sqlite3',
+    'http.server',
+    'services',
+    'services.ollama',
+    'services.kiwix',
+    'services.cyberchef',
+    'services.kolibri',
+    'services.qdrant',
+    'services.stirling',
+    'services.manager',
+    'services.torrent',
+    'services.flatnotes',
+    'web.catalog',
+    'web.routes_advanced',
+    'web.state',
+    'web.sql_safety',
+    'web.validation',
+    'web.translations',
+    'web.blueprints',
+    'web.blueprints.garden',
+    'web.blueprints.notes',
+    'web.blueprints.weather',
+    'web.blueprints.medical',
+    'web.blueprints.power',
+    'web.blueprints.federation',
+    'web.blueprints.kb',
+    'web.blueprints.security',
+    'web.blueprints.inventory',
+    'web.blueprints.comms',
+    'web.blueprints.media',
+    'web.blueprints.maps',
+    'web.blueprints.ai',
+    'web.blueprints.services',
+    'web.blueprints.system',
+    'config',
+]
+
+for _optional_hiddenimport in (
+    'engineio.async_drivers.threading',
+    'libtorrent',
+):
+    try:
+        _optional_spec = importlib.util.find_spec(_optional_hiddenimport)
+    except ModuleNotFoundError:
+        _optional_spec = None
+    if _optional_spec:
+        _hiddenimports.append(_optional_hiddenimport)
+
 
 a = Analysis(
     ['nomad.py'],
@@ -32,52 +90,7 @@ a = Analysis(
         ('config.py', '.'),
         ('platform_utils.py', '.'),
     ],
-    hiddenimports=[
-        'flask',
-        'requests',
-        'webview',
-        'pystray',
-        'PIL',
-        'psutil',
-        'PyPDF2',
-        'sqlite3',
-        'http.server',
-        'engineio.async_drivers.threading',
-        'services',
-        'services.ollama',
-        'services.kiwix',
-        'services.cyberchef',
-        'services.kolibri',
-        'services.qdrant',
-        'services.stirling',
-        'services.manager',
-        'services.torrent',
-        'services.flatnotes',
-        'web.catalog',
-        'web.routes_advanced',
-        'web.state',
-        'web.sql_safety',
-        'web.validation',
-        'web.translations',
-        'web.blueprints',
-        'web.blueprints.garden',
-        'web.blueprints.notes',
-        'web.blueprints.weather',
-        'web.blueprints.medical',
-        'web.blueprints.power',
-        'web.blueprints.federation',
-        'web.blueprints.kb',
-        'web.blueprints.security',
-        'web.blueprints.inventory',
-        'web.blueprints.comms',
-        'web.blueprints.media',
-        'web.blueprints.maps',
-        'web.blueprints.ai',
-        'web.blueprints.services',
-        'web.blueprints.system',
-        'config',
-        'libtorrent',
-    ],
+    hiddenimports=_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -100,7 +113,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='ProjectNOMAD',
+    name='NOMADFieldDesk',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -1,5 +1,5 @@
 /**
- * esbuild bundler config for Project N.O.M.A.D.
+ * esbuild bundler config for NOMAD Field Desk
  *
  * Bundles all JS from web/static/js/ into web/static/dist/nomad.bundle.<hash>.js
  * and all CSS from web/static/css/ into web/static/dist/nomad.bundle.<hash>.css.

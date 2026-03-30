@@ -1,4 +1,4 @@
-"""Internationalization translation data for N.O.M.A.D. UI."""
+"""Internationalization translation data for the NOMAD Field Desk UI."""
 
 SUPPORTED_LANGUAGES = {
     'en': 'English',
@@ -15,7 +15,7 @@ SUPPORTED_LANGUAGES = {
 
 TRANSLATIONS = {
     'en': {
-        'app.title': 'N.O.M.A.D.',
+        'app.title': 'NOMAD',
         'app.subtitle': 'Network Operations & Mission Analysis Dashboard',
         'nav.dashboard': 'Dashboard',
         'nav.inventory': 'Inventory',
@@ -73,7 +73,7 @@ TRANSLATIONS = {
         'settings.backup': 'Backup & Restore',
     },
     'es': {
-        'app.title': 'N.O.M.A.D.',
+        'app.title': 'NOMAD',
         'app.subtitle': 'Panel de Operaciones de Red y Análisis de Misión',
         'nav.dashboard': 'Panel',
         'nav.inventory': 'Inventario',
@@ -131,7 +131,7 @@ TRANSLATIONS = {
         'settings.backup': 'Copia de Seguridad',
     },
     'fr': {
-        'app.title': 'N.O.M.A.D.',
+        'app.title': 'NOMAD',
         'app.subtitle': "Tableau de Bord des Opérations Réseau et d'Analyse de Mission",
         'nav.dashboard': 'Tableau de Bord',
         'nav.inventory': 'Inventaire',
@@ -189,7 +189,7 @@ TRANSLATIONS = {
         'settings.backup': 'Sauvegarde et Restauration',
     },
     'de': {
-        'app.title': 'N.O.M.A.D.',
+        'app.title': 'NOMAD',
         'app.subtitle': 'Netzwerk-Operationen & Missionsanalyse-Dashboard',
         'nav.dashboard': 'Dashboard',
         'nav.inventory': 'Inventar',
@@ -228,7 +228,7 @@ TRANSLATIONS = {
         'settings.backup': 'Sicherung & Wiederherstellung',
     },
     'pt': {
-        'app.title': 'N.O.M.A.D.',
+        'app.title': 'NOMAD',
         'app.subtitle': 'Painel de Operações de Rede e Análise de Missão',
         'nav.dashboard': 'Painel',
         'nav.inventory': 'Inventário',
@@ -251,7 +251,7 @@ TRANSLATIONS = {
         'settings.language': 'Idioma',
     },
     'ja': {
-        'app.title': 'N.O.M.A.D.',
+        'app.title': 'NOMAD',
         'app.subtitle': 'ネットワーク運用・ミッション分析ダッシュボード',
         'nav.dashboard': 'ダッシュボード',
         'nav.inventory': '在庫',
@@ -274,7 +274,7 @@ TRANSLATIONS = {
         'settings.language': '言語',
     },
     'zh': {
-        'app.title': 'N.O.M.A.D.',
+        'app.title': 'NOMAD',
         'app.subtitle': '网络运营与任务分析仪表板',
         'nav.dashboard': '仪表板',
         'nav.inventory': '库存',
@@ -297,7 +297,7 @@ TRANSLATIONS = {
         'settings.language': '语言',
     },
     'ar': {
-        'app.title': 'N.O.M.A.D.',
+        'app.title': 'NOMAD',
         'app.subtitle': 'لوحة عمليات الشبكة وتحليل المهام',
         'nav.dashboard': 'لوحة القيادة',
         'nav.inventory': 'المخزون',
@@ -320,7 +320,7 @@ TRANSLATIONS = {
         'settings.language': 'اللغة',
     },
     'uk': {
-        'app.title': 'N.O.M.A.D.',
+        'app.title': 'NOMAD',
         'app.subtitle': 'Панель мережевих операцій та аналізу місій',
         'nav.dashboard': 'Панель',
         'nav.inventory': 'Інвентар',
@@ -343,7 +343,7 @@ TRANSLATIONS = {
         'settings.language': 'Мова',
     },
     'ko': {
-        'app.title': 'N.O.M.A.D.',
+        'app.title': 'NOMAD',
         'app.subtitle': '네트워크 운영 및 임무 분석 대시보드',
         'nav.dashboard': '대시보드',
         'nav.inventory': '재고',

@@ -8,6 +8,8 @@ dist_release/
 build/
 screenshot*.png
 .env
+NOMAD-Setup.exe
+NOMADFieldDesk.exe
 ProjectNOMAD-Setup.exe
 ProjectNOMAD.exe
 .qdrant-initialized
@@ -16,3 +18,6 @@ web/static/dist/
 *.spec.bak
 .venv/
 venv/
+.pytest_tmp/
+test_runtime/
+test_runtime_probe/
