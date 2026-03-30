@@ -116,6 +116,8 @@ function _sitroomRefreshPanels() {
   loadSitroomGdeltFull();
   loadSitroomCot();
   loadSitroomBreakingDetection();
+  loadSitroomNewsClusters();
+  loadSitroomSourceHealth();
   _checkCriticalAlerts();
   loadSitroomLiveChannels();
 }
@@ -3017,6 +3019,72 @@ async function loadSitroomBreakingDetection() {
       <span class="sr-feed-source">${escapeHtml(b.source_name || '')}</span>
     </div>`;
   });
+  el.innerHTML = html;
+}
+
+/* ─── P3: News Clusters Card ─── */
+async function loadSitroomNewsClusters() {
+  const el = document.getElementById('sitroom-news-clusters');
+  if (!el) return;
+  const d = await safeFetch('/api/sitroom/news-clusters', {}, null);
+  if (!d || !d.clusters || !d.clusters.length) {
+    el.innerHTML = '<div class="sitroom-empty">No clusters detected</div>';
+    return;
+  }
+  let html = '';
+  d.clusters.forEach(c => {
+    const sources = (c.sources || []).filter(Boolean).join(', ');
+    html += `<div class="sr-feed-item" style="border-left:3px solid #4aedc4">
+      <span class="sr-feed-badge" style="background:#4aedc4;color:#000;font-size:9px;padding:1px 4px;border-radius:2px">${c.count}x</span>
+      <span class="sr-feed-title">${escapeHtml(c.label)}</span>
+      <span class="sr-feed-source">${escapeHtml(sources)}</span>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+/* ─── P3: AI Deduction Panel ─── */
+async function runSitroomDeduction() {
+  const el = document.getElementById('sitroom-deduction');
+  if (!el) return;
+  el.innerHTML = '<div class="sitroom-empty">Analyzing situation...</div>';
+  const d = await safeFetch('/api/sitroom/deduction', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({focus:'global situation'})}, null);
+  if (!d) { el.innerHTML = '<div class="sitroom-empty">Analysis failed</div>'; return; }
+  let html = '';
+  if (d.deduction) {
+    html += `<div class="sr-ai-brief">${escapeHtml(d.deduction).replace(/\n/g, '<br>')}</div>`;
+  } else {
+    html += '<div class="sitroom-empty">AI not available — install Ollama for deduction analysis</div>';
+  }
+  html += `<div class="sr-mini-label" style="margin-top:8px">${d.data_points || 0} data points analyzed</div>`;
+  el.innerHTML = html;
+}
+
+/* ─── P3: Source Health Card ─── */
+async function loadSitroomSourceHealth() {
+  const el = document.getElementById('sitroom-source-health');
+  if (!el) return;
+  const d = await safeFetch('/api/sitroom/source-health', {}, null);
+  if (!d || !d.sources) { el.innerHTML = '<div class="sitroom-empty">No health data</div>'; return; }
+  const s = d.summary || {};
+  let html = `<div style="display:flex;gap:8px;margin-bottom:8px">
+    <span class="sr-feed-badge" style="background:#44dd88;color:#000">${s.live || 0} LIVE</span>
+    <span class="sr-feed-badge" style="background:#ffaa00;color:#000">${s.stale || 0} STALE</span>
+    <span class="sr-feed-badge" style="background:#ff4444;color:#000">${s.unavailable || 0} DOWN</span>
+  </div>`;
+  // Show problematic sources only
+  const problems = d.sources.filter(src => src.status !== 'live').slice(0, 10);
+  if (problems.length) {
+    problems.forEach(src => {
+      const color = src.status === 'stale' ? '#ffaa00' : '#ff4444';
+      const age = src.age_seconds ? Math.round(src.age_seconds / 60) + 'm ago' : 'never';
+      html += `<div class="sr-feed-item"><span style="color:${color};font-size:10px;width:10px;display:inline-block">&#9679;</span>
+        <span class="sr-feed-title">${escapeHtml(src.source)}</span>
+        <span class="sr-feed-time">${age}</span></div>`;
+    });
+  } else {
+    html += '<div class="sr-feed-item" style="color:#44dd88">All sources healthy</div>';
+  }
   el.innerHTML = html;
 }
 

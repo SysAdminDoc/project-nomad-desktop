@@ -74,6 +74,8 @@ FETCH_COOLDOWN = {
     'github_trending': 3600, 'fuel_prices': 7200,
     'product_hunt': 3600, 'macro_stress': 3600,
     'central_banks': 3600, 'arxiv_papers': 7200,
+    'ais_ships': 300, 'oref_alerts': 60, 'gdelt_events': 1800,
+    'cot_positioning': 86400,
 }
 
 # ─── Live YouTube Channels ────────────────────────────────────────────
@@ -3477,3 +3479,148 @@ def api_sitroom_country_brief(country):
         brief['ai_summary'] = None
 
     return jsonify(brief)
+
+
+@situation_room_bp.route('/api/sitroom/news-clusters')
+def api_sitroom_news_clusters():
+    """Cluster related news stories using word-level Jaccard similarity."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title, link, source_name, category FROM sitroom_news ORDER BY cached_at DESC LIMIT 200"
+        ).fetchall()
+
+    if not rows:
+        return jsonify({'clusters': [], 'count': 0})
+
+    articles = [dict(r) for r in rows]
+
+    # Tokenize titles into word sets
+    def _words(title):
+        return set(re.sub(r'[^\w\s]', '', title.lower()).split())
+
+    word_sets = [_words(a['title']) for a in articles]
+    used = set()
+    clusters = []
+
+    for i, a in enumerate(articles):
+        if i in used:
+            continue
+        cluster = [a]
+        used.add(i)
+        for j in range(i + 1, len(articles)):
+            if j in used:
+                continue
+            # Jaccard similarity
+            intersection = len(word_sets[i] & word_sets[j])
+            union = len(word_sets[i] | word_sets[j])
+            if union > 0 and intersection / union > 0.35:
+                cluster.append(articles[j])
+                used.add(j)
+                if len(cluster) >= 8:
+                    break
+        if len(cluster) >= 2:
+            # Use first article's title as cluster label
+            clusters.append({
+                'label': cluster[0]['title'],
+                'count': len(cluster),
+                'sources': list(set(c.get('source_name', '') for c in cluster)),
+                'category': cluster[0].get('category', ''),
+                'articles': cluster[:5],
+            })
+
+    clusters.sort(key=lambda c: c['count'], reverse=True)
+    return jsonify({'clusters': clusters[:20], 'count': len(clusters)})
+
+
+@situation_room_bp.route('/api/sitroom/deduction', methods=['POST'])
+def api_sitroom_deduction():
+    """AI-powered situation deduction from current evidence."""
+    req_data = request.get_json(silent=True) or {}
+    focus = req_data.get('focus', 'global situation')
+
+    # Gather current intelligence
+    with db_session() as db:
+        news = db.execute(
+            "SELECT title, category, source_name FROM sitroom_news ORDER BY cached_at DESC LIMIT 30"
+        ).fetchall()
+        events = db.execute(
+            "SELECT title, event_type, magnitude FROM sitroom_events "
+            "WHERE event_type IN ('earthquake', 'conflict', 'oref_alert', 'ucdp_conflict', 'fire') "
+            "ORDER BY cached_at DESC LIMIT 15"
+        ).fetchall()
+        markets = db.execute(
+            "SELECT symbol, price, change_24h FROM sitroom_markets ORDER BY ABS(change_24h) DESC LIMIT 10"
+        ).fetchall()
+
+    context = f"Focus: {focus}\n\nRecent Headlines:\n"
+    for r in news:
+        d = dict(r)
+        context += f"- [{d.get('category', '')}] {d['title']} ({d.get('source_name', '')})\n"
+    context += "\nActive Events:\n"
+    for r in events:
+        d = dict(r)
+        context += f"- [{d.get('event_type', '')}] {d['title']}"
+        if d.get('magnitude'):
+            context += f" (magnitude: {d['magnitude']})"
+        context += "\n"
+    context += "\nMarket Movers:\n"
+    for r in markets:
+        d = dict(r)
+        chg = d.get('change_24h', 0)
+        context += f"- {d['symbol']}: ${d.get('price', '?')} ({'+' if chg > 0 else ''}{chg:.1f}%)\n"
+
+    try:
+        import ollama
+        prompt = (f"You are a senior intelligence analyst. Based on the following current data, "
+                  f"provide a structured deduction covering:\n"
+                  f"1. SITUATION ASSESSMENT — What is happening right now?\n"
+                  f"2. KEY INDICATORS — What signals are most significant?\n"
+                  f"3. LIKELY DEVELOPMENTS — What will probably happen in the next 24-72 hours?\n"
+                  f"4. WATCH ITEMS — What should we monitor closely?\n"
+                  f"5. CONFIDENCE LEVEL — How reliable is this assessment (Low/Medium/High)?\n\n"
+                  f"{context}")
+        response = ollama.chat(model='llama3.2', messages=[{'role': 'user', 'content': prompt}],
+                               options={'temperature': 0.3, 'num_predict': 800})
+        deduction = response.get('message', {}).get('content', '')
+    except Exception:
+        # Fallback: structured summary without AI
+        deduction = None
+
+    return jsonify({
+        'deduction': deduction,
+        'focus': focus,
+        'data_points': len(list(news)) + len(list(events)) + len(list(markets)),
+        'ai_available': deduction is not None,
+    })
+
+
+@situation_room_bp.route('/api/sitroom/source-health')
+def api_sitroom_source_health():
+    """Return health status of all data sources (circuit breaker pattern)."""
+    last_fetch, is_running = _get_state()
+    now = datetime.now()
+    sources = []
+    for key, cooldown in FETCH_COOLDOWN.items():
+        last = last_fetch.get(key)
+        if last:
+            age_sec = (now - last).total_seconds()
+            status = 'live' if age_sec < cooldown * 3 else 'stale' if age_sec < cooldown * 10 else 'unavailable'
+            sources.append({
+                'source': key,
+                'last_fetch': last.isoformat(),
+                'age_seconds': int(age_sec),
+                'cooldown': cooldown,
+                'status': status,
+            })
+        else:
+            sources.append({'source': key, 'last_fetch': None, 'status': 'never_fetched', 'cooldown': cooldown})
+
+    live = sum(1 for s in sources if s['status'] == 'live')
+    stale = sum(1 for s in sources if s['status'] == 'stale')
+    down = sum(1 for s in sources if s['status'] in ('unavailable', 'never_fetched'))
+
+    return jsonify({
+        'sources': sources,
+        'summary': {'live': live, 'stale': stale, 'unavailable': down, 'total': len(sources)},
+        'is_refreshing': is_running,
+    })
