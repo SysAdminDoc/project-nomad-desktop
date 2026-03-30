@@ -268,6 +268,49 @@ RSS_FEEDS = {
     'commodities': [
         {'name': 'Mining.com', 'url': 'https://www.mining.com/feed/', 'category': 'Commodities'},
         {'name': 'Mining Technology', 'url': 'https://www.mining-technology.com/feed/', 'category': 'Commodities'},
+        {'name': 'Australian Mining', 'url': 'https://www.australianmining.com.au/feed/', 'category': 'Commodities'},
+    ],
+    'regional_intl': [
+        {'name': 'BBC Mundo', 'url': 'https://feeds.bbci.co.uk/mundo/rss.xml', 'category': 'Latin America'},
+        {'name': 'El Pais', 'url': 'https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/portada', 'category': 'Latin America'},
+        {'name': 'Tagesschau', 'url': 'https://www.tagesschau.de/xml/rss2/', 'category': 'Europe'},
+        {'name': 'NOS Nieuws', 'url': 'https://feeds.nos.nl/nosnieuwsalgemeen', 'category': 'Europe'},
+        {'name': 'SVT Nyheter', 'url': 'https://www.svt.se/nyheter/rss.xml', 'category': 'Europe'},
+        {'name': 'BBC Turkce', 'url': 'https://feeds.bbci.co.uk/turkce/rss.xml', 'category': 'Middle East'},
+        {'name': 'Meduza EN', 'url': 'https://meduza.io/rss/en/all', 'category': 'Europe'},
+        {'name': 'Kyiv Independent', 'url': 'https://kyivindependent.com/feed/', 'category': 'Europe'},
+        {'name': 'Japan Times', 'url': 'https://www.japantimes.co.jp/feed/', 'category': 'Asia-Pacific'},
+        {'name': 'Straits Times', 'url': 'https://www.straitstimes.com/news/asia/rss.xml', 'category': 'Asia-Pacific'},
+        {'name': 'Times of India', 'url': 'https://timesofindia.indiatimes.com/rssfeedstopstories.cms', 'category': 'Asia-Pacific'},
+        {'name': 'News24 SA', 'url': 'https://feeds.24.com/articles/news24/TopStories/rss', 'category': 'Africa'},
+        {'name': 'Punch Nigeria', 'url': 'https://punchng.com/feed/', 'category': 'Africa'},
+        {'name': 'Buenos Aires Times', 'url': 'https://www.batimes.com.ar/feed', 'category': 'Latin America'},
+    ],
+    'layoffs': [
+        {'name': 'Layoffs.fyi', 'url': 'https://layoffs.fyi/feed/', 'category': 'Layoffs'},
+    ],
+    'semiconductors': [
+        {'name': 'SemiEngineering', 'url': 'https://semiengineering.com/feed/', 'category': 'Semiconductors'},
+        {'name': 'EE Times', 'url': 'https://www.eetimes.com/feed/', 'category': 'Semiconductors'},
+        {'name': 'AnandTech', 'url': 'https://www.anandtech.com/rss/', 'category': 'Semiconductors'},
+    ],
+    'nuclear_energy': [
+        {'name': 'World Nuclear News', 'url': 'https://www.world-nuclear-news.org/rss', 'category': 'Nuclear'},
+        {'name': 'IAEA News', 'url': 'https://www.iaea.org/feeds/topnews', 'category': 'Nuclear'},
+    ],
+    'maritime': [
+        {'name': 'gCaptain', 'url': 'https://gcaptain.com/feed/', 'category': 'Maritime'},
+        {'name': 'Maritime Executive', 'url': 'https://maritime-executive.com/rss', 'category': 'Maritime'},
+        {'name': 'Splash247', 'url': 'https://splash247.com/feed/', 'category': 'Maritime'},
+    ],
+    'space': [
+        {'name': 'SpaceNews', 'url': 'https://spacenews.com/feed/', 'category': 'Space'},
+        {'name': 'Spaceflight Now', 'url': 'https://spaceflightnow.com/feed/', 'category': 'Space'},
+        {'name': 'NASA Spaceflight', 'url': 'https://www.nasaspaceflight.com/feed/', 'category': 'Space'},
+    ],
+    'supply_chain': [
+        {'name': 'Supply Chain Dive', 'url': 'https://www.supplychaindive.com/feeds/news/', 'category': 'Supply Chain'},
+        {'name': 'Freightwaves', 'url': 'https://www.freightwaves.com/feed', 'category': 'Supply Chain'},
     ],
 }
 
@@ -1713,3 +1756,161 @@ def api_sitroom_internet_outages():
 def api_sitroom_live_channels():
     """Return list of live YouTube news channels."""
     return jsonify({'channels': LIVE_CHANNELS})
+
+
+# ─── Keyword Monitors ────────────────────────────────────────────────
+
+@situation_room_bp.route('/api/sitroom/monitors')
+def api_sitroom_monitors():
+    """Return keyword monitor list and matches."""
+    with db_session() as db:
+        # Ensure table exists
+        db.execute('''CREATE TABLE IF NOT EXISTS sitroom_monitors
+            (id INTEGER PRIMARY KEY, keyword TEXT NOT NULL, color TEXT DEFAULT '#4aedc4',
+             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        monitors = db.execute('SELECT * FROM sitroom_monitors ORDER BY created_at DESC').fetchall()
+        db.commit()
+
+    results = []
+    for m in monitors:
+        kw = m['keyword'].lower()
+        with db_session() as db:
+            matches = db.execute(
+                "SELECT title, link, category, source_name FROM sitroom_news WHERE LOWER(title) LIKE ? ORDER BY cached_at DESC LIMIT 10",
+                (f'%{kw}%',)).fetchall()
+        results.append({**dict(m), 'matches': [dict(r) for r in matches], 'match_count': len(matches)})
+
+    return jsonify({'monitors': results})
+
+
+@situation_room_bp.route('/api/sitroom/monitors', methods=['POST'])
+def api_sitroom_add_monitor():
+    data = request.get_json() or {}
+    keyword = (data.get('keyword') or '').strip()[:100]
+    color = (data.get('color') or '#4aedc4').strip()[:20]
+    if not keyword:
+        return jsonify({'error': 'Keyword required'}), 400
+    with db_session() as db:
+        db.execute('''CREATE TABLE IF NOT EXISTS sitroom_monitors
+            (id INTEGER PRIMARY KEY, keyword TEXT NOT NULL, color TEXT DEFAULT '#4aedc4',
+             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        db.execute('INSERT INTO sitroom_monitors (keyword, color) VALUES (?, ?)', (keyword, color))
+        db.commit()
+    return jsonify({'ok': True}), 201
+
+
+@situation_room_bp.route('/api/sitroom/monitors/<int:mid>', methods=['DELETE'])
+def api_sitroom_delete_monitor(mid):
+    with db_session() as db:
+        db.execute('DELETE FROM sitroom_monitors WHERE id = ?', (mid,))
+        db.commit()
+    return jsonify({'ok': True})
+
+
+# ─── AI Intelligence Briefing (uses Ollama if available) ─────────────
+
+@situation_room_bp.route('/api/sitroom/ai-briefing', methods=['POST'])
+def api_sitroom_generate_ai_briefing():
+    """Generate AI-powered strategic intelligence briefing from cached data."""
+    with db_session() as db:
+        news = db.execute("SELECT title, category FROM sitroom_news ORDER BY cached_at DESC LIMIT 20").fetchall()
+        quakes = db.execute("SELECT title, magnitude FROM sitroom_events WHERE event_type = 'earthquake' AND magnitude >= 4 ORDER BY magnitude DESC LIMIT 5").fetchall()
+        conflicts = db.execute("SELECT title FROM sitroom_events WHERE event_type IN ('conflict', 'ucdp_conflict') LIMIT 10").fetchall()
+        markets = db.execute("SELECT symbol, price, change_24h FROM sitroom_markets WHERE market_type = 'index' LIMIT 5").fetchall()
+        cyber = db.execute("SELECT title FROM sitroom_events WHERE event_type = 'cyber_threat' LIMIT 5").fetchall()
+
+    # Build context for LLM
+    context_parts = []
+    if news:
+        context_parts.append("TOP HEADLINES:\n" + "\n".join(f"- [{dict(n)['category']}] {dict(n)['title']}" for n in news[:15]))
+    if quakes:
+        context_parts.append("SEISMIC ACTIVITY:\n" + "\n".join(f"- M{dict(q)['magnitude']:.1f} {dict(q)['title']}" for q in quakes))
+    if conflicts:
+        context_parts.append("ACTIVE CONFLICTS:\n" + "\n".join(f"- {dict(c)['title']}" for c in conflicts))
+    if markets:
+        context_parts.append("MARKET INDICES:\n" + "\n".join(f"- {dict(m)['symbol']}: ${dict(m)['price']:.0f} ({dict(m)['change_24h']:+.1f}%)" for m in markets))
+    if cyber:
+        context_parts.append("CYBER THREATS:\n" + "\n".join(f"- {dict(c)['title']}" for c in cyber))
+
+    context = "\n\n".join(context_parts)
+    prompt = f"""You are an intelligence analyst. Based on the following situation data, produce a concise strategic intelligence briefing. Cover: key threats, geopolitical developments, market implications, and recommended watch items. Be specific, not generic.
+
+{context}
+
+Produce a briefing with sections: STRATEGIC OVERVIEW, KEY THREATS, MARKET OUTLOOK, WATCH ITEMS."""
+
+    # Try Ollama first
+    briefing = None
+    try:
+        resp = requests.post('http://localhost:11434/api/generate',
+                             json={'model': 'llama3.2', 'prompt': prompt, 'stream': False},
+                             timeout=60)
+        if resp.ok:
+            briefing = resp.json().get('response', '')
+    except Exception:
+        pass
+
+    if not briefing:
+        # Fallback: generate a structured summary without LLM
+        briefing = "## STRATEGIC OVERVIEW\n"
+        briefing += f"Monitoring {len(news)} news sources across multiple categories.\n\n"
+        if quakes:
+            briefing += "## SEISMIC ALERT\n"
+            for q in quakes[:3]:
+                briefing += f"- M{dict(q)['magnitude']:.1f} — {dict(q)['title']}\n"
+            briefing += "\n"
+        if conflicts:
+            briefing += "## ACTIVE CONFLICTS\n"
+            for c in conflicts[:5]:
+                briefing += f"- {dict(c)['title']}\n"
+            briefing += "\n"
+        if markets:
+            briefing += "## MARKET STATUS\n"
+            for m in markets:
+                ch = dict(m)['change_24h']
+                briefing += f"- {dict(m)['symbol']}: {'UP' if ch >= 0 else 'DOWN'} {abs(ch):.1f}%\n"
+            briefing += "\n"
+        if cyber:
+            briefing += "## CYBER THREATS\n"
+            for c in cyber[:3]:
+                briefing += f"- {dict(c)['title']}\n"
+
+    # Cache the briefing
+    with db_session() as db:
+        db.execute('''CREATE TABLE IF NOT EXISTS sitroom_briefings
+            (id INTEGER PRIMARY KEY, content TEXT, generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        db.execute('INSERT INTO sitroom_briefings (content) VALUES (?)', (briefing,))
+        db.commit()
+
+    return jsonify({'briefing': briefing})
+
+
+# ─── Economic Data (FRED-style) ──────────────────────────────────────
+
+@situation_room_bp.route('/api/sitroom/economic-calendar')
+def api_sitroom_economic_calendar():
+    """Return upcoming economic events from news."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title, link, source_name, published FROM sitroom_news WHERE category IN ('Finance', 'Government') AND (LOWER(title) LIKE '%fed%' OR LOWER(title) LIKE '%rate%' OR LOWER(title) LIKE '%gdp%' OR LOWER(title) LIKE '%inflation%' OR LOWER(title) LIKE '%employment%' OR LOWER(title) LIKE '%treasury%' OR LOWER(title) LIKE '%ecb%' OR LOWER(title) LIKE '%boj%') ORDER BY cached_at DESC LIMIT 20"
+        ).fetchall()
+    return jsonify({'events': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/national-debt')
+def api_sitroom_national_debt():
+    """Return estimated national debt figures."""
+    # US national debt from Treasury API (fiscal data)
+    debt = {}
+    try:
+        resp = requests.get('https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny',
+                            params={'sort': '-record_date', 'page[size]': 1},
+                            timeout=_REQ_TIMEOUT, headers=_REQ_HEADERS)
+        if resp.ok:
+            data = resp.json().get('data', [])
+            if data:
+                debt['us'] = {'total': float(data[0].get('tot_pub_debt_out_amt', 0)),
+                              'date': data[0].get('record_date', '')}
+    except Exception as e:
+        log.debug(f"Treasury debt fetch failed: {e}")
+    return jsonify({'debt': debt})

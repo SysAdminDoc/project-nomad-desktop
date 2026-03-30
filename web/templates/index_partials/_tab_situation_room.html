@@ -249,6 +249,36 @@
         <div id="sitroom-osint" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
+      <!-- AI Strategic Briefing -->
+      <div class="sr-card sr-card-tall">
+        <div class="sr-card-head">
+          AI STRATEGIC POSTURE
+          <button class="sr-btn sr-btn-accent" data-sitroom-action="generate-briefing">GENERATE</button>
+        </div>
+        <div id="sitroom-ai-briefing" class="sr-card-body sr-scroll"><div class="sr-empty">Click GENERATE for AI intelligence briefing</div></div>
+      </div>
+
+      <!-- Keyword Monitors -->
+      <div class="sr-card">
+        <div class="sr-card-head">
+          MY MONITORS
+          <button class="sr-btn" data-sitroom-action="add-monitor">+ ADD</button>
+        </div>
+        <div id="sitroom-monitors" class="sr-card-body sr-scroll"><div class="sr-empty">No keyword monitors</div></div>
+      </div>
+
+      <!-- Economic Calendar -->
+      <div class="sr-card">
+        <div class="sr-card-head">ECONOMIC CALENDAR</div>
+        <div id="sitroom-econ-cal" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
+      </div>
+
+      <!-- National Debt -->
+      <div class="sr-card">
+        <div class="sr-card-head">NATIONAL DEBT</div>
+        <div id="sitroom-debt" class="sr-card-body"><div class="sr-empty">Loading...</div></div>
+      </div>
+
       <!-- World Clock -->
       <div class="sr-card">
         <div class="sr-card-head">WORLD CLOCK</div>
@@ -287,6 +317,21 @@
       </div>
       <div class="sr-country-panel-body" id="sr-country-body">
         <div class="sr-empty">Select a country from the CII panel</div>
+      </div>
+    </div>
+
+    <!-- Story Detail Modal -->
+    <div class="sr-story-modal" id="sr-story-modal" hidden>
+      <div class="sr-story-content">
+        <div class="sr-story-header">
+          <span id="sr-story-cat" class="sitroom-news-cat"></span>
+          <h3 id="sr-story-title"></h3>
+          <button class="sr-btn sr-btn-ghost" onclick="document.getElementById('sr-story-modal').hidden=true">&#10005;</button>
+        </div>
+        <div id="sr-story-body" class="sr-story-body"></div>
+        <div class="sr-story-footer">
+          <a id="sr-story-link" href="#" target="_blank" rel="noopener" class="sr-btn sr-btn-accent">Read Full Article</a>
+        </div>
       </div>
     </div>
 
