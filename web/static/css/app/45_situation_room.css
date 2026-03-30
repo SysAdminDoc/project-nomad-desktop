@@ -515,6 +515,38 @@
 .sitroom-custom-feed-name { font-weight: 600; color: #c8ccd0; }
 .sr-feed-stats { font-size: 8px; color: #333; padding: 3px 12px 6px; }
 
+/* ─── Story Detail Modal ─── */
+.sr-story-modal {
+  position: absolute; inset: 0; z-index: 400;
+  background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center;
+}
+.sr-story-modal[hidden] { display: none; }
+.sr-story-content {
+  width: 560px; max-width: 90%; max-height: 80vh; background: #141414;
+  border: 1px solid #2a2a2a; border-radius: 6px; box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.sr-story-header { padding: 14px 18px; border-bottom: 1px solid #2a2a2a; display: flex; align-items: flex-start; gap: 10px; }
+.sr-story-header h3 { flex: 1; font-size: 14px; color: #e0e4e8; margin: 0; line-height: 1.4; }
+.sr-story-body { flex: 1; padding: 14px 18px; overflow-y: auto; font-size: 12px; color: #c8ccd0; line-height: 1.6; }
+.sr-story-footer { padding: 10px 18px; border-top: 1px solid #2a2a2a; display: flex; justify-content: flex-end; }
+.sr-story-related { margin-top: 12px; padding-top: 8px; border-top: 1px solid #1e1e1e; }
+.sr-story-related-title { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; color: #555; margin-bottom: 6px; }
+
+/* ─── Monitor Card ─── */
+.sr-monitor-item { padding: 6px 12px; border-bottom: 1px solid #1e1e1e; }
+.sr-monitor-kw { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.sr-monitor-kw-text { font-size: 12px; font-weight: 700; color: #e0e4e8; }
+.sr-monitor-kw-count { font-size: 9px; background: #0f5040; color: #4aedc4; padding: 1px 5px; border-radius: 2px; }
+.sr-monitor-kw-del { font-size: 9px; color: #884444; cursor: pointer; margin-left: auto; }
+.sr-monitor-kw-del:hover { color: #e05050; }
+.sr-monitor-match { font-size: 10px; color: #888; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ─── Debt Display ─── */
+.sr-debt-value { font-size: 28px; font-weight: 700; color: #e05050; text-align: center; padding: 20px; letter-spacing: 0.04em; }
+.sr-debt-label { font-size: 9px; color: #555; text-align: center; letter-spacing: 0.1em; }
+.sr-debt-date { font-size: 8px; color: #333; text-align: center; margin-top: 4px; }
+
 /* ─── Event Timeline ─── */
 .sr-timeline-body { display: flex; flex-direction: column; padding: 0; }
 .sr-timeline-track { display: flex; align-items: flex-start; gap: 0; overflow-x: auto; padding: 12px 8px; flex: 1; }
