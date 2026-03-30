@@ -69,6 +69,13 @@ function _sitroomRefreshPanels() {
   loadSitroomFuel();
   loadSitroomProductHunt();
   loadSitroomEarnings();
+  loadSitroomLayoffs();
+  loadSitroomAirline();
+  loadSitroomSupplyChain();
+  loadSitroomMacroStress();
+  loadSitroomForex();
+  loadSitroomCryptoSectors();
+  loadSitroomSentiment();
   loadSitroomIntelGap();
   loadSitroomHumanitarian();
   _checkCriticalAlerts();
@@ -1467,6 +1474,126 @@ function _showSitroomAlert(type, message) {
   stack.appendChild(toast);
   // Auto-dismiss after 15s
   setTimeout(() => { if (toast.parentElement) toast.remove(); }, 15000);
+}
+
+/* ─── Macro Stress Indicators ─── */
+async function loadSitroomMacroStress() {
+  const d = await safeFetch('/api/sitroom/macro-stress', {}, null);
+  const el = document.getElementById('sitroom-macro');
+  if (!el) return;
+  if (!d || !d.indicators?.length) { el.innerHTML = '<div class="sr-empty">No macro data</div>'; return; }
+  el.innerHTML = d.indicators.map(i => {
+    let det = {}; try { det = i.detail_json ? JSON.parse(i.detail_json) : {}; } catch(e) {}
+    const val = i.magnitude || 0;
+    return `<div class="sr-macro-row">
+      <span class="sr-macro-label">${escapeHtml(i.title || det.series || '')}</span>
+      <span class="sr-macro-val">${val.toFixed(2)}</span>
+    </div>`;
+  }).join('');
+}
+
+/* ─── Forex Card ─── */
+async function loadSitroomForex() {
+  const d = await safeFetch('/api/sitroom/forex', {}, null);
+  const el = document.getElementById('sitroom-forex');
+  if (!el) return;
+  if (!d || !d.pairs?.length) { el.innerHTML = '<div class="sr-empty">No forex data</div>'; return; }
+  el.innerHTML = d.pairs.map(m => {
+    const ch = m.change_24h || 0;
+    const cls = ch >= 0 ? 'sitroom-market-up' : 'sitroom-market-down';
+    return `<div class="sitroom-market-card ${cls}">
+      <div class="sitroom-market-symbol">${escapeHtml(m.symbol)}</div>
+      <div class="sitroom-market-price">${Number(m.price).toFixed(4)}</div>
+      <div class="sitroom-market-change">${ch >= 0 ? '&#9650;' : '&#9660;'} ${Math.abs(ch).toFixed(2)}%</div>
+    </div>`;
+  }).join('');
+}
+
+/* ─── Crypto Sectors ─── */
+async function loadSitroomCryptoSectors() {
+  const d = await safeFetch('/api/sitroom/crypto-sectors', {}, null);
+  const el = document.getElementById('sitroom-crypto-sectors');
+  if (!el) return;
+  const all = [...(d?.crypto || []), ...(d?.stablecoins || [])];
+  if (!all.length) { el.innerHTML = '<div class="sr-empty">No crypto data</div>'; return; }
+  el.innerHTML = all.map(m => {
+    const ch = m.change_24h || 0;
+    const cls = ch >= 0 ? 'sitroom-market-up' : 'sitroom-market-down';
+    const price = m.price >= 1 ? '$' + Number(m.price).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : '$' + Number(m.price).toFixed(4);
+    return `<div class="sitroom-market-card ${cls}">
+      <div class="sitroom-market-symbol">${escapeHtml(m.symbol)}</div>
+      <div class="sitroom-market-price">${price}</div>
+      <div class="sitroom-market-change">${ch >= 0 ? '&#9650;' : '&#9660;'} ${Math.abs(ch).toFixed(1)}%</div>
+    </div>`;
+  }).join('');
+}
+
+/* ─── News Sentiment ─── */
+async function loadSitroomSentiment() {
+  const d = await safeFetch('/api/sitroom/news-sentiment', {}, null);
+  const el = document.getElementById('sitroom-sentiment');
+  if (!el || !d) return;
+  const total = d.total || 1;
+  const posPct = ((d.positive || 0) / total * 100).toFixed(0);
+  const negPct = ((d.negative || 0) / total * 100).toFixed(0);
+  const neuPct = ((d.neutral || 0) / total * 100).toFixed(0);
+  const score = d.sentiment_score || 0;
+  const color = score > 10 ? '#4aedc4' : score < -10 ? '#e05050' : '#888';
+  const label = score > 20 ? 'BULLISH' : score > 5 ? 'POSITIVE' : score < -20 ? 'BEARISH' : score < -5 ? 'NEGATIVE' : 'NEUTRAL';
+  el.innerHTML = `<div class="sr-sentiment-score" style="color:${color}">${score > 0 ? '+' : ''}${score.toFixed(0)}</div>
+    <div class="sr-sentiment-label">${label}</div>
+    <div class="sr-sentiment-row">
+      <div class="sr-sentiment-bar">
+        <div class="sr-sentiment-pos" style="width:${posPct}%">${posPct}%</div>
+        <div class="sr-sentiment-neu" style="width:${neuPct}%">${neuPct}%</div>
+        <div class="sr-sentiment-neg" style="width:${negPct}%">${negPct}%</div>
+      </div>
+    </div>`;
+}
+
+/* ─── Layoffs Tracker ─── */
+async function loadSitroomLayoffs() {
+  const d = await safeFetch('/api/sitroom/layoffs', {}, null);
+  const el = document.getElementById('sitroom-layoffs');
+  if (!el) return;
+  if (!d || !d.layoffs?.length) { el.innerHTML = '<div class="sr-empty">No layoff data</div>'; return; }
+  el.innerHTML = d.layoffs.map(l => `<div class="sitroom-news-item">
+    <span class="sitroom-news-cat" style="background:#3a1515;color:#e05050">CUT</span>
+    <div class="sitroom-news-body">
+      <a href="${escapeAttr(l.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(l.title)}</a>
+      <div class="sitroom-news-meta">${escapeHtml(l.source_name || '')}</div>
+    </div>
+  </div>`).join('');
+}
+
+/* ─── Airline Intelligence ─── */
+async function loadSitroomAirline() {
+  const d = await safeFetch('/api/sitroom/airline-intel', {}, null);
+  const el = document.getElementById('sitroom-airline');
+  if (!el) return;
+  if (!d || !d.articles?.length) { el.innerHTML = '<div class="sr-empty">No airline data</div>'; return; }
+  el.innerHTML = d.articles.map(a => `<div class="sitroom-news-item">
+    <span class="sitroom-news-cat" style="background:#0a1a30;color:#44aaff">AIR</span>
+    <div class="sitroom-news-body">
+      <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
+      <div class="sitroom-news-meta">${escapeHtml(a.source_name || '')}</div>
+    </div>
+  </div>`).join('');
+}
+
+/* ─── Supply Chain ─── */
+async function loadSitroomSupplyChain() {
+  const d = await safeFetch('/api/sitroom/supply-chain', {}, null);
+  const el = document.getElementById('sitroom-supplychain');
+  if (!el) return;
+  if (!d || !d.articles?.length) { el.innerHTML = '<div class="sr-empty">No supply chain data</div>'; return; }
+  el.innerHTML = d.articles.map(a => `<div class="sitroom-news-item">
+    <span class="sitroom-news-cat" style="background:#1a2a10;color:#88cc44">LOG</span>
+    <div class="sitroom-news-body">
+      <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
+      <div class="sitroom-news-meta">${escapeHtml(a.source_name || '')}</div>
+    </div>
+  </div>`).join('');
 }
 
 /* ─── Product Hunt ─── */
