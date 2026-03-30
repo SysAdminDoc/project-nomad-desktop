@@ -66,6 +66,7 @@ FETCH_COOLDOWN = {
     'space_weather': 300, 'volcanoes': 3600, 'predictions': 600,
     'fires': 600, 'disease_outbreaks': 1800,
     'internet_outages': 600,
+    'radiation': 1800, 'gdelt_trending': 600, 'sanctions': 3600,
 }
 
 # ─── Live YouTube Channels ────────────────────────────────────────────
@@ -874,6 +875,116 @@ def _fetch_disease_outbreaks():
     log.info(f"Situation Room: cached {len(items)} disease outbreak entries")
 
 
+def _fetch_radiation():
+    """Fetch radiation monitoring data from Safecast API."""
+    if not _can_fetch('radiation'):
+        return
+    _set_last_fetch('radiation')
+    try:
+        # Safecast public API — recent measurements
+        resp = requests.get('https://api.safecast.org/measurements.json',
+                            params={'order': 'created_at desc', 'per_page': 50},
+                            timeout=_REQ_TIMEOUT, headers=_REQ_HEADERS)
+        if not resp.ok:
+            return
+        data = resp.json()
+    except Exception as e:
+        log.debug(f"Safecast radiation fetch failed: {e}")
+        return
+
+    if not data:
+        return
+
+    with db_session() as db:
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'radiation'")
+        for m in data[:50]:
+            lat = m.get('latitude') or 0
+            lng = m.get('longitude') or 0
+            value = m.get('value') or 0
+            unit = m.get('unit', 'cpm')
+            loc = m.get('location_name', '')
+            eid = hashlib.sha256(f"rad:{m.get('id', '')}".encode()).hexdigest()[:16]
+            db.execute('''INSERT OR IGNORE INTO sitroom_events
+                (event_id, event_type, title, magnitude, lat, lng, event_time, detail_json)
+                VALUES (?, ?, ?, ?, ?, ?, 0, ?)''',
+                (eid, 'radiation', f"{value} {unit} - {loc}" if loc else f"{value} {unit}",
+                 value, lat, lng,
+                 json.dumps({'value': value, 'unit': unit, 'location': loc,
+                             'device_id': m.get('device_id', ''), 'captured_at': m.get('captured_at', '')})))
+        db.commit()
+    log.info(f"Situation Room: cached {len(data)} radiation measurements")
+
+
+def _fetch_gdelt_trending():
+    """Fetch trending topics from GDELT GKG (Global Knowledge Graph)."""
+    if not _can_fetch('gdelt_trending'):
+        return
+    _set_last_fetch('gdelt_trending')
+    try:
+        # GDELT DOC API — top themes in last 24 hours
+        resp = requests.get('https://api.gdeltproject.org/api/v2/doc/doc',
+                            params={'query': '', 'mode': 'ToneChart', 'format': 'json',
+                                    'maxrecords': '30', 'timespan': '24h', 'sort': 'ToneDesc'},
+                            timeout=15, headers=_REQ_HEADERS)
+        if not resp.ok:
+            return
+        data = resp.json()
+    except Exception as e:
+        log.debug(f"GDELT trending fetch failed: {e}")
+        return
+
+    articles = data.get('articles', [])
+    if not articles:
+        return
+
+    with db_session() as db:
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'gdelt_trend'")
+        for a in articles[:30]:
+            eid = hashlib.sha256((a.get('title', '') + a.get('url', '')).encode()).hexdigest()[:16]
+            tone = a.get('tone', 0)
+            db.execute('''INSERT OR IGNORE INTO sitroom_events
+                (event_id, event_type, title, magnitude, lat, lng, event_time, source_url, detail_json)
+                VALUES (?, ?, ?, ?, 0, 0, 0, ?, ?)''',
+                (eid, 'gdelt_trend', (a.get('title', '') or '')[:500], tone,
+                 a.get('url', ''),
+                 json.dumps({'domain': a.get('domain', ''), 'language': a.get('language', ''),
+                             'seendate': a.get('seendate', ''), 'socialimage': a.get('socialimage', ''),
+                             'tone': tone})))
+        db.commit()
+    log.info(f"Situation Room: cached {len(articles)} GDELT trending articles")
+
+
+def _fetch_sanctions():
+    """Fetch sanctions/trade policy news via RSS."""
+    if not _can_fetch('sanctions'):
+        return
+    _set_last_fetch('sanctions')
+    articles = []
+    sanction_feeds = [
+        {'name': 'OFAC Updates', 'url': 'https://home.treasury.gov/system/files/126/sdn_feed.xml', 'category': 'Sanctions'},
+        {'name': 'Trade Policy', 'url': 'https://www.trade.gov/rss/press-releases', 'category': 'Trade'},
+    ]
+    for feed in sanction_feeds:
+        items = _fetch_single_feed(feed)
+        articles.extend(items)
+
+    if not articles:
+        return
+
+    with db_session() as db:
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'sanctions'")
+        for a in articles[:20]:
+            eid = hashlib.sha256((a['title'] + a.get('link', '')).encode()).hexdigest()[:16]
+            db.execute('''INSERT OR IGNORE INTO sitroom_events
+                (event_id, event_type, title, lat, lng, event_time, source_url, detail_json)
+                VALUES (?, ?, ?, 0, 0, 0, ?, ?)''',
+                (eid, 'sanctions', a['title'][:500], a.get('link', ''),
+                 json.dumps({'source': a.get('source', ''), 'category': a.get('category', ''),
+                             'published': a.get('published', ''), 'description': a.get('description', '')[:500]})))
+        db.commit()
+    log.info(f"Situation Room: cached {len(articles)} sanctions/trade items")
+
+
 # ─── Refresh Orchestrator ──────────────────────────────────────────────
 
 def refresh_all_feeds():
@@ -898,6 +1009,9 @@ def refresh_all_feeds():
             _fetch_fires()
             _fetch_disease_outbreaks()
             _fetch_internet_outages()
+            _fetch_radiation()
+            _fetch_gdelt_trending()
+            _fetch_sanctions()
         except Exception as e:
             log.exception(f"Situation Room refresh error: {e}")
         finally:
@@ -1203,6 +1317,30 @@ def api_sitroom_diseases():
     with db_session() as db:
         rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'disease' ORDER BY cached_at DESC LIMIT 30").fetchall()
     return jsonify({'outbreaks': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/radiation')
+def api_sitroom_radiation():
+    """Return cached radiation monitoring data."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'radiation' ORDER BY magnitude DESC LIMIT 50").fetchall()
+    return jsonify({'readings': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/trending')
+def api_sitroom_trending():
+    """Return GDELT trending topics."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'gdelt_trend' ORDER BY cached_at DESC LIMIT 30").fetchall()
+    return jsonify({'topics': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/sanctions')
+def api_sitroom_sanctions():
+    """Return sanctions and trade policy data."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'sanctions' ORDER BY cached_at DESC LIMIT 20").fetchall()
+    return jsonify({'items': [dict(r) for r in rows], 'count': len(rows)})
 
 
 @situation_room_bp.route('/api/sitroom/internet-outages')

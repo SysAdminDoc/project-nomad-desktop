@@ -22,6 +22,7 @@ function initSituationRoom() {
   _sitroomRefreshPanels();
   initSitroomMap();
   _initSitroomMapResize();
+  _initSitroomClock();
   _sitroomAutoRefreshIfEmpty();
   if (_sitroomAutoTimer) clearInterval(_sitroomAutoTimer);
   _sitroomAutoTimer = setInterval(_sitroomRefreshPanels, 60000);
@@ -37,6 +38,9 @@ function _sitroomRefreshPanels() {
   loadSitroomFires();
   loadSitroomDiseases();
   loadSitroomOutages();
+  loadSitroomRadiation();
+  loadSitroomTrending();
+  loadSitroomSanctions();
   loadSitroomLiveChannels();
 }
 
@@ -335,6 +339,7 @@ async function loadSitroomSummary() {
   s('sitroom-stat-aircraft', d.aircraft_count || 0);
   s('sitroom-stat-volcanoes', d.volcano_count || 0);
   s('sitroom-stat-fires', d.fire_count || 0);
+  s('sitroom-stat-outages', d.outage_count || 0);
   s('sitroom-stat-predictions', d.prediction_count || 0);
 
   const badge = document.getElementById('sitroom-online-badge');
@@ -771,6 +776,76 @@ async function loadSitroomDiseases() {
         <div class="sitroom-event-meta">${det.published ? escapeHtml(det.published) : ''}</div>
       </div>
       ${o.source_url ? `<a href="${escapeAttr(o.source_url)}" target="_blank" rel="noopener" class="sitroom-event-link">&#8599;</a>` : ''}
+    </div>`;
+  }).join('');
+}
+
+/* ─── UTC Clock ─── */
+function _initSitroomClock() {
+  const el = document.getElementById('sr-utc-clock');
+  if (!el) return;
+  const tick = () => {
+    const now = new Date();
+    el.textContent = now.toUTCString().replace('GMT', 'UTC');
+  };
+  tick();
+  setInterval(tick, 1000);
+}
+
+/* ─── Radiation Watch ─── */
+async function loadSitroomRadiation() {
+  const d = await safeFetch('/api/sitroom/radiation', {}, null);
+  const el = document.getElementById('sitroom-radiation');
+  if (!el) return;
+  if (!d || !d.readings?.length) { el.innerHTML = '<div class="sr-empty">No radiation data</div>'; return; }
+  el.innerHTML = d.readings.slice(0, 20).map(r => {
+    let det = {}; try { det = r.detail_json ? JSON.parse(r.detail_json) : {}; } catch(e) {}
+    const val = r.magnitude || 0;
+    const cls = val > 100 ? 'sitroom-mag-high' : val > 50 ? 'sitroom-mag-med' : 'sitroom-mag-low';
+    return `<div class="sitroom-event-item">
+      <span class="sitroom-mag ${cls}">${val.toFixed(0)}</span>
+      <div class="sitroom-event-info">
+        <div class="sitroom-event-title">${escapeHtml(det.location || r.title || 'Reading')}</div>
+        <div class="sitroom-event-meta">${det.unit || 'cpm'}${det.captured_at ? ' | ' + escapeHtml(det.captured_at.substring(0, 16)) : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ─── GDELT Trending ─── */
+async function loadSitroomTrending() {
+  const d = await safeFetch('/api/sitroom/trending', {}, null);
+  const el = document.getElementById('sitroom-trending');
+  if (!el) return;
+  if (!d || !d.topics?.length) { el.innerHTML = '<div class="sr-empty">No trending data</div>'; return; }
+  el.innerHTML = d.topics.map(t => {
+    let det = {}; try { det = t.detail_json ? JSON.parse(t.detail_json) : {}; } catch(e) {}
+    const tone = t.magnitude || 0;
+    const toneColor = tone > 2 ? '#4aedc4' : tone < -2 ? '#e05050' : '#888';
+    return `<div class="sitroom-news-item">
+      <span class="sitroom-news-cat" style="background:${tone > 0 ? '#0f5040' : '#3a1515'}">${tone > 0 ? '+' : ''}${tone.toFixed(1)}</span>
+      <div class="sitroom-news-body">
+        <a href="${escapeAttr(t.source_url || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(t.title || '')}</a>
+        <div class="sitroom-news-meta">${escapeHtml(det.domain || '')}${det.seendate ? ' | ' + escapeHtml(det.seendate.substring(0, 8)) : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ─── Sanctions & Trade ─── */
+async function loadSitroomSanctions() {
+  const d = await safeFetch('/api/sitroom/sanctions', {}, null);
+  const el = document.getElementById('sitroom-sanctions');
+  if (!el) return;
+  if (!d || !d.items?.length) { el.innerHTML = '<div class="sr-empty">No sanctions/trade data</div>'; return; }
+  el.innerHTML = d.items.map(s => {
+    let det = {}; try { det = s.detail_json ? JSON.parse(s.detail_json) : {}; } catch(e) {}
+    return `<div class="sitroom-event-item">
+      <div class="sitroom-event-info">
+        <div class="sitroom-event-title" title="${escapeAttr(s.title || '')}">${escapeHtml(s.title || '')}</div>
+        <div class="sitroom-event-meta">${escapeHtml(det.category || '')}${det.published ? ' | ' + escapeHtml(det.published) : ''}</div>
+      </div>
+      ${s.source_url ? `<a href="${escapeAttr(s.source_url)}" target="_blank" rel="noopener" class="sitroom-event-link">&#8599;</a>` : ''}
     </div>`;
   }).join('');
 }

@@ -63,9 +63,11 @@
 .sr-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 16px; height: 40px;
-  border-bottom: 1px solid #2a2a2a; background: #0a0a0a; flex-shrink: 0;
+  border-bottom: 1px solid #2a2a2a; background: #0a0a0a; flex-shrink: 0; position: relative;
 }
-.sr-header-left { display: flex; align-items: center; gap: 14px; }
+.sr-header-left { display: flex; align-items: center; gap: 14px; flex: 1; }
+.sr-header-center { position: absolute; left: 50%; transform: translateX(-50%); }
+.sr-utc-clock { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; color: #888; text-transform: uppercase; }
 .sr-title { font-size: 12px; font-weight: 700; letter-spacing: 0.18em; color: #e0e4e8; }
 .sr-subtitle { font-size: 10px; color: #555; letter-spacing: 0.04em; }
 .sr-header-right { display: flex; align-items: center; gap: 10px; }
