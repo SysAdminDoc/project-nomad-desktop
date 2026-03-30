@@ -224,6 +224,16 @@ RSS_FEEDS = {
         {'name': 'State Dept', 'url': 'https://www.state.gov/rss-feed/press-releases/feed/', 'category': 'Government'},
         {'name': 'FAO News', 'url': 'https://www.fao.org/feeds/fao-newsroom-rss', 'category': 'Government'},
     ],
+    'osint': [
+        {'name': 'BNO News', 'url': 'https://rsshub.app/telegram/channel/BNONews', 'category': 'OSINT'},
+        {'name': 'NEXTA', 'url': 'https://rsshub.app/telegram/channel/nexaborig', 'category': 'OSINT'},
+        {'name': 'Intel Slava Z', 'url': 'https://rsshub.app/telegram/channel/inaborig', 'category': 'OSINT'},
+        {'name': 'OSINTdefender', 'url': 'https://rsshub.app/telegram/channel/OSINTdefender', 'category': 'OSINT'},
+        {'name': 'Aurora Intel', 'url': 'https://rsshub.app/telegram/channel/AuroraIntel', 'category': 'OSINT'},
+        {'name': 'Liveuamap', 'url': 'https://rsshub.app/telegram/channel/liveuamap', 'category': 'OSINT'},
+        {'name': 'War Monitor', 'url': 'https://rsshub.app/telegram/channel/WarMonitors', 'category': 'OSINT'},
+        {'name': 'Spectator Index', 'url': 'https://rsshub.app/telegram/channel/spectaborig', 'category': 'OSINT'},
+    ],
     'commodities': [
         {'name': 'Mining.com', 'url': 'https://www.mining.com/feed/', 'category': 'Commodities'},
         {'name': 'Mining Technology', 'url': 'https://www.mining-technology.com/feed/', 'category': 'Commodities'},
@@ -1394,6 +1404,76 @@ def api_sitroom_diseases():
     with db_session() as db:
         rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'disease' ORDER BY cached_at DESC LIMIT 30").fetchall()
     return jsonify({'outbreaks': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/osint')
+def api_sitroom_osint():
+    """Return OSINT-categorized news articles."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_news WHERE category = 'OSINT' ORDER BY cached_at DESC LIMIT 50").fetchall()
+    return jsonify({'articles': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/export')
+def api_sitroom_export():
+    """Export current intelligence as a text report."""
+    with db_session() as db:
+        news = db.execute("SELECT title, category, source_name FROM sitroom_news ORDER BY cached_at DESC LIMIT 30").fetchall()
+        quakes = db.execute("SELECT title, magnitude FROM sitroom_events WHERE event_type = 'earthquake' AND magnitude >= 4 ORDER BY magnitude DESC LIMIT 10").fetchall()
+        weather = db.execute("SELECT title FROM sitroom_events WHERE event_type = 'weather_alert' LIMIT 10").fetchall()
+        markets = db.execute("SELECT symbol, price, change_24h, market_type FROM sitroom_markets ORDER BY market_type, symbol").fetchall()
+        crises = db.execute("SELECT title FROM sitroom_events WHERE event_type = 'conflict' LIMIT 10").fetchall()
+        fires_ct = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'fire'").fetchone()[0]
+
+    lines = []
+    lines.append('=' * 60)
+    lines.append('SITUATION ROOM — INTELLIGENCE REPORT')
+    lines.append(f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")}')
+    lines.append('=' * 60)
+    lines.append('')
+
+    if markets:
+        lines.append('--- MARKETS ---')
+        for m in markets:
+            ch = m['change_24h'] or 0
+            arrow = '+' if ch >= 0 else ''
+            lines.append(f"  {m['symbol']}: ${m['price']:.2f} ({arrow}{ch:.1f}%)")
+        lines.append('')
+
+    if quakes:
+        lines.append('--- SEISMIC ACTIVITY ---')
+        for q in quakes:
+            lines.append(f"  M{q['magnitude']:.1f} - {q['title']}")
+        lines.append('')
+
+    if weather:
+        lines.append('--- SEVERE WEATHER ---')
+        for w in weather:
+            lines.append(f"  {w['title']}")
+        lines.append('')
+
+    if crises:
+        lines.append('--- CRISIS EVENTS ---')
+        for c in crises:
+            lines.append(f"  {c['title']}")
+        lines.append('')
+
+    lines.append(f'--- SATELLITE FIRES: {fires_ct} active detections ---')
+    lines.append('')
+
+    if news:
+        lines.append('--- TOP HEADLINES ---')
+        for n in news:
+            lines.append(f"  [{n['category']}] {n['title']} ({n['source_name']})")
+        lines.append('')
+
+    lines.append('=' * 60)
+    lines.append('END OF REPORT')
+
+    from flask import Response
+    report = '\n'.join(lines)
+    return Response(report, mimetype='text/plain',
+                    headers={'Content-Disposition': f'attachment; filename=sitroom-report-{datetime.now().strftime("%Y%m%d-%H%M")}.txt'})
 
 
 @situation_room_bp.route('/api/sitroom/radiation')

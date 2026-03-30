@@ -1,6 +1,9 @@
   <!-- Situation Room Tab -->
   <div id="tab-situation-room" class="tab-content active">
 
+    <!-- Critical Alert Toasts -->
+    <div class="sr-alert-stack" id="sr-alert-stack"></div>
+
     <!-- Auto-Refresh Progress Bar -->
     <div class="sr-refresh-bar" id="sr-refresh-bar"></div>
 
@@ -24,6 +27,7 @@
         <span id="sitroom-threat-level" class="sr-threat-badge" title="Composite threat level">LEVEL 5</span>
         <span class="sr-status-dot" id="sr-status-dot" title="Data status"></span>
         <span id="sitroom-online-badge" class="sitroom-badge sitroom-badge-offline">OFFLINE</span>
+        <button class="sr-btn" data-sitroom-action="export-report" title="Export intelligence report">Export</button>
         <button class="sr-btn" data-sitroom-action="open-search" title="Search (Ctrl+K)">&#128269; Search</button>
         <button class="sr-btn" data-sitroom-action="toggle-feeds" title="Manage feeds">&#9881;</button>
         <button class="sr-btn sr-btn-accent" id="sitroom-refresh-btn" data-sitroom-action="refresh">REFRESH</button>
@@ -199,6 +203,12 @@
       <div class="sr-card">
         <div class="sr-card-head">SANCTIONS &amp; TRADE</div>
         <div id="sitroom-sanctions" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
+      </div>
+
+      <!-- OSINT Feed (Telegram channels via RSS) -->
+      <div class="sr-card sr-card-tall">
+        <div class="sr-card-head">OSINT FEED</div>
+        <div id="sitroom-osint" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
       <!-- World Clock -->

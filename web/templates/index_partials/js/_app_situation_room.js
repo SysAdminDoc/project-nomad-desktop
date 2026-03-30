@@ -6,6 +6,7 @@ let _sitroomNewsOffset = 0;
 const SITROOM_NEWS_PAGE = 50;
 let _sitroomAutoTimer = null;
 let _sitroomIsGlobe = false;
+let _sitroomAlertsSeen = new Set();
 let _sitroomInitDone = false;
 let _sitroomNewsCat = ''; // preserve category across refreshes
 
@@ -49,6 +50,8 @@ function _sitroomRefreshPanels() {
   loadSitroomSanctions();
   loadSitroomDisplacement();
   loadSitroomTimeline();
+  loadSitroomOsint();
+  _checkCriticalAlerts();
   loadSitroomLiveChannels();
 }
 
@@ -131,6 +134,11 @@ const _NUCLEAR_SITES = [
   {lat:51.56,lng:-0.73,name:'Burghfield, UK'},{lat:44.26,lng:26.06,name:'Cernavoda, Romania'},
   {lat:46.46,lng:30.66,name:'Odesa NPP, Ukraine'},{lat:51.39,lng:30.10,name:'Chernobyl, Ukraine'},
   {lat:47.51,lng:34.59,name:'Zaporizhzhia NPP, Ukraine'},
+  {lat:46.21,lng:-119.27,name:'Hanford Site B, US'},{lat:43.78,lng:-79.19,name:'Pickering, Canada'},
+  {lat:47.38,lng:0.70,name:'Chinon, France'},{lat:49.54,lng:1.88,name:'Paluel, France'},
+  {lat:48.52,lng:10.43,name:'Gundremmingen, Germany'},{lat:42.86,lng:141.64,name:'Tomari, Japan'},
+  {lat:37.42,lng:126.99,name:'Wolsong, South Korea'},{lat:21.67,lng:69.33,name:'Kakrapar, India'},
+  {lat:-34.00,lng:18.72,name:'Koeberg, South Africa'},{lat:30.44,lng:30.05,name:'El Dabaa, Egypt'},
 ];
 const _MILITARY_BASES = [
   {lat:36.77,lng:-76.29,name:'Norfolk Naval, US'},{lat:32.87,lng:-117.14,name:'Camp Pendleton, US'},
@@ -149,6 +157,10 @@ const _MILITARY_BASES = [
   {lat:36.07,lng:120.38,name:'Qingdao, China'},{lat:30.00,lng:122.15,name:'Zhoushan, China'},
   {lat:37.47,lng:126.62,name:'Pyeongtaek/Osan, S. Korea'},{lat:51.28,lng:-0.77,name:'Aldershot, UK'},
   {lat:48.73,lng:44.50,name:'Volgograd, Russia'},{lat:55.01,lng:82.93,name:'Novosibirsk, Russia'},
+  {lat:24.75,lng:46.65,name:'Prince Sultan AB, Saudi Arabia'},{lat:64.29,lng:-15.23,name:'Keflavik, Iceland'},
+  {lat:49.95,lng:7.26,name:'Ramstein AB, Germany'},{lat:-7.32,lng:72.41,name:'Diego Garcia, BIOT'},
+  {lat:13.05,lng:77.51,name:'Yelahanka AFB, India'},{lat:30.63,lng:32.34,name:'El Gorah MFO, Egypt'},
+  {lat:71.29,lng:-156.77,name:'Utqiagvik/Barrow, US'},{lat:42.43,lng:-71.22,name:'Hanscom AFB, US'},
 ];
 
 const _CABLE_LANDINGS = [
@@ -1242,6 +1254,68 @@ async function loadSitroomSanctions() {
   }).join('');
 }
 
+/* ─── Critical Alert System ─── */
+async function _checkCriticalAlerts() {
+  const stack = document.getElementById('sr-alert-stack');
+  if (!stack) return;
+
+  // Check for M6+ earthquakes
+  const eq = await safeFetch('/api/sitroom/earthquakes?min_magnitude=6', {}, null);
+  if (eq?.earthquakes) {
+    eq.earthquakes.forEach(q => {
+      const key = 'eq:' + q.event_id;
+      if (_sitroomAlertsSeen.has(key)) return;
+      _sitroomAlertsSeen.add(key);
+      _showSitroomAlert('critical', 'EARTHQUAKE M' + (q.magnitude||0).toFixed(1) + ' — ' + (q.title||'Unknown'));
+    });
+  }
+
+  // Check for extreme weather
+  const wx = await safeFetch('/api/sitroom/weather-alerts', {}, null);
+  if (wx?.alerts) {
+    wx.alerts.slice(0, 3).forEach(a => {
+      let det = {}; try { det = a.detail_json ? JSON.parse(a.detail_json) : {}; } catch(e) {}
+      if (det.severity !== 'Extreme') return;
+      const key = 'wx:' + a.event_id;
+      if (_sitroomAlertsSeen.has(key)) return;
+      _sitroomAlertsSeen.add(key);
+      _showSitroomAlert('warning', 'EXTREME WEATHER — ' + (a.title||'Alert'));
+    });
+  }
+}
+
+function _showSitroomAlert(type, message) {
+  const stack = document.getElementById('sr-alert-stack');
+  if (!stack) return;
+  const toast = document.createElement('div');
+  toast.className = 'sr-alert-toast ' + (type === 'critical' ? '' : type);
+  const icon = type === 'critical' ? '&#9888;' : type === 'warning' ? '&#9888;' : '&#8505;';
+  toast.innerHTML = `<span class="sr-alert-icon">${icon}</span><span class="sr-alert-text">${escapeHtml(message)}</span><span class="sr-alert-dismiss" onclick="this.parentElement.remove()">&#10005;</span>`;
+  stack.appendChild(toast);
+  // Auto-dismiss after 15s
+  setTimeout(() => { if (toast.parentElement) toast.remove(); }, 15000);
+}
+
+/* ─── OSINT Feed (Telegram via RSS) ─── */
+async function loadSitroomOsint() {
+  const d = await safeFetch('/api/sitroom/osint', {}, null);
+  const el = document.getElementById('sitroom-osint');
+  if (!el) return;
+  if (!d || !d.articles?.length) { el.innerHTML = '<div class="sr-empty">No OSINT data — click Refresh</div>'; return; }
+  el.innerHTML = d.articles.map(a => `<div class="sitroom-news-item">
+    <span class="sitroom-news-cat" data-cat="OSINT" style="background:#2a1030;color:#d080ff">${escapeHtml(a.source_name || 'OSINT')}</span>
+    <div class="sitroom-news-body">
+      <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
+      <div class="sitroom-news-meta">${a.published ? escapeHtml(a.published) : ''}</div>
+    </div>
+  </div>`).join('');
+}
+
+/* ─── Export Intelligence Report ─── */
+function _exportSitroomReport() {
+  window.open('/api/sitroom/export', '_blank');
+}
+
 /* ─── UNHCR Displacement ─── */
 async function loadSitroomDisplacement() {
   const d = await safeFetch('/api/sitroom/displacement', {}, null);
@@ -1354,6 +1428,7 @@ document.addEventListener('click', e => {
   if (a === 'open-search') _toggleSitroomSearch(true);
   if (a === 'toggle-map-fullscreen') _toggleMapFullscreen();
   if (a === 'toggle-globe') _toggleGlobe();
+  if (a === 'export-report') _exportSitroomReport();
 });
 
 document.getElementById('sitroom-news-category')?.addEventListener('change', () => loadSitroomNews());
