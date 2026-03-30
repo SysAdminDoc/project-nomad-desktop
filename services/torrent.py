@@ -1,5 +1,5 @@
 """
-Built-in BitTorrent client for N.O.M.A.D.
+Built-in BitTorrent client for NOMAD Field Desk.
 Uses libtorrent (python-libtorrent) for downloading torrent content.
 Install: pip install python-libtorrent
 
@@ -23,8 +23,8 @@ try:
 except ImportError:
     lt = None
     _LT_AVAILABLE = False
-    log.warning('libtorrent not installed — built-in torrent client unavailable. '
-                'Install with: pip install python-libtorrent')
+    log.info('libtorrent not installed — built-in torrent client unavailable. '
+             'Install with: pip install python-libtorrent')
 
 
 def _extract_hash_from_magnet(magnet: str) -> Optional[str]:

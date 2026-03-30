@@ -1,5 +1,5 @@
 /**
- * Server-Sent Events (SSE) client for real-time updates in N.O.M.A.D.
+ * Server-Sent Events (SSE) client for real-time updates in NOMAD Field Desk.
  * Handles connection, reconnection, and event dispatching.
  */
 
@@ -90,9 +90,9 @@ NomadEvents.on('alert_check', (data) => {
                     sendNotification(data.title, data.message || 'New alert');
                 }
             } else if (data.event === 'new_alerts') {
-                if (typeof sendNotification === 'function') sendNotification('N.O.M.A.D. Alert', 'New situation alert received');
+                if (typeof sendNotification === 'function') sendNotification('NOMAD Alert', 'New situation alert received');
             }
-        } catch(e) { if (typeof sendNotification === 'function') sendNotification('N.O.M.A.D. Alert', 'New alert received'); }
+        } catch(e) { if (typeof sendNotification === 'function') sendNotification('NOMAD Alert', 'New alert received'); }
     }
 });
 NomadEvents.on('task_update', () => {

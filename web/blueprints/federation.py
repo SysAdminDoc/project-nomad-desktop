@@ -96,7 +96,7 @@ def api_node_identity_update():
 
 @federation_bp.route('/api/node/discover', methods=['POST'])
 def api_node_discover():
-    """Broadcast UDP to find other N.O.M.A.D. nodes on LAN."""
+    """Broadcast UDP to find other NOMAD Field Desk nodes on the LAN."""
     import socket
     _discovered_peers.clear()
     node_id = _get_node_id()

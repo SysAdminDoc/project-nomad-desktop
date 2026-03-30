@@ -20,17 +20,17 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            artifact: ProjectNOMAD-Windows
-            binary: dist/ProjectNOMAD.exe
-            release_name: ProjectNOMAD-Windows.exe
+            artifact: NOMADFieldDesk-Windows
+            binary: dist/NOMADFieldDesk.exe
+            release_name: NOMADFieldDesk-Windows.exe
           - os: ubuntu-22.04
-            artifact: ProjectNOMAD-Linux
-            binary: dist/ProjectNOMAD
-            release_name: ProjectNOMAD-Linux
+            artifact: NOMADFieldDesk-Linux
+            binary: dist/NOMADFieldDesk
+            release_name: NOMADFieldDesk-Linux
           - os: macos-latest
-            artifact: ProjectNOMAD-macOS
-            binary: dist/ProjectNOMAD
-            release_name: ProjectNOMAD-macOS
+            artifact: NOMADFieldDesk-macOS
+            binary: dist/NOMADFieldDesk
+            release_name: NOMADFieldDesk-macOS
 
     runs-on: ${{ matrix.os }}
 
@@ -71,7 +71,7 @@ jobs:
       # Linux: mark binary executable
       - name: Mark executable
         if: runner.os != 'Windows'
-        run: chmod +x dist/ProjectNOMAD
+        run: chmod +x dist/NOMADFieldDesk
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
@@ -83,8 +83,8 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: ProjectNOMAD-Setup
-          path: ProjectNOMAD-Setup.exe
+          name: NOMAD-Setup
+          path: NOMAD-Setup.exe
 
   release:
     needs: build
@@ -100,19 +100,19 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release
-          cp artifacts/ProjectNOMAD-Windows/ProjectNOMAD.exe release/ProjectNOMAD-Windows.exe
-          cp artifacts/ProjectNOMAD-Linux/ProjectNOMAD release/ProjectNOMAD-Linux
-          cp artifacts/ProjectNOMAD-macOS/ProjectNOMAD release/ProjectNOMAD-macOS
-          cp artifacts/ProjectNOMAD-Setup/ProjectNOMAD-Setup.exe release/ProjectNOMAD-Setup.exe
-          chmod +x release/ProjectNOMAD-Linux release/ProjectNOMAD-macOS
+          cp artifacts/NOMADFieldDesk-Windows/NOMADFieldDesk.exe release/NOMADFieldDesk-Windows.exe
+          cp artifacts/NOMADFieldDesk-Linux/NOMADFieldDesk release/NOMADFieldDesk-Linux
+          cp artifacts/NOMADFieldDesk-macOS/NOMADFieldDesk release/NOMADFieldDesk-macOS
+          cp artifacts/NOMAD-Setup/NOMAD-Setup.exe release/NOMAD-Setup.exe
+          chmod +x release/NOMADFieldDesk-Linux release/NOMADFieldDesk-macOS
 
       - name: Upload release assets
         run: |
           gh release upload ${{ github.ref_name }} \
-            release/ProjectNOMAD-Windows.exe \
-            release/ProjectNOMAD-Setup.exe \
-            release/ProjectNOMAD-Linux \
-            release/ProjectNOMAD-macOS \
+            release/NOMADFieldDesk-Windows.exe \
+            release/NOMAD-Setup.exe \
+            release/NOMADFieldDesk-Linux \
+            release/NOMADFieldDesk-macOS \
             --repo ${{ github.repository }} \
             --clobber
         env:

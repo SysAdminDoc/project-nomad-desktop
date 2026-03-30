@@ -1,0 +1,35 @@
+    <!-- Sub: Ammo Inventory -->
+    <div id="psub-ammo" class="prep-sub">
+    <div class="prep-section">
+      <h3>Ammunition Inventory</h3>
+      <div class="prep-toolbar prep-toolbar-row mb-12">
+        <button type="button" class="btn btn-sm btn-primary" data-prep-action="open-ammo-form">+ Add Entry</button>
+        <div class="prep-toolbar-spacer"></div>
+        <div id="ammo-summary-bar" class="prep-inline-stats"></div>
+      </div>
+      <div id="ammo-form" class="prep-form-shell prep-data-shell mb-12 is-hidden">
+        <div class="prep-form-grid prep-form-grid-2 prep-ops-form-grid">
+          <label class="prep-field"><span class="prep-field-label">Caliber *</span><input id="ammo-caliber" name="ammo_caliber" class="prep-field-control" placeholder="e.g. 9mm, 5.56, .308"></label>
+          <label class="prep-field"><span class="prep-field-label">Brand</span><input id="ammo-brand" name="ammo_brand" class="prep-field-control" placeholder="e.g. Federal, PMC"></label>
+          <label class="prep-field"><span class="prep-field-label">Bullet Weight</span><input id="ammo-weight" name="ammo_weight" class="prep-field-control" placeholder="e.g. 115gr, 55gr"></label>
+          <label class="prep-field"><span class="prep-field-label">Type</span>
+            <select id="ammo-type" name="ammo_type" class="prep-field-control">
+              <option>FMJ</option><option>JHP</option><option>SP</option><option>HP</option>
+              <option>BTHP</option><option>Slug</option><option>00 Buck</option><option>Bird Shot</option>
+              <option>LRN</option><option>Tracer</option><option>Subsonic</option><option>Match</option><option>Other</option>
+            </select>
+          </label>
+          <label class="prep-field"><span class="prep-field-label">Quantity (rounds) *</span><input id="ammo-qty" name="ammo_qty" type="number" min="0" class="prep-field-control" value="0"></label>
+          <label class="prep-field"><span class="prep-field-label">Storage Location</span><input id="ammo-location" name="ammo_location" class="prep-field-control" placeholder="e.g. Gun safe, cache #1"></label>
+          <label class="prep-field prep-field-span-2"><span class="prep-field-label">Notes</span><input id="ammo-notes" name="ammo_notes" class="prep-field-control" placeholder="Lot number, purchase date, etc."></label>
+        </div>
+        <div class="prep-form-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="save-ammo">Save</button>
+          <button type="button" class="btn btn-sm" data-prep-action="close-ammo-form">Cancel</button>
+        </div>
+        <input type="hidden" id="ammo-edit-id" name="ammo_edit_id" value="">
+      </div>
+      <div id="ammo-by-caliber" class="prep-chip-row mb-12"></div>
+      <div id="ammo-list" class="prep-table-wrap"></div>
+    </div>
+    </div><!-- /psub-ammo -->

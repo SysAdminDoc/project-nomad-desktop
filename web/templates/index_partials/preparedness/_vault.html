@@ -1,0 +1,45 @@
+    <!-- Sub: Vault -->
+    <div id="psub-vault" class="prep-sub">
+    <div class="prep-section">
+      <h3>Secure Vault (AES-256 Encrypted) <button class="help-icon" data-help="vault-guide" title="Vault encryption guide">?</button></h3>
+      <div class="settings-card prep-form-shell mb-16">
+        <div class="prep-toolbar prep-toolbar-row prep-data-toolbar">
+          <label class="prep-field">
+            <span class="prep-field-label">Vault Password</span>
+            <span class="prep-inline-password-wrap">
+              <input id="vault-pw" name="vault_pw" type="password" class="prep-field-control prep-inline-password-input" placeholder="Enter password to unlock…" data-enter-action="unlock-vault">
+              <button type="button" class="btn btn-ghost btn-sm prep-inline-password-toggle" data-prep-action="toggle-vault-password" aria-label="Show or hide vault password">Show</button>
+            </span>
+          </label>
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="unlock-vault">Unlock</button>
+          <button type="button" class="btn btn-sm" data-prep-action="lock-vault">Lock</button>
+        </div>
+        <div class="prep-inline-stats">Encryption happens in your browser. The password never leaves your machine. If you forget the password, data cannot be recovered.</div>
+      </div>
+      <div id="vault-locked" class="prep-empty-state">Enter your vault password above to access encrypted documents.</div>
+      <div id="vault-unlocked" class="is-hidden">
+        <div class="prep-toolbar prep-toolbar-row mb-12">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="new-vault-entry">+ New Entry</button>
+          <button type="button" class="btn btn-sm" data-prep-action="generate-password">Generate Password</button>
+        </div>
+        <div id="vault-form" class="settings-card prep-form-shell mb-12 is-hidden">
+          <div class="prep-form-grid prep-ops-form-grid">
+            <label class="prep-field">
+              <span class="prep-field-label">Entry Title</span>
+              <input id="vault-title" name="vault_title" class="prep-field-control" placeholder="Entry title (e.g., Bank Accounts, Medical Records)">
+            </label>
+            <label class="prep-field">
+              <span class="prep-field-label">Encrypted Content</span>
+              <textarea id="vault-content" name="vault_content" class="prep-field-control prep-ops-textarea prep-ops-mono-field min-height-120" placeholder="Enter sensitive information here. It will be encrypted before saving."></textarea>
+            </label>
+          </div>
+          <input type="hidden" id="vault-edit-id" name="vault_edit_id" value="">
+          <div class="prep-form-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-prep-action="save-vault-entry">Encrypt & Save</button>
+            <button type="button" class="btn btn-sm" data-prep-action="hide-vault-form">Cancel</button>
+          </div>
+        </div>
+        <div id="vault-list"></div>
+      </div>
+    </div>
+    </div><!-- /psub-vault -->

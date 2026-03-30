@@ -368,7 +368,7 @@ def get_qdrant_asset_filter() -> str:
 
 def system_shutdown():
     if IS_WINDOWS:
-        os.system('shutdown /s /t 5 /c "N.O.M.A.D. initiated shutdown"')
+        os.system('shutdown /s /t 5 /c "NOMAD initiated shutdown"')
     elif IS_MACOS:
         os.system('sudo shutdown -h +1')
     else:
@@ -377,7 +377,7 @@ def system_shutdown():
 
 def system_reboot():
     if IS_WINDOWS:
-        os.system('shutdown /r /t 5 /c "N.O.M.A.D. initiated reboot"')
+        os.system('shutdown /r /t 5 /c "NOMAD initiated reboot"')
     elif IS_MACOS:
         os.system('sudo shutdown -r +1')
     else:

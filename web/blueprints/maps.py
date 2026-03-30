@@ -9,6 +9,7 @@ import threading
 import subprocess
 import shutil
 import logging
+from html import escape as esc
 
 from flask import Blueprint, request, jsonify, Response
 from werkzeug.utils import secure_filename
@@ -16,7 +17,7 @@ from werkzeug.utils import secure_filename
 from db import get_db, log_activity
 from services.manager import format_size, get_services_dir
 from config import get_data_dir
-from platform_utils import get_data_base
+from web.print_templates import render_print_document
 from web.state import _map_downloads
 import web.state as _state
 
@@ -55,7 +56,7 @@ def _validate_download_url(url):
 MAPS_DIR_NAME = 'maps'
 
 def get_maps_dir():
-    path = os.path.join(get_data_base(), 'ProjectNOMAD', MAPS_DIR_NAME)
+    path = os.path.join(get_data_dir(), MAPS_DIR_NAME)
     os.makedirs(path, exist_ok=True)
     return path
 
@@ -333,7 +334,7 @@ def _get_pmtiles_cli():
     import urllib.request, zipfile, io, json as _json
     api_url = 'https://api.github.com/repos/protomaps/go-pmtiles/releases/latest'
     log.info('Resolving pmtiles CLI release from %s', api_url)
-    req = urllib.request.Request(api_url, headers={'User-Agent': 'ProjectNOMAD/3.5.0', 'Accept': 'application/vnd.github+json'})
+    req = urllib.request.Request(api_url, headers={'User-Agent': 'NOMADFieldDesk/1.0.0', 'Accept': 'application/vnd.github+json'})
     with urllib.request.urlopen(req, timeout=30) as resp:
         release = _json.loads(resp.read())
     url = None
@@ -355,7 +356,7 @@ def _get_pmtiles_cli():
         log.error('No %s %s asset found in go-pmtiles release', plat_key, arch_key)
         return None
     log.info('Downloading pmtiles CLI from %s', url)
-    req = urllib.request.Request(url, headers={'User-Agent': 'ProjectNOMAD/3.5.0'})
+    req = urllib.request.Request(url, headers={'User-Agent': 'NOMADFieldDesk/1.0.0'})
     with urllib.request.urlopen(req, timeout=120) as resp:
         data = resp.read()
     binary_name = exe_name('pmtiles') if IS_WINDOWS else 'pmtiles'
@@ -456,7 +457,7 @@ def _download_map_region_thread(region_id, bbox, maps_dir):
         if proc.returncode != 0:
             err = '\n'.join(lines[-5:]) if lines else 'Unknown error'
             if 'permission denied' in err.lower() or 'access is denied' in err.lower():
-                err = 'Permission denied. Your antivirus may be blocking pmtiles.exe. Add it to your antivirus exclusions, or try running N.O.M.A.D. as Administrator.'
+                err = 'Permission denied. Your antivirus may be blocking pmtiles.exe. Add it to your antivirus exclusions, or try running NOMAD Field Desk as Administrator.'
             _map_downloads[region_id] = {'progress': 0, 'status': 'Error', 'error': f'pmtiles extract failed: {err}'}
             if os.path.isfile(temp_file):
                 os.remove(temp_file)
@@ -489,12 +490,12 @@ def _download_map_region_thread(region_id, bbox, maps_dir):
     except PermissionError as e:
         log.exception('Map download permission error for %s', region_id)
         _map_downloads[region_id] = {'progress': 0, 'status': 'Error',
-            'error': 'Permission denied. Try running N.O.M.A.D. as Administrator, or check that your antivirus is not blocking pmtiles.exe.'}
+            'error': 'Permission denied. Try running NOMAD Field Desk as Administrator, or check that your antivirus is not blocking pmtiles.exe.'}
     except Exception as e:
         log.exception('Map download error for %s', region_id)
         err_msg = str(e)
         if 'WinError 5' in err_msg or 'Permission denied' in err_msg or 'Access is denied' in err_msg:
-            err_msg = 'Permission denied. Try running N.O.M.A.D. as Administrator, or check that your antivirus is not blocking pmtiles.exe.'
+            err_msg = 'Permission denied. Try running NOMAD Field Desk as Administrator, or check that your antivirus is not blocking pmtiles.exe.'
         _map_downloads[region_id] = {'progress': 0, 'status': 'Error', 'error': err_msg}
 
 @maps_bp.route('/api/maps/download-region', methods=['POST'])
@@ -554,7 +555,7 @@ def api_maps_download_url():
         try:
             maps_dir = get_maps_dir()
             dest = os.path.join(maps_dir, filename)
-            req = urllib.request.Request(url, headers={'User-Agent': 'ProjectNOMAD/3.5.0'})
+            req = urllib.request.Request(url, headers={'User-Agent': 'NOMADFieldDesk/1.0.0'})
             with urllib.request.urlopen(req, timeout=60) as resp:
                 total = int(resp.headers.get('Content-Length', 0))
                 downloaded = 0
@@ -926,126 +927,204 @@ def api_waypoint_icons():
 def api_maps_atlas():
     """Generate printable map atlas pages for the current view area."""
     data = request.get_json() or {}
-    center_lat = data.get('lat', 0)
-    center_lng = data.get('lng', 0)
-    zoom_levels = data.get('zoom_levels', [10, 12, 14])
-    import html as _html
-    page_title = _html.escape(data.get('title', 'N.O.M.A.D. Map Atlas'))
-    grid_size = min(int(data.get('grid_size', 2)), 10)  # NxN grid per zoom level, capped at 10
+    try:
+        center_lat = float(data.get('lat', 0) or 0)
+    except (TypeError, ValueError):
+        center_lat = 0.0
+    try:
+        center_lng = float(data.get('lng', 0) or 0)
+    except (TypeError, ValueError):
+        center_lng = 0.0
+    raw_zoom_levels = data.get('zoom_levels', [10, 12, 14])
+    if not isinstance(raw_zoom_levels, list):
+        raw_zoom_levels = [raw_zoom_levels]
+    zoom_levels = []
+    for zoom in raw_zoom_levels[:6]:
+        try:
+            zoom_levels.append(max(1, min(int(zoom), 18)))
+        except (TypeError, ValueError):
+            continue
+    if not zoom_levels:
+        zoom_levels = [10, 12, 14]
+    page_title = str(data.get('title') or 'NOMAD Map Atlas')
+    try:
+        grid_size = max(1, min(int(data.get('grid_size', 2) or 2), 10))
+    except (TypeError, ValueError):
+        grid_size = 2
 
-    import math
     pages = []
     page_num = 1
     db = get_db()
+    try:
+        for zoom in zoom_levels:
+            n = 2 ** zoom
+            lat_per_tile = 360 / n * 0.7
+            lng_per_tile = 360 / n
 
-    for zoom in zoom_levels:
-        # Calculate tile coverage at this zoom
-        n = 2 ** zoom
-        # Degrees per tile at this zoom (approximate)
-        lat_per_tile = 360 / n * 0.7  # Rough latitude coverage per tile
-        lng_per_tile = 360 / n
+            page_lat_span = lat_per_tile * 1.5
+            page_lng_span = lng_per_tile * 1.5
 
-        # Size of each page in degrees
-        page_lat_span = lat_per_tile * 1.5
-        page_lng_span = lng_per_tile * 1.5
+            half = grid_size / 2
+            for row in range(grid_size):
+                for col in range(grid_size):
+                    page_lat = center_lat + (row - half + 0.5) * page_lat_span
+                    page_lng = center_lng + (col - half + 0.5) * page_lng_span
 
-        # Generate grid of pages around center
-        half = grid_size / 2
-        for row in range(grid_size):
-            for col in range(grid_size):
-                page_lat = center_lat + (row - half + 0.5) * page_lat_span
-                page_lng = center_lng + (col - half + 0.5) * page_lng_span
+                    nearby = db.execute(
+                        '''SELECT name, lat, lng, category, icon FROM waypoints
+                           WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ? LIMIT 20''',
+                        (
+                            page_lat - page_lat_span / 2,
+                            page_lat + page_lat_span / 2,
+                            page_lng - page_lng_span / 2,
+                            page_lng + page_lng_span / 2,
+                        ),
+                    ).fetchall()
 
-                # Get waypoints in this page extent
-                nearby = db.execute('''SELECT name, lat, lng, category, icon FROM waypoints
-                    WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ? LIMIT 20''',
-                    (page_lat - page_lat_span/2, page_lat + page_lat_span/2,
-                     page_lng - page_lng_span/2, page_lng + page_lng_span/2)).fetchall()
+                    pages.append({
+                        'page': page_num,
+                        'zoom': zoom,
+                        'grid_ref': f'{chr(65 + col)}{row + 1}',
+                        'center_lat': round(page_lat, 6),
+                        'center_lng': round(page_lng, 6),
+                        'bounds': {
+                            'north': round(page_lat + page_lat_span / 2, 6),
+                            'south': round(page_lat - page_lat_span / 2, 6),
+                            'east': round(page_lng + page_lng_span / 2, 6),
+                            'west': round(page_lng - page_lng_span / 2, 6),
+                        },
+                        'waypoints': [dict(r) for r in nearby],
+                    })
+                    page_num += 1
+    finally:
+        db.close()
 
-                pages.append({
-                    'page': page_num,
-                    'zoom': zoom,
-                    'grid_ref': f'{chr(65+col)}{row+1}',
-                    'center_lat': round(page_lat, 6),
-                    'center_lng': round(page_lng, 6),
-                    'bounds': {
-                        'north': round(page_lat + page_lat_span/2, 6),
-                        'south': round(page_lat - page_lat_span/2, 6),
-                        'east': round(page_lng + page_lng_span/2, 6),
-                        'west': round(page_lng - page_lng_span/2, 6),
-                    },
-                    'waypoints': [dict(r) for r in nearby],
-                })
-                page_num += 1
+    generated_at = time.strftime('%Y-%m-%d %H:%M')
+    zoom_summary = ', '.join(str(z) for z in zoom_levels)
+    waypoint_hits = sum(len(page['waypoints']) for page in pages)
 
-    db.close()
+    toc_rows = ''.join(
+        f'<tr><td class="doc-strong">Page {page["page"]}</td><td>{esc(page["grid_ref"])}</td>'
+        f'<td>{page["zoom"]}</td><td>{page["center_lat"]:.4f}, {page["center_lng"]:.4f}</td></tr>'
+        for page in pages
+    ) or '<tr><td colspan="4">No atlas pages generated.</td></tr>'
+    toc_html = (
+        '<div class="doc-table-shell"><table><thead><tr><th>Page</th><th>Grid</th><th>Zoom</th><th>Center</th></tr></thead>'
+        f'<tbody>{toc_rows}</tbody></table></div>'
+    )
 
-    # Generate printable HTML
-    html = f'''<!DOCTYPE html><html><head><meta charset="utf-8">
-    <title>{page_title}</title>
-    <style>
-      @media print {{ @page {{ size: landscape; margin: 0.5in; }} .page-break {{ page-break-after: always; }} }}
-      body {{ font-family: 'Courier New', monospace; font-size: 11px; color: #000; }}
-      .atlas-cover {{ text-align: center; padding: 80px 40px; }}
-      .atlas-cover h1 {{ font-size: 28px; border-bottom: 3px solid #000; padding-bottom: 12px; }}
-      .atlas-page {{ padding: 20px; position: relative; }}
-      .atlas-header {{ display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 4px; margin-bottom: 12px; }}
-      .atlas-grid {{ display: grid; grid-template-columns: 1fr; gap: 8px; }}
-      .atlas-map-placeholder {{ border: 2px solid #000; padding: 20px; min-height: 300px; text-align: center; background: #f9f9f9; }}
-      .atlas-wp-list {{ margin-top: 12px; border-top: 1px solid #ccc; padding-top: 8px; }}
-      .atlas-wp {{ font-size: 10px; padding: 2px 0; }}
-      .atlas-toc {{ columns: 2; column-gap: 40px; }}
-      .atlas-toc-entry {{ padding: 2px 0; font-size: 11px; }}
-      .atlas-footer {{ position: absolute; bottom: 10px; left: 20px; right: 20px; display: flex; justify-content: space-between; font-size: 9px; color: #666; border-top: 1px solid #ccc; padding-top: 4px; }}
-    </style></head><body>
-    <div class="atlas-cover">
-      <h1>{page_title}</h1>
-      <p>Generated: {time.strftime("%Y-%m-%d %H:%M")}</p>
-      <p>Center: {center_lat:.4f}, {center_lng:.4f}</p>
-      <p>Zoom Levels: {", ".join(str(z) for z in zoom_levels)} | Pages: {len(pages)}</p>
-      <p style="margin-top:40px;font-size:12px;">CLASSIFIED — FOR AUTHORIZED USE ONLY</p>
+    page_sections = ''
+    for page in pages:
+        waypoint_rows = ''.join(
+            f'<tr><td class="doc-strong">{esc(str(wp.get("name") or "Waypoint"))}</td>'
+            f'<td>{esc(str(wp.get("category") or "-"))}</td>'
+            f'<td>{wp["lat"]:.5f}</td><td>{wp["lng"]:.5f}</td></tr>'
+            for wp in page['waypoints']
+            if wp.get('lat') is not None and wp.get('lng') is not None
+        )
+        waypoint_html = (
+            '<div class="doc-table-shell"><table><thead><tr><th>Name</th><th>Category</th><th>Lat</th><th>Lng</th></tr></thead>'
+            f'<tbody>{waypoint_rows}</tbody></table></div>'
+            if waypoint_rows else
+            '<div class="doc-empty">No saved waypoints fall inside this atlas page extent.</div>'
+        )
+        page_sections += f'''<section class="doc-section" style="page-break-before:always;">
+  <div class="doc-grid-2">
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Atlas Page {page["page"]}</h2>
+      <div class="doc-chip-list">
+        <span class="doc-chip">Grid {esc(page["grid_ref"])}</span>
+        <span class="doc-chip">Zoom {page["zoom"]}</span>
+        <span class="doc-chip">Center {page["center_lat"]:.4f}, {page["center_lng"]:.4f}</span>
+      </div>
+      <div class="doc-note-box" style="margin-top:12px;">Bounds: N{page["bounds"]["north"]:.4f} S{page["bounds"]["south"]:.4f} E{page["bounds"]["east"]:.4f} W{page["bounds"]["west"]:.4f}</div>
     </div>
-    <div class="page-break"></div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Capture Workflow</h2>
+      <div class="doc-checklist">
+        <div class="doc-check-item"><div class="doc-check-box"></div><div class="doc-check-label">Base Map</div><div class="doc-check-copy">Load the offline layer for this area before printing or screen capture.</div></div>
+        <div class="doc-check-item"><div class="doc-check-box"></div><div class="doc-check-label">Screen Grab</div><div class="doc-check-copy">Capture the current map at the listed center and zoom, then file it with this page.</div></div>
+        <div class="doc-check-item"><div class="doc-check-box"></div><div class="doc-check-label">Annotate</div><div class="doc-check-copy">Mark routes, hazards, rally points, and fallback notes before storing the binder copy.</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="doc-panel" style="margin-top:16px;">
+    <h2 class="doc-section-title">Map Capture Window</h2>
+    <div class="doc-note-box" style="min-height:280px;display:grid;place-items:center;text-align:center;border-style:dashed;border-width:2px;background:linear-gradient(180deg,#f8fbff 0%,#eef5fb 100%);">
+      <div>
+        <div class="doc-strong" style="font-size:16px;letter-spacing:0.08em;text-transform:uppercase;">Grid {esc(page["grid_ref"])} / Zoom {page["zoom"]}</div>
+        <div style="margin-top:8px;">Center: {page["center_lat"]:.6f}, {page["center_lng"]:.6f}</div>
+        <div style="margin-top:8px;color:#5d7085;">Use this frame for a pasted map screenshot, route markup, or field notes overlay.</div>
+      </div>
+    </div>
+  </div>
+  <div class="doc-panel" style="margin-top:16px;">
+    <h2 class="doc-section-title">Waypoints in Area</h2>
+    {waypoint_html}
+  </div>
+  <div class="doc-footer" style="margin-top:14px;">
+    <span>{esc(page_title)}</span>
+    <span>Page {page["page"]} of {len(pages)}</span>
+    <span>Generated {generated_at}</span>
+  </div>
+</section>'''
 
-    <div class="atlas-page">
-      <h2>Table of Contents</h2>
-      <div class="atlas-toc">'''
+    body = f'''<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Atlas Overview</h2>
+      <div class="doc-note-box">Printable map packet for offline movement planning, route review, and field annotation. Each atlas page is centered on the requested map view and leaves space for a captured map image or hand-marked notes.</div>
+      <div class="doc-chip-list" style="margin-top:12px;">
+        <span class="doc-chip">Center {center_lat:.4f}, {center_lng:.4f}</span>
+        <span class="doc-chip">Zooms {esc(zoom_summary)}</span>
+        <span class="doc-chip">Grid {grid_size}x{grid_size}</span>
+      </div>
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Handling Notes</h2>
+      <div class="doc-checklist">
+        <div class="doc-check-item"><div class="doc-check-box"></div><div class="doc-check-label">Classify</div><div class="doc-check-copy">Treat route annotations, rally points, and cache notes as sensitive operational information.</div></div>
+        <div class="doc-check-item"><div class="doc-check-box"></div><div class="doc-check-label">Refresh</div><div class="doc-check-copy">Replace the packet after major waypoint updates, seasonal route changes, or terrain disruptions.</div></div>
+        <div class="doc-check-item"><div class="doc-check-box"></div><div class="doc-check-label">Pair</div><div class="doc-check-copy">Store with the Operations Binder or go-kit so navigation references stay together.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="doc-section" style="page-break-before:always;">
+  <div class="doc-grid-2">
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Atlas Contents</h2>
+      {toc_html}
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Print Prep</h2>
+      <div class="doc-note-box">Landscape format works best for captured screenshots, manual route markup, and margin notes. Use the waypoint table to cross-reference saved positions while reviewing the map image.</div>
+      <div class="doc-note-box" style="margin-top:12px;border-color:#e9b7b7;background:#fff5f5;color:#7a1d1d;">
+        <div class="doc-strong" style="letter-spacing:0.12em;text-transform:uppercase;">Authorized Use Only</div>
+        <div style="margin-top:6px;">Do not leave printed atlases unsecured if they include rally points, logistics routes, or private site annotations.</div>
+      </div>
+    </div>
+  </div>
+</section>
+{page_sections}'''
 
-    for p in pages:
-        html += f'''<div class="atlas-toc-entry">Page {p["page"]} — Grid {p["grid_ref"]} (Zoom {p["zoom"]}) — {p["center_lat"]:.4f}, {p["center_lng"]:.4f}</div>'''
-
-    html += '</div></div><div class="page-break"></div>'
-
-    for p in pages:
-        wp_html = ''
-        if p['waypoints']:
-            wp_html = '<div class="atlas-wp-list"><b>Waypoints in area:</b>'
-            for wp in p['waypoints']:
-                wp_html += f'<div class="atlas-wp">{_html.escape(str(wp["name"]))} ({_html.escape(str(wp["category"]))}) — {wp["lat"]:.5f}, {wp["lng"]:.5f}</div>'
-            wp_html += '</div>'
-
-        html += f'''<div class="atlas-page">
-          <div class="atlas-header">
-            <span><b>Page {p["page"]}</b> — Grid Ref: {p["grid_ref"]}</span>
-            <span>Zoom Level {p["zoom"]}</span>
-            <span>{p["center_lat"]:.4f}N, {p["center_lng"]:.4f}E</span>
-          </div>
-          <div class="atlas-map-placeholder">
-            <p style="font-size:14px;font-weight:bold;">MAP AREA — ZOOM {p["zoom"]}</p>
-            <p>Center: {p["center_lat"]:.6f}, {p["center_lng"]:.6f}</p>
-            <p>Bounds: N{p["bounds"]["north"]:.4f} S{p["bounds"]["south"]:.4f} E{p["bounds"]["east"]:.4f} W{p["bounds"]["west"]:.4f}</p>
-            <p style="margin-top:20px;color:#666;">Print this page, then screenshot the map at this location/zoom for a complete atlas.</p>
-          </div>
-          {wp_html}
-          <div class="atlas-footer">
-            <span>{page_title}</span>
-            <span>Page {p["page"]} of {len(pages)}</span>
-            <span>Generated {time.strftime("%Y-%m-%d")}</span>
-          </div>
-        </div>
-        <div class="page-break"></div>'''
-
-    html += '</body></html>'
+    html = render_print_document(
+        page_title,
+        'Landscape-ready atlas packet for offline navigation, screenshot capture, and field route annotation.',
+        body,
+        eyebrow='NOMAD Field Desk Map Atlas',
+        meta_items=[f'Generated {generated_at}', f'Center {center_lat:.4f}, {center_lng:.4f}', 'Authorized use only'],
+        stat_items=[
+            ('Pages', len(pages)),
+            ('Zoom Levels', len(zoom_levels)),
+            ('Grid Size', f'{grid_size}x{grid_size}'),
+            ('Waypoint Hits', waypoint_hits),
+        ],
+        accent_start='#102338',
+        accent_end='#2f556f',
+        max_width='1180px',
+        landscape=True,
+    )
     return Response(html, mimetype='text/html')
 
 # ─── Portable Mode Detection ─────────────────────────────────────

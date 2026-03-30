@@ -1,0 +1,699 @@
+  <div id="tab-settings" class="tab-content settings-workspace">
+    <div class="settings-command-deck workspace-panel">
+      <div class="settings-command-deck-head">
+        <div class="settings-command-copy">
+          <div class="section-header-label settings-command-kicker">SYSTEM CONTROL</div>
+          <h2 class="settings-command-title">Tune the platform without losing the operational picture.</h2>
+          <p class="settings-command-text">Models, sync, security, and backup controls all live here. Use this workspace to harden the desk, not hunt through scattered admin panels.</p>
+        </div>
+        <div class="settings-command-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-shell-action="pull-all-models">Pull Recommended Models</button>
+          <button type="button" class="btn btn-sm" data-shell-action="discover-peers">Scan for Nodes</button>
+          <button type="button" class="btn btn-sm" data-shell-action="full-backup">Create Backup</button>
+        </div>
+      </div>
+      <div class="settings-command-pills">
+        <span class="settings-command-pill">Modes</span>
+        <span class="settings-command-pill">Models</span>
+        <span class="settings-command-pill">Sync</span>
+        <span class="settings-command-pill">Backups</span>
+        <span class="settings-command-pill">Logs &amp; health</span>
+      </div>
+    </div>
+    <div class="settings-grid settings-workspace-grid">
+      <!-- Dashboard Mode Configuration -->
+      <div class="settings-card settings-hero-card settings-span-full">
+        <div class="settings-hero-header">
+          <div class="workspace-kicker">WORKSPACE MODES</div>
+          <h3 class="settings-hero-title">Choose how this desk behaves under load</h3>
+          <p class="settings-panel-copy settings-hero-text">Switch the overall operating posture before you tune the deeper system controls below.</p>
+        </div>
+        <div class="settings-mode-grid">
+          <div class="mode-option settings-mode-option" data-mode-opt="command" data-mode-select="command" role="button" tabindex="0">
+            <div class="settings-mode-icon">&#9876;</div>
+            <div class="settings-mode-title">Command Center</div>
+            <div class="settings-mode-copy">Full military-style ops dashboard. All modules visible, threat-level focus. 10 live widgets. Security, comms, and incidents prioritized.</div>
+          </div>
+          <div class="mode-option settings-mode-option" data-mode-opt="homestead" data-mode-select="homestead" role="button" tabindex="0">
+            <div class="settings-mode-icon">&#127793;</div>
+            <div class="settings-mode-title">Homestead</div>
+            <div class="settings-mode-copy">Farm and self-reliance focus. Garden, weather, power, and livestock prioritized. 8 live widgets. AI asks about planting and harvests.</div>
+          </div>
+          <div class="mode-option settings-mode-option" data-mode-opt="minimal" data-mode-select="minimal" role="button" tabindex="0">
+            <div class="settings-mode-icon">&#9679;</div>
+            <div class="settings-mode-title">Essentials</div>
+            <div class="settings-mode-copy">Streamlined basics only. Core survival modules: inventory, contacts, medical, and checklists. 4 live widgets. Minimal interface.</div>
+          </div>
+        </div>
+        <div class="settings-panel-copy settings-mini-note">Current: <strong id="settings-mode-label" class="settings-summary-accent">Command Center</strong> &middot; Keyboard: 1-9 switches tabs &middot; Ctrl+K search &middot; Ctrl+/ copilot</div>
+      </div>
+      <!-- Language Selector -->
+      <div class="settings-card settings-info-card" id="language-settings-card">
+        <h3 data-i18n="settings.language">Language</h3>
+        <p class="settings-panel-copy">Select your preferred interface language.</p>
+        <select id="language-selector" name="interface_language" data-change-action="set-language" class="settings-select" aria-label="Interface language">
+          <!-- populated dynamically -->
+        </select>
+      </div>
+      <div class="settings-card settings-info-card settings-span-full">
+        <h3>System Monitoring</h3>
+        <div class="gauge-row" id="system-gauges"><div class="settings-empty-state system-gauges-loading">Loading system metrics...</div></div>
+      </div>
+      <div class="settings-card settings-info-card">
+        <h3>System Information</h3>
+        <div id="system-info">Loading...</div>
+      </div>
+      <div class="settings-card settings-info-card">
+        <h3>Storage Devices</h3>
+        <div id="disk-devices"></div>
+      </div>
+      <div class="settings-card settings-models-card">
+        <h3>AI Models <button class="help-icon" data-help="models-guide" title="AI model guide">?</button></h3>
+        <div id="model-manager" class="settings-stack">
+          <p class="settings-panel-copy">Manage downloaded AI models and pull the recommended set without leaving the settings workspace.</p>
+          <div id="model-list"><div class="settings-empty-state">No AI models downloaded yet. Choose one below or click "Download All" to get all recommended models.</div></div>
+          <div class="settings-subsection">
+            <div class="settings-heading-row settings-toolbar-spacing">
+              <h4>Recommended Models</h4>
+              <button type="button" class="btn btn-sm btn-primary" data-shell-action="pull-all-models" title="Download all recommended models">Download All</button>
+            </div>
+            <div id="recommended-models"></div>
+          </div>
+        </div>
+      </div>
+      <div class="settings-card settings-models-card">
+        <h3>Model Fine-Tuning</h3>
+        <div class="settings-panel-toolbar settings-panel-toolbar-wrap settings-toolbar-spacing">
+          <button type="button" class="btn btn-sm" data-shell-action="create-training-dataset">New Dataset</button>
+          <button type="button" class="btn btn-sm btn-primary" data-shell-action="create-training-job">New Job</button>
+        </div>
+        <div class="settings-panel-copy">Create custom AI models from your conversation history using Ollama Modelfiles.</div>
+        <div class="settings-subsection-title">Datasets</div>
+        <div id="training-datasets-list" class="training-list-shell training-list-shell-datasets"></div>
+        <div class="settings-subsection-title">Training Jobs</div>
+        <div id="training-jobs-list" class="training-list-shell training-list-shell-jobs"></div>
+      </div>
+      <div class="settings-card settings-preferences-card">
+        <h3>Preferences <button class="help-icon" data-help="settings" title="Settings guide">?</button></h3>
+        <div>
+          <!-- Appearance (always visible) -->
+          <div class="setting-row">
+            <span class="setting-label">Theme</span>
+            <span class="setting-value settings-inline-actions settings-theme-row">
+              <span id="active-theme-dot" class="settings-theme-dot"></span>
+              <span id="active-theme-label" class="settings-theme-name">Atlas</span>
+              <div class="theme-switcher settings-theme-switcher">
+                <button type="button" class="theme-btn" data-t="nomad" data-theme-select="nomad" title="Atlas (Light)" aria-label="Atlas light theme" aria-pressed="false"></button>
+                <button type="button" class="theme-btn" data-t="nightops" data-theme-select="nightops" title="Midnight (Dark)" aria-label="Midnight dark theme" aria-pressed="false"></button>
+                <button type="button" class="theme-btn" data-t="cyber" data-theme-select="cyber" title="Cobalt (Blue Steel)" aria-label="Cobalt blue steel theme" aria-pressed="false"></button>
+                <button type="button" class="theme-btn" data-t="redlight" data-theme-select="redlight" title="Ember (Warm Dark)" aria-label="Ember warm dark theme" aria-pressed="false"></button>
+                <button type="button" class="theme-btn theme-btn-eink" data-t="eink" data-theme-select="eink" title="Paper (E-Ink)" aria-label="Paper e-ink theme" aria-pressed="false"></button>
+              </div>
+            </span>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">AI Assistant Name</span>
+            <input id="ai-name-input" name="assistant_name" class="settings-input settings-input-sm" value="AI" data-input-action="save-ai-name" autocomplete="off" aria-label="AI assistant name">
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">UI Size</span>
+            <div class="settings-inline-actions settings-zoom-group">
+              <button class="btn btn-sm settings-row-compact-btn" data-zoom-level="small" id="zoom-small" aria-pressed="false">Small</button>
+              <button class="btn btn-sm btn-primary settings-row-compact-btn" data-zoom-level="default" id="zoom-default" aria-pressed="true">Default</button>
+              <button class="btn btn-sm settings-row-compact-btn" data-zoom-level="large" id="zoom-large" aria-pressed="false">Large</button>
+              <button class="btn btn-sm settings-row-compact-btn" data-zoom-level="xlarge" id="zoom-xlarge" aria-pressed="false">X-Large</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">External Ollama Host</span>
+            <div class="settings-inline-actions">
+              <input id="ollama-host-input" name="ollama_host" class="settings-input settings-input-md" placeholder="Leave empty for local (default)" autocomplete="url" aria-label="External Ollama host">
+              <button type="button" class="btn btn-sm" data-shell-action="save-ollama-host">Save</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">Dashboard Password</span>
+            <div class="settings-inline-actions">
+              <input id="auth-pw-input" name="dashboard_password" type="password" class="settings-input settings-input-sm" placeholder="Set password" autocomplete="new-password" aria-label="Dashboard password">
+              <button type="button" class="btn btn-sm" data-shell-action="set-auth-password">Set</button>
+              <button type="button" class="btn btn-sm" data-shell-action="clear-auth-password">Clear</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">Auto Backup</span>
+            <select id="auto-backup-interval" name="auto_backup_interval" class="preset-select settings-select settings-input-sm" data-change-action="save-auto-backup" aria-label="Auto backup interval">
+              <option value="0">Disabled</option>
+              <option value="3600">Every hour</option>
+              <option value="21600">Every 6 hours</option>
+              <option value="86400">Daily</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">Setup Wizard</span>
+            <button type="button" class="btn btn-sm" data-shell-action="rerun-setup-wizard">Re-run Setup Wizard</button>
+          </div>
+          <!-- System & Data (collapsible) -->
+          <details class="settings-collapsible settings-toolbar-spacing">
+            <summary class="settings-collapsible-summary">
+              <span class="settings-collapsible-chevron">&#9654;</span> System, Backup & Data Management
+            </summary>
+            <div class="settings-collapsible-body">
+              <div class="setting-row">
+                <span class="setting-label">Start at Login</span>
+                <label class="settings-toggle-control"><input type="checkbox" id="startup-toggle" name="start_at_login" data-change-action="toggle-startup"></label>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label">LAN Access</span>
+                <span class="setting-value settings-inline-actions">
+                  <span class="setting-value" id="lan-url-setting">-</span>
+          <button type="button" class="btn btn-sm" data-shell-action="show-lan-qr" title="Show QR code for LAN browser access">QR Code</button>
+                </span>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label">Notifications</span>
+                <label class="settings-toggle-control settings-toggle-copy"><input type="checkbox" id="notif-toggle" name="enable_notifications" data-change-action="toggle-notifications"> Enable browser alerts</label>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label">Data Directory</span>
+                <span class="setting-value settings-path-value" id="data-dir"></span>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label">Backup & Restore<br><span id="last-backup-time" class="settings-inline-label"></span></span>
+                <span class="settings-inline-actions">
+                  <button type="button" class="btn btn-sm btn-primary" data-shell-action="full-backup" title="Download complete backup">Backup</button>
+                  <button type="button" class="btn btn-sm" data-shell-action="show-backup-list" title="Restore from automatic backups">Restore</button>
+                  <button type="button" class="btn btn-sm" data-shell-action="export-config">Export</button>
+                  <input type="file" id="import-file" name="config_import_file" accept=".zip" data-change-action="import-config" class="is-hidden">
+                  <button type="button" class="btn btn-sm" data-click-target="import-file">Import</button>
+                </span>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label">CSV Import</span>
+                <button type="button" class="btn btn-sm" data-shell-action="show-csv-import">Import CSV Data</button>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label">USB Transfer</span>
+                <span class="settings-inline-actions">
+                  <button type="button" class="btn btn-sm" data-shell-action="export-sync-pack">Export Pack</button>
+                  <input type="file" id="sync-import-file" name="sync_import_file" accept=".zip" data-change-action="import-sync-pack" class="is-hidden">
+                  <button type="button" class="btn btn-sm" data-click-target="sync-import-file">Import Pack</button>
+                </span>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label">Host Power</span>
+                <div class="settings-inline-actions">
+                  <button type="button" class="btn btn-sm btn-danger" data-shell-action="confirm-host-power" data-host-power="reboot">Reboot</button>
+                  <button type="button" class="btn btn-sm btn-danger" data-shell-action="confirm-host-power" data-host-power="shutdown">Shutdown</button>
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+      <!-- Federation / Multi-Node Sync -->
+      <div class="settings-card settings-sync-card settings-span-full">
+        <h3 class="settings-panel-header settings-heading-row">
+          <span>Connect Multiple Systems <button class="help-icon" data-help="sync" title="How to sync between systems">?</button></span>
+          <span class="settings-node-status"><span id="node-id-badge"></span><span id="offline-sync-badge" class="settings-sync-indicator" title="Offline sync pending"></span></span>
+        </h3>
+        <p class="settings-panel-copy">Share data between multiple NOMAD systems on your network, like syncing a base camp laptop with a cabin or field kit. Data is merged, not overwritten.</p>
+        <div class="settings-panel-toolbar settings-panel-toolbar-wrap settings-toolbar-spacing">
+          <label class="settings-inline-field settings-sync-node-field"><span class="settings-inline-label">This Node's Name</span><input id="node-name-input" name="node_name" class="settings-input" placeholder="My Base Camp" autocomplete="off" aria-label="This node name"></label>
+          <button type="button" class="btn btn-sm" data-shell-action="save-node-name">Save Name</button>
+          <button class="btn btn-sm btn-primary" type="button" data-shell-action="discover-peers">Scan for Nodes</button>
+        </div>
+        <div id="peer-list" class="settings-toolbar-spacing prep-card-grid peer-list-grid"></div>
+        <div class="settings-panel-toolbar settings-panel-toolbar-wrap settings-toolbar-spacing">
+          <label class="settings-inline-field settings-sync-ip-field"><span class="settings-inline-label">Manual Peer IP</span><input id="manual-peer-ip" name="manual_peer_ip" data-enter-action="sync-manual-peer" class="settings-input" placeholder="192.168.1.50" autocomplete="off" inputmode="decimal" aria-label="Manual peer IP"></label>
+          <button class="btn btn-sm btn-primary" type="button" data-shell-action="sync-manual-peer">Push to IP</button>
+        </div>
+        <div class="settings-subsection">
+          <div class="settings-heading-row settings-toolbar-spacing">
+            <span class="settings-subsection-title">Sync History</span>
+            <button class="btn btn-sm" type="button" data-shell-action="load-sync-log">Refresh</button>
+          </div>
+          <div id="sync-log-list" class="settings-list-shell settings-scroll-shell settings-sync-log-shell"></div>
+        </div>
+      </div>
+
+      <!-- Conflict Resolution -->
+      <div class="settings-card settings-sync-card settings-span-full">
+        <div class="settings-panel-head settings-panel-head-split settings-toolbar-spacing">
+          <div class="settings-panel-head-main">
+            <div class="workspace-kicker">MERGE REVIEW</div>
+            <h3 class="settings-panel-title">Conflict Resolution</h3>
+            <p class="settings-panel-copy">When two nodes modify the same data, conflicts land here for review so you can keep the right version with confidence.</p>
+          </div>
+          <div class="settings-panel-actions">
+            <span id="conflict-count-badge" class="settings-conflict-badge" hidden>0</span>
+            <button class="btn btn-sm" type="button" data-shell-action="load-conflicts">Refresh</button>
+          </div>
+        </div>
+        <div id="conflict-list" class="settings-list-shell settings-scroll-shell settings-conflict-shell"></div>
+        <!-- Inline merge editor (hidden by default) -->
+        <div id="merge-editor-overlay" class="settings-result-shell settings-toolbar-spacing settings-merge-editor-shell" hidden>
+          <div class="settings-heading-row settings-toolbar-spacing">
+            <span class="settings-detail-title">Manual Merge Editor</span>
+            <button class="btn btn-sm" type="button" data-shell-action="close-merge-editor">Close</button>
+          </div>
+          <input type="hidden" id="merge-conflict-id" name="merge_conflict_id">
+          <div id="merge-editor-fields" class="settings-stack"></div>
+          <button class="btn btn-sm btn-primary" type="button" data-shell-action="submit-merge">Apply Merged Data</button>
+        </div>
+      </div>
+
+            <div class="settings-card settings-flow-panel settings-span-full">
+              <div class="settings-panel-head settings-toolbar-spacing">
+                <div class="workspace-kicker">SNEAKERNET COMMS</div>
+                <h3 class="settings-panel-title">Dead Drop Messaging</h3>
+                <p class="settings-panel-copy">Prepare encrypted message files for physical handoff when you need discreet, offline exchange between systems.</p>
+              </div>
+              <div class="settings-form-shell settings-stack">
+                <input id="dd-recipient" name="dead_drop_recipient" class="settings-input" placeholder="Recipient name (optional)" autocomplete="off" aria-label="Dead drop recipient">
+                <textarea id="dd-message" name="dd_message" class="settings-textarea" rows="3" placeholder="Type your message..."></textarea>
+                <input id="dd-secret" name="dead_drop_secret" class="settings-input" type="password" placeholder="Shared secret passphrase" autocomplete="off" aria-label="Dead drop shared secret">
+                <div class="settings-panel-toolbar settings-panel-toolbar-wrap">
+                    <button class="btn btn-sm btn-primary" type="button" data-shell-action="compose-dead-drop">Encrypt &amp; Download</button>
+                    <label class="btn btn-sm settings-file-trigger">Import Message
+                      <input id="dd-import-file" name="dead_drop_import_file" type="file" accept=".json" data-change-action="import-dead-drop" class="is-hidden">
+                    </label>
+                </div>
+                <div id="dd-received" class="settings-list-shell settings-scroll-shell"></div>
+              </div>
+            </div>
+
+            <div class="settings-card settings-flow-panel settings-span-full">
+              <div class="settings-panel-head settings-panel-head-split settings-toolbar-spacing">
+                <div class="settings-panel-head-main">
+                  <div class="workspace-kicker">TEAM TRAINING</div>
+                  <h3 class="settings-panel-title">Group Training Exercises</h3>
+                  <p class="settings-panel-copy">Coordinate shared exercises with peers so training, decisions, and results stay visible across the network.</p>
+                </div>
+                <div class="settings-panel-actions">
+                  <button class="btn btn-sm btn-primary" type="button" data-shell-action="create-group-exercise">New Exercise</button>
+                </div>
+              </div>
+              <div id="group-exercises-list" class="settings-list-shell settings-scroll-shell">
+                <div class="settings-empty-state">Loading...</div>
+              </div>
+            </div>
+
+      <div class="settings-card settings-console-panel settings-span-full">
+        <div class="settings-panel-head settings-panel-head-split settings-toolbar-spacing">
+          <div class="settings-panel-head-main">
+            <div class="workspace-kicker">OBSERVABILITY</div>
+            <h3 class="settings-panel-title">Application Log</h3>
+            <p class="settings-panel-copy">Review app-level warnings and errors without leaving the control workspace.</p>
+          </div>
+          <div class="settings-panel-actions settings-panel-toolbar">
+            <select id="log-level-filter" name="log_level_filter" class="preset-select" data-change-action="load-log-viewer" aria-label="Application log level">
+              <option value="">All Levels</option>
+              <option value="error">Errors</option>
+              <option value="warning">Warnings</option>
+            </select>
+            <button class="btn btn-sm" type="button" data-shell-action="load-log-viewer">Refresh</button>
+          </div>
+        </div>
+        <div id="log-viewer" class="settings-console-viewer settings-console-shell"></div>
+      </div>
+      <div id="task-scheduler-panel" class="settings-card settings-flow-panel settings-span-full">
+        <div class="settings-panel-head settings-panel-head-split settings-toolbar-spacing">
+          <div class="settings-panel-head-main">
+            <div class="workspace-kicker">MAINTENANCE</div>
+            <h3 class="settings-panel-title">Scheduled Tasks</h3>
+            <p class="settings-panel-copy">Plan recurring work, track due windows, and keep upkeep visible before it becomes a problem.</p>
+          </div>
+          <div class="settings-panel-actions">
+            <button class="btn btn-sm btn-primary" type="button" data-shell-action="show-task-form">+ New Task</button>
+          </div>
+        </div>
+        <div id="task-form" class="settings-form-shell settings-flow-shell is-hidden">
+          <div class="settings-form-grid settings-form-grid-3">
+            <div class="settings-field">
+              <label class="settings-field-label">Task Name *</label>
+              <input id="task-name" name="task_name" class="settings-input" placeholder="Check generator oil" autocomplete="off" aria-label="Task name">
+            </div>
+            <div class="settings-field">
+              <label class="settings-field-label">Category</label>
+              <select id="task-category" name="task_category" class="settings-input settings-select" aria-label="Task category">
+              <option value="maintenance">Maintenance</option><option value="inventory">Inventory</option><option value="security">Security</option><option value="medical">Medical</option><option value="comms">Comms</option><option value="training">Training</option><option value="other">Other</option>
+              </select>
+            </div>
+            <div class="settings-field">
+              <label class="settings-field-label">Recurrence</label>
+              <select id="task-recurrence" name="task_recurrence" class="settings-input settings-select" aria-label="Task recurrence">
+              <option value="once">Once</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option>
+              </select>
+            </div>
+            <div class="settings-field">
+              <label class="settings-field-label">Next Due</label>
+              <input id="task-next-due" name="task_next_due" type="datetime-local" class="settings-input">
+            </div>
+            <div class="settings-field">
+              <label class="settings-field-label">Assigned To</label>
+              <input id="task-assigned" name="task_assigned_to" class="settings-input" placeholder="Name or role" autocomplete="off" aria-label="Assigned to">
+            </div>
+            <div class="settings-field">
+              <label class="settings-field-label">Notes</label>
+              <input id="task-notes" name="task_notes" class="settings-input" placeholder="Optional" autocomplete="off" aria-label="Task notes">
+            </div>
+          </div>
+          <div class="settings-form-actions settings-form-actions-row">
+            <button class="btn btn-sm btn-primary" type="button" data-shell-action="save-task">Save Task</button>
+            <button class="btn btn-sm" type="button" data-shell-action="hide-task-form">Cancel</button>
+          </div>
+        </div>
+        <div id="task-list" class="settings-list-shell settings-list-copy"><div class="settings-empty-state">Loading tasks…</div></div>
+      </div>
+
+      <div id="watch-schedule-panel" class="settings-card settings-flow-panel settings-span-full">
+        <div class="settings-panel-head settings-panel-head-split settings-toolbar-spacing">
+          <div class="settings-panel-head-main">
+            <div class="workspace-kicker">ROTATIONS</div>
+            <h3 class="settings-panel-title">Watch/Shift Rotation Planner</h3>
+            <p class="settings-panel-copy">Generate clear rotations, print them fast, and keep shift coverage easy to review under pressure.</p>
+          </div>
+          <div class="settings-panel-actions">
+            <button class="btn btn-sm btn-primary" type="button" data-shell-action="show-watch-form">+ New Watch Schedule</button>
+          </div>
+        </div>
+        <div id="watch-form" class="settings-form-shell settings-flow-shell is-hidden">
+          <div class="settings-form-grid settings-form-grid-3">
+            <div class="settings-field">
+              <label class="settings-field-label">Schedule Name</label>
+              <input id="watch-name" name="watch_name" class="settings-input" placeholder="Alpha Rotation" value="Watch Schedule" autocomplete="off" aria-label="Watch schedule name">
+            </div>
+            <div class="settings-field">
+              <label class="settings-field-label">Start Date *</label>
+              <input id="watch-start-date" name="watch_start_date" type="date" class="settings-input">
+            </div>
+            <div class="settings-field">
+              <label class="settings-field-label">End Date</label>
+              <input id="watch-end" name="watch_end_date" type="date" class="settings-input">
+            </div>
+            <div class="settings-field">
+              <label class="settings-field-label">Shift Duration</label>
+              <select id="watch-shift-hours" name="watch_shift_hours" class="settings-input settings-select" aria-label="Watch shift duration">
+              <option value="2">2 hours</option><option value="4" selected>4 hours</option><option value="6">6 hours</option><option value="8">8 hours</option><option value="12">12 hours</option>
+              </select>
+            </div>
+            <div class="settings-field settings-field-span-2">
+              <label class="settings-field-label">Personnel (one name per line, min 2) *</label>
+              <textarea id="watch-personnel" name="watch_personnel" rows="3" class="settings-input settings-textarea" placeholder="Alpha&#10;Bravo&#10;Charlie" autocomplete="off" aria-label="Watch personnel list"></textarea>
+            </div>
+            <div class="settings-field settings-field-full">
+              <label class="settings-field-label">Notes</label>
+              <input id="watch-notes" name="watch_notes" class="settings-input" placeholder="Optional notes" autocomplete="off" aria-label="Watch notes">
+            </div>
+          </div>
+          <div class="settings-form-actions settings-form-actions-row">
+            <button class="btn btn-sm btn-primary" type="button" data-shell-action="create-watch-schedule">Generate Schedule</button>
+            <button class="btn btn-sm" type="button" data-shell-action="hide-watch-form">Cancel</button>
+          </div>
+        </div>
+        <div id="watch-list" class="settings-list-shell settings-list-copy"><div class="settings-empty-state">Loading watch schedules…</div></div>
+        <div id="watch-detail" class="settings-detail-shell settings-flow-shell is-hidden">
+          <div class="settings-detail-header settings-detail-head">
+            <h4 id="watch-detail-title" class="settings-detail-title"></h4>
+            <button class="btn btn-sm" type="button" data-shell-action="hide-watch-detail">Close</button>
+          </div>
+          <div id="watch-detail-meta" class="settings-detail-meta"></div>
+          <div id="watch-detail-table" class="settings-scroll-shell"></div>
+        </div>
+      </div>
+
+      <div class="settings-card settings-console-panel settings-span-full">
+        <div class="settings-panel-head settings-panel-head-split settings-toolbar-spacing">
+          <div class="settings-panel-head-main">
+            <div class="workspace-kicker">SERVICE OUTPUT</div>
+            <h3 class="settings-panel-title">Service Process Logs</h3>
+            <p class="settings-panel-copy">Inspect per-service output when a subsystem needs attention, without jumping into the host machine first.</p>
+          </div>
+          <div class="settings-panel-actions settings-panel-toolbar">
+            <select id="svc-log-select" name="service_log" class="preset-select" data-change-action="load-service-logs" aria-label="Service process log">
+              <option value="">Select service...</option>
+              <option value="ollama">Ollama (AI)</option>
+              <option value="kiwix">Kiwix (Library)</option>
+              <option value="cyberchef">CyberChef</option>
+              <option value="kolibri">Kolibri (Education)</option>
+              <option value="qdrant">Qdrant (Vectors)</option>
+              <option value="stirling">Stirling (PDF)</option>
+              <option value="flatnotes">FlatNotes (Notes)</option>
+            </select>
+            <button class="btn btn-sm" type="button" data-shell-action="load-service-logs">Refresh</button>
+          </div>
+        </div>
+        <div id="svc-log-viewer" class="settings-console-viewer settings-console-shell">
+          <span class="settings-console-hint">Select a service above to view its process output.</span>
+        </div>
+      </div>
+      <div id="system-health-panel" class="settings-card settings-flow-panel settings-span-full">
+        <div class="settings-panel-head settings-toolbar-spacing">
+          <div class="workspace-kicker">INTEGRITY</div>
+          <h3 class="settings-panel-title">System Health</h3>
+          <p class="settings-panel-copy">Run quick integrity checks and database maintenance without leaving the admin lane.</p>
+        </div>
+        <div class="settings-panel-toolbar settings-panel-toolbar-wrap settings-toolbar-spacing">
+          <button class="btn btn-sm btn-primary" type="button" data-shell-action="run-self-test">Run Self-Test</button>
+          <button class="btn btn-sm" type="button" data-shell-action="run-db-check">Check Database</button>
+          <button class="btn btn-sm" type="button" data-shell-action="run-db-vacuum">Optimize Database</button>
+        </div>
+        <div id="system-health-results" class="settings-result-shell" aria-live="polite"></div>
+      </div>
+
+      <div id="backup-restore-panel" class="settings-card settings-flow-panel settings-span-full">
+        <div class="settings-panel-head settings-toolbar-spacing">
+          <div class="workspace-kicker">RESILIENCE</div>
+          <h3 class="settings-panel-title">Backup &amp; Restore</h3>
+          <p class="settings-panel-copy">Create recovery points, tune retention, and restore safely when the desk needs to roll back.</p>
+        </div>
+        <div class="settings-panel-toolbar settings-panel-toolbar-wrap settings-backup-toolbar">
+          <button class="btn btn-sm btn-primary" type="button" data-shell-action="create-backup">Backup Now</button>
+          <div class="settings-toggle-field">
+            <label class="settings-inline-label" for="ab-enabled">Auto-Backup</label>
+            <label class="settings-toggle-control">
+              <input type="checkbox" id="ab-enabled" name="auto_backup_enabled" data-change-action="configure-auto-backup">
+            </label>
+          </div>
+          <div class="settings-inline-field">
+            <label class="settings-field-label" for="ab-interval">Interval</label>
+            <select id="ab-interval" name="auto_backup_schedule" class="settings-input settings-select" data-change-action="configure-auto-backup" aria-label="Auto backup schedule">
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+          <div class="settings-slider-field">
+            <label class="settings-field-label" for="ab-keep">Keep</label>
+            <div class="settings-slider-row">
+              <input id="ab-keep" name="auto_backup_keep_days" type="range" min="1" max="30" value="7" data-input-action="update-ab-keep-display" data-change-action="configure-auto-backup" aria-label="Days of backups to keep">
+              <span id="ab-keep-val" class="settings-slider-value">7</span>
+            </div>
+          </div>
+          <div class="settings-toggle-field">
+            <label class="settings-inline-label" for="ab-encrypt">Encrypt</label>
+            <label class="settings-toggle-control">
+              <input type="checkbox" id="ab-encrypt" name="auto_backup_encrypt" data-change-action="toggle-backup-encryption">
+            </label>
+          </div>
+          <div id="ab-pw-wrap" class="settings-inline-field is-hidden">
+            <label class="settings-field-label" for="ab-password">Password</label>
+            <input id="ab-password" name="backup_encryption_password" type="password" class="settings-input" placeholder="Enter encryption key…" autocomplete="new-password" aria-label="Backup encryption password">
+          </div>
+        </div>
+        <div class="settings-inline-actions settings-toolbar-spacing">
+          <input type="file" id="backup-upload-file" name="backup_restore_file" accept=".db,.enc" data-change-action="restore-upload" class="is-hidden">
+          <button class="btn btn-sm" type="button" data-click-target="backup-upload-file">Restore from File</button>
+        </div>
+        <div id="backup-list" class="settings-list-shell settings-scroll-shell"></div>
+      </div>
+
+      <div class="settings-card settings-flow-panel settings-span-full">
+        <div class="settings-panel-head settings-toolbar-spacing">
+          <div class="workspace-kicker">OFFLINE DATA</div>
+          <h3 class="settings-panel-title">Offline Data Cache</h3>
+          <p class="settings-panel-copy">Cache critical data locally for faster offline access and quick status checks.</p>
+        </div>
+        <div class="settings-panel-toolbar settings-panel-toolbar-wrap">
+          <button class="btn btn-sm btn-primary" type="button" data-shell-action="offline-full-sync">Full Sync Now</button>
+          <button class="btn btn-sm" type="button" data-shell-action="offline-status">Check Status</button>
+          <button class="btn btn-sm btn-danger" type="button" data-shell-action="offline-clear">Clear Cache</button>
+        </div>
+        <div id="offline-sync-result" class="settings-result-shell settings-result-copy"></div>
+      </div>
+
+      <div class="settings-card settings-flow-panel settings-span-full">
+        <div class="settings-panel-head settings-toolbar-spacing">
+          <div class="workspace-kicker">CONNECTED DEVICES</div>
+          <h3 class="settings-panel-title">Hardware Devices (Serial Ports)</h3>
+          <p class="settings-panel-copy">Scan attached field hardware and confirm the desk can see the ports you expect.</p>
+        </div>
+        <div class="settings-panel-toolbar settings-toolbar-spacing">
+          <button class="btn btn-sm btn-primary" type="button" data-shell-action="scan-serial-ports">Scan Ports</button>
+        </div>
+        <div id="serial-port-list" class="settings-list-shell" aria-live="polite"><div class="settings-inline-status settings-inline-status-muted">Click "Scan Ports" to detect connected hardware.</div></div>
+      </div>
+
+      <div class="settings-card settings-flow-panel settings-span-full">
+        <div class="settings-panel-head settings-toolbar-spacing">
+          <div class="workspace-kicker">FIELD OUTPUT</div>
+          <h3 class="settings-panel-title">Print Documents</h3>
+          <p class="settings-panel-copy">Open or export the core binders and handouts that matter when the desk needs to leave the screen.</p>
+        </div>
+        <div class="settings-panel-toolbar settings-panel-toolbar-wrap">
+          <a class="btn btn-sm" href="/api/print/operations-binder" target="_blank" rel="noopener noreferrer">Operations Binder</a>
+          <a class="btn btn-sm" href="/api/print/wallet-cards" target="_blank" rel="noopener noreferrer">Wallet Cards</a>
+          <a class="btn btn-sm" href="/api/print/soi" target="_blank" rel="noopener noreferrer">SOI Document</a>
+          <a class="btn btn-sm" href="/api/print/medical-flipbook" target="_blank" rel="noopener noreferrer">Medical Flipbook</a>
+        </div>
+        <div class="settings-subsection">
+          <span class="settings-subsection-title">Download as PDF (requires ReportLab)</span>
+          <div class="settings-panel-toolbar settings-panel-toolbar-wrap">
+            <button class="btn btn-sm btn-primary" type="button" data-shell-action="download-pdf" data-pdf-url="/api/print/pdf/operations-binder" data-pdf-filename="NOMAD-Operations-Binder.pdf">PDF Binder</button>
+            <button class="btn btn-sm btn-primary" type="button" data-shell-action="download-pdf" data-pdf-url="/api/print/pdf/wallet-cards" data-pdf-filename="NOMAD-Wallet-Cards.pdf">PDF Wallet Cards</button>
+            <button class="btn btn-sm btn-primary" type="button" data-shell-action="download-pdf" data-pdf-url="/api/print/pdf/soi" data-pdf-filename="NOMAD-SOI.pdf">PDF SOI</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-card settings-info-card settings-span-full">
+        <div class="settings-panel-head settings-toolbar-spacing">
+          <div class="workspace-kicker">AT A GLANCE</div>
+          <h3 class="settings-panel-title">Data Summary</h3>
+        </div>
+        <div id="data-summary" class="settings-result-shell settings-result-copy">Loading...</div>
+      </div>
+      <div class="settings-card settings-info-card settings-span-full">
+        <div class="settings-panel-head settings-toolbar-spacing">
+          <div class="workspace-kicker">CAPACITY</div>
+          <h3 class="settings-panel-title">Disk Space Monitor</h3>
+        </div>
+        <div id="disk-monitor" class="settings-result-shell"><div class="settings-empty-state">Loading disk info...</div></div>
+      </div>
+      <div class="settings-card settings-info-card settings-span-full">
+        <div class="settings-panel-head settings-panel-head-split settings-toolbar-spacing">
+          <div class="settings-panel-head-main">
+            <div class="workspace-kicker">ABOUT THE DESK</div>
+            <h3 class="settings-panel-title">About NOMAD Field Desk</h3>
+            <p class="settings-panel-copy">Versioning, release updates, and the current shape of the desktop workspace.</p>
+          </div>
+          <div class="settings-panel-actions settings-panel-toolbar settings-about-toolbar">
+            <span id="update-status-text" class="settings-update-status"></span>
+            <button class="btn btn-sm is-hidden" id="update-download-btn" type="button" data-shell-action="download-update">Download Update</button>
+          </div>
+        </div>
+        <div class="settings-about-copy settings-result-copy">
+          <!-- Update progress bar -->
+          <div id="update-progress-bar" class="settings-progress-shell is-hidden">
+            <div class="settings-progress-head">
+              <span id="update-progress-label">Downloading update…</span>
+              <span id="update-progress-pct">0%</span>
+            </div>
+            <div class="settings-progress-track">
+              <div id="update-progress-fill" class="settings-progress-fill is-zero-width"></div>
+            </div>
+          </div>
+          <div id="update-complete-msg" class="settings-inline-status settings-inline-status-success settings-update-msg is-hidden">
+            Update downloaded! <button class="btn btn-sm btn-primary" type="button" data-shell-action="open-update-folder">Open Folder</button>
+          </div>
+          <p><strong class="settings-about-strong">Desktop-first preparedness and field operations workspace.</strong> Cross-platform edition for Windows, Linux, and macOS. No Docker required.</p>
+          <p class="settings-version-line"><span class="settings-version-pill">v{{ version }}</span></p>
+          <p>Built on the original <a href="https://github.com/Crosstalk-Solutions/project-nomad">Project N.O.M.A.D.</a> foundation by Crosstalk Solutions. NOMAD Field Desk is the desktop-first field-desk edition maintained by <a href="https://github.com/SysAdminDoc">SysAdminDoc</a>.</p>
+          <div class="settings-summary-grid">
+            <div class="settings-summary-card"><strong class="settings-summary-accent">11 Main Workspaces</strong><br>Home, Readiness, Preparedness, Copilot, Maps, Tools, Library, Notes, Media, Diagnostics, and Settings</div>
+            <div class="settings-summary-card"><strong class="settings-summary-accent">5 Work Modes</strong><br>Briefing, Operations, Knowledge, Assistant, and System keep the desktop menu organized around decision flow instead of raw feature sprawl.</div>
+            <div class="settings-summary-card"><strong class="settings-summary-accent">5 Preparedness Lanes</strong><br>Coordinate, Sustain, Care &amp; People, Protect &amp; Secure, and Reference &amp; Planning organize the preparedness workspace around situations instead of modules.</div>
+          </div>
+          <div class="settings-shortcuts-copy">
+            <strong class="settings-summary-accent">Keyboard Shortcuts:</strong>
+            Alt+1-9 primary workspaces | Alt+T timers | Alt+C chat | Alt+N new note | Ctrl+K search
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Minimized Wizard Banner (shown when setup is running in background) -->
+<button id="wiz-mini-banner" class="wizard-mini-banner is-hidden" type="button" data-shell-action="restore-wizard" aria-controls="wizard">
+  <span class="wizard-mini-head">
+    <span class="wizard-mini-label">Preparing Workspace...</span>
+    <span class="wizard-mini-pct" id="wiz-mini-pct">0%</span>
+  </span>
+  <span class="wizard-mini-track">
+    <span id="wiz-mini-fill" class="wizard-mini-fill is-zero-width"></span>
+  </span>
+  <span class="wizard-mini-item" id="wiz-mini-item">Starting...</span>
+  <span class="wizard-mini-note">Click to expand</span>
+</button>
+
+</div><!-- /container -->
+</main><!-- /main-content -->
+
+<!-- ════════════════════════════════════════════════════════════
+     PERSISTENT AI COPILOT DOCK (bottom bar, available on all tabs)
+     ════════════════════════════════════════════════════════════ -->
+<div class="copilot-dock" id="copilot-dock" role="complementary" aria-label="AI Copilot">
+  <div class="copilot-answer-wrap">
+    <div class="copilot-dock-answer" id="copilot-answer" aria-live="polite" aria-label="Copilot response"></div>
+    <button id="copilot-dismiss" class="copilot-dismiss-btn is-hidden" type="button" data-shell-action="dismiss-copilot-answer" aria-label="Clear copilot answer">Clear</button>
+  </div>
+  <div class="copilot-dock-bar">
+    <span class="copilot-dock-label">AI COPILOT</span>
+    <input type="text" id="copilot-input" name="copilot_query" data-enter-action="ask-copilot" aria-label="AI Copilot question input" autocomplete="off" placeholder="Ask about supplies, team, medical, or power… (Ctrl+/)">
+    <button class="btn btn-sm copilot-voice-btn" type="button" data-shell-action="voice-input" data-voice-target="copilot-input" title="Voice input" id="copilot-voice-btn" aria-label="Voice input for copilot">&#127908;</button>
+    <button class="btn btn-sm btn-primary copilot-ask-btn" type="button" data-shell-action="ask-copilot" aria-label="Ask AI Copilot">ASK</button>
+    <div class="copilot-dock-tools" aria-label="Desk utilities">
+      <button id="copilot-utility-chat-btn" class="btn btn-sm btn-ghost copilot-utility-btn" type="button" data-shell-action="toggle-lan-chat" aria-controls="lan-chat-panel" aria-expanded="false" aria-label="Open LAN chat">
+        <span class="copilot-utility-btn-icon" aria-hidden="true">&#9993;</span>
+        <span class="copilot-utility-btn-label">LAN</span>
+      </button>
+      <button id="copilot-utility-timer-btn" class="btn btn-sm btn-ghost copilot-utility-btn" type="button" data-shell-action="toggle-timer-panel" aria-controls="timer-panel" aria-expanded="false" aria-label="Open timers">
+        <span class="copilot-utility-btn-icon" aria-hidden="true">&#9202;</span>
+        <span class="copilot-utility-btn-label">Timers</span>
+      </button>
+      <button id="copilot-utility-actions-btn" class="btn btn-sm btn-ghost copilot-utility-btn" type="button" data-shell-action="toggle-quick-actions" aria-controls="quick-actions-menu" aria-expanded="false" aria-label="Open quick actions">
+        <span class="copilot-utility-btn-icon" aria-hidden="true">+</span>
+        <span class="copilot-utility-btn-label">Quick</span>
+      </button>
+    </div>
+    <div class="copilot-quick-btns" id="copilot-quick-btns"></div>
+  </div>
+  <div id="copilot-suggestions" class="copilot-suggestions" hidden></div>
+</div>
+
+<!-- CSV Import Modal -->
+<div id="csv-import-modal" class="modal-overlay settings-modal-overlay is-hidden" data-backdrop-close="csv-import-modal">
+  <div class="modal-card settings-modal-card settings-modal-card-md">
+    <div class="modal-header settings-heading-row">
+      <h3 class="settings-detail-title">CSV Data Import</h3>
+      <button class="btn btn-sm btn-ghost settings-modal-close" type="button" data-shell-action="close-csv-import" aria-label="Close CSV import dialog">x</button>
+    </div>
+    <div class="modal-body settings-modal-body settings-stack">
+      <div class="settings-field">
+        <label class="settings-field-label">Target Table</label>
+        <select id="csv-target-table" name="csv_target_table" class="settings-select" aria-label="CSV import target table">
+          <option value="inventory">Inventory</option>
+          <option value="contacts">Contacts</option>
+          <option value="waypoints">Waypoints</option>
+          <option value="seeds">Seeds</option>
+          <option value="ammo">Ammo</option>
+          <option value="fuel">Fuel</option>
+          <option value="equipment">Equipment</option>
+        </select>
+      </div>
+      <div class="settings-field">
+        <label class="settings-field-label">CSV File</label>
+        <input type="file" id="csv-import-file" name="csv_import_file" accept=".csv" data-change-action="preview-csv-import" class="settings-file-input">
+      </div>
+      <div id="csv-mapping-area" class="settings-stack is-hidden">
+        <label class="settings-field-label settings-field-label-strong">Column Mapping</label>
+        <div id="csv-column-mapping" class="settings-csv-mapping"></div>
+      </div>
+      <div id="csv-preview-area" class="settings-stack is-hidden">
+        <label class="settings-field-label settings-field-label-strong">Preview (first 3 rows)</label>
+        <div id="csv-preview-table" class="settings-csv-preview"></div>
+      </div>
+      <button class="btn btn-sm btn-primary is-hidden" id="csv-import-btn" type="button" data-shell-action="execute-csv-import">Import Data</button>
+    </div>
+  </div>
+</div>

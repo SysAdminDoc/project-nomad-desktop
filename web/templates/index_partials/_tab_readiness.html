@@ -1,0 +1,67 @@
+  <!-- Readiness Tab -->
+  <div id="tab-readiness" class="tab-content workspace-stack">
+    <div class="readiness-shell">
+
+      <!-- Readiness Score -->
+      <div id="readiness-score-panel" class="readiness-panel readiness-score-shell">
+        <div class="readiness-panel-hero">
+          <div class="readiness-panel-grade">
+            <div id="rs-grade" class="readiness-grade-value readiness-grade-value-display">--</div>
+            <div id="rs-total" class="readiness-grade-total readiness-grade-total-copy">0/100</div>
+          </div>
+          <div class="readiness-panel-copy">
+            <div class="readiness-panel-header">
+              <span class="readiness-panel-kicker">READINESS SCORE</span>
+              <button class="help-icon" data-help="readiness" title="How your score is calculated">?</button>
+            </div>
+            <div class="readiness-panel-title">Know what breaks first, then fix it fast.</div>
+            <div id="rs-bar" class="readiness-progress-shell">
+              <div class="readiness-grade-bar-fill is-zero-width" id="rs-bar-fill"></div>
+            </div>
+            <div class="readiness-panel-note">
+              Your readiness grade is calculated from 7 categories below. Add supplies, contacts, and checklists to improve your score.
+            </div>
+            <div class="readiness-panel-actions">
+              <button type="button" class="btn btn-sm btn-primary" data-tab-target="preparedness" data-prep-sub="checklists">Run Operations Lane</button>
+              <button type="button" class="btn btn-sm" data-tab-target="preparedness" data-prep-sub="inventory">Stabilize Sustainment</button>
+              <button type="button" class="btn btn-sm" data-tab-target="preparedness" data-prep-sub="medical">Review Care Gaps</button>
+            </div>
+          </div>
+        </div>
+        <div id="rs-categories" class="readiness-categories readiness-categories-grid"></div>
+      </div>
+
+      <!-- Quick Actions to Improve -->
+      <div class="home-section-header readiness-actions-header home-toolbar">
+        <span class="section-header-label">BEST NEXT MOVES</span>
+        <div class="section-divider section-divider-grow"></div>
+      </div>
+      <div class="readiness-actions-grid">
+        <div class="service-card service-card-action" role="button" tabindex="0" data-tab-target="preparedness" data-prep-sub="inventory">
+          <div class="readiness-action-kicker">Sustain</div>
+          <h3 class="readiness-action-title">Add Supplies</h3>
+          <p class="desc readiness-action-copy">Track water, food, medical, and gear inventory to boost your Water, Food, and Medical scores.</p>
+        </div>
+        <div class="service-card service-card-action" role="button" tabindex="0" data-tab-target="preparedness" data-prep-sub="contacts">
+          <div class="readiness-action-kicker">Care &amp; People</div>
+          <h3 class="readiness-action-title">Add Contacts</h3>
+          <p class="desc readiness-action-copy">Emergency contacts with blood types and skills improve Communications and Medical scores.</p>
+        </div>
+        <div class="service-card service-card-action" role="button" tabindex="0" data-tab-target="preparedness" data-prep-sub="checklists">
+          <div class="readiness-action-kicker">Coordinate</div>
+          <h3 class="readiness-action-title">Complete Checklists</h3>
+          <p class="desc readiness-action-copy">Work through preparedness checklists to improve your Planning & Knowledge score.</p>
+        </div>
+      </div>
+
+      <!-- Needs Overview (duplicate for readiness context) -->
+      <div class="workspace-toolbar readiness-section-heading">
+        <span class="section-header-label">COVERAGE BY CATEGORY</span>
+        <div class="section-divider section-divider-grow"></div>
+      </div>
+      <div id="readiness-needs-grid" class="workspace-auto-grid readiness-needs-grid"></div>
+
+    </div>
+  </div>
+
+  <!-- Benchmark Tab -->

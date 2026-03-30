@@ -1,0 +1,83 @@
+    <!-- Sub: Radio -->
+    <div id="psub-radio" class="prep-sub">
+    <div class="prep-section prep-utility-section prep-radio-section">
+      <div id="comms-status-board" class="prep-data-shell prep-utility-shell prep-radio-status-shell">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Live Comms Snapshot</div>
+            <h3 class="prep-utility-title">Comms Status Board</h3>
+          </div>
+          <button type="button" class="btn btn-sm" data-prep-action="load-comms-status-board">Refresh</button>
+        </div>
+        <div id="comms-board-content" class="prep-inline-status prep-status-copy">Loading comms status…</div>
+      </div>
+
+      <div class="prep-command-bar prep-radio-command-bar">
+        <div>
+          <div class="prep-command-note">Frequency Database</div>
+          <h3 class="prep-utility-title">Frequency Database</h3>
+        </div>
+        <div class="prep-command-actions">
+          <input type="text" id="freq-search" name="freq_search" class="prep-toolbar-input prep-text-input prep-radio-search" placeholder="Search frequencies…" data-input-action="filter-freq-table">
+          <select id="freq-license-filter" name="freq_license_filter" class="prep-toolbar-select prep-toolbar-select-tight" data-change-action="filter-freq-table">
+            <option value="">All</option><option value="0">No License</option><option value="1">License Required</option>
+          </select>
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="show-add-freq-form">+ ADD FREQ</button>
+          <button type="button" class="btn btn-sm" data-prep-action="export-chirp-csv" title="Export CHIRP CSV">EXPORT CHIRP</button>
+          <button type="button" class="btn btn-sm" data-app-frame-title="Frequency Card" data-app-frame-url="/api/print/freq-card">PRINT CARD</button>
+        </div>
+      </div>
+      <div class="settings-card prep-data-shell prep-table-wrap prep-radio-table-shell">
+        <table class="freq-table" id="freq-table-dynamic">
+          <thead>
+            <tr><th>FREQ (MHz)</th><th>MODE</th><th>SERVICE</th><th>DESCRIPTION</th><th>LICENSE</th><th>PRI</th><th></th></tr>
+          </thead>
+          <tbody id="freq-table-body"></tbody>
+        </table>
+      </div>
+      <div id="freq-count" class="prep-inline-stats prep-radio-count"></div>
+
+      <div class="prep-data-shell prep-utility-shell prep-radio-tool-shell">
+        <div class="prep-secondary-heading prep-utility-section-heading">
+          <span class="section-header-label">DTMF TONE GENERATOR</span>
+          <div class="prep-toolbar-spacer"></div>
+        </div>
+        <div class="prep-dtmf-grid" id="dtmf-pad">
+          <button type="button" class="btn prep-dtmf-key" data-dtmf-key="1">1</button><button type="button" class="btn prep-dtmf-key" data-dtmf-key="2">2</button><button type="button" class="btn prep-dtmf-key" data-dtmf-key="3">3</button><button type="button" class="btn prep-dtmf-key prep-dtmf-key-accent" data-dtmf-key="A">A</button>
+          <button type="button" class="btn prep-dtmf-key" data-dtmf-key="4">4</button><button type="button" class="btn prep-dtmf-key" data-dtmf-key="5">5</button><button type="button" class="btn prep-dtmf-key" data-dtmf-key="6">6</button><button type="button" class="btn prep-dtmf-key prep-dtmf-key-accent" data-dtmf-key="B">B</button>
+          <button type="button" class="btn prep-dtmf-key" data-dtmf-key="7">7</button><button type="button" class="btn prep-dtmf-key" data-dtmf-key="8">8</button><button type="button" class="btn prep-dtmf-key" data-dtmf-key="9">9</button><button type="button" class="btn prep-dtmf-key prep-dtmf-key-accent" data-dtmf-key="C">C</button>
+          <button type="button" class="btn prep-dtmf-key" data-dtmf-key="*">*</button><button type="button" class="btn prep-dtmf-key" data-dtmf-key="0">0</button><button type="button" class="btn prep-dtmf-key" data-dtmf-key="#">#</button><button type="button" class="btn prep-dtmf-key prep-dtmf-key-accent" data-dtmf-key="D">D</button>
+        </div>
+        <div class="prep-toolbar prep-toolbar-compact prep-radio-sequence-row">
+          <input id="dtmf-sequence" name="dtmf_sequence" class="prep-toolbar-input prep-text-input prep-radio-sequence-input" placeholder="Enter DTMF sequence (e.g., *3001#)" data-enter-action="play-dtmf-sequence">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="play-dtmf-sequence">Play Sequence</button>
+        </div>
+      </div>
+
+      <div class="prep-data-shell prep-utility-shell prep-radio-tool-shell">
+        <div class="prep-secondary-heading prep-utility-section-heading">
+          <span class="section-header-label">NATO PHONETIC ALPHABET TRAINER</span>
+          <div class="prep-toolbar-spacer"></div>
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="start-phonetic-quiz">Start Quiz</button>
+        </div>
+        <div id="phonetic-quiz" class="prep-quiz-shell is-hidden">
+          <div class="prep-quiz-letter" id="phonetic-letter">A</div>
+          <div class="prep-quiz-note">What is the NATO phonetic word for this letter?</div>
+          <input id="phonetic-input" name="phonetic_input" class="prep-field-control prep-quiz-input" placeholder="Type the phonetic word…" data-enter-action="check-phonetic">
+          <div id="phonetic-result" class="prep-quiz-result"></div>
+          <div class="prep-quiz-score">Score: <strong id="phonetic-score">0</strong> / <strong id="phonetic-total">0</strong></div>
+        </div>
+        <div id="phonetic-reference" class="prep-reference-grid"></div>
+      </div>
+
+      <div class="prep-data-shell prep-utility-shell prep-radio-tool-shell">
+        <div class="prep-secondary-heading prep-utility-section-heading">
+          <span class="section-header-label">HF PROPAGATION FORECAST</span>
+          <div class="prep-toolbar-spacer"></div>
+          <button type="button" class="btn btn-sm" data-prep-action="load-propagation">Refresh</button>
+        </div>
+        <div id="propagation-panel" class="prep-inline-status prep-propagation-panel">Loading…</div>
+      </div>
+
+    </div>
+    </div><!-- /psub-radio -->

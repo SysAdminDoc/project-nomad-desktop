@@ -1,0 +1,107 @@
+    <!-- Sub: Weather -->
+    <div id="psub-weather" class="prep-sub">
+    <div class="prep-section">
+      <h3>Weather Journal & Barometer <button class="help-icon" data-help="weather-guide" title="Weather tracking guide">?</button></h3>
+      <div id="zambretti-panel" class="settings-card prep-data-shell prep-form-shell mb-16">
+        <div class="section-header">
+          <span class="section-header-label">WEATHER FORECAST (OFFLINE)</span>
+          <span class="section-line"></span>
+          <button type="button" class="btn btn-sm" data-prep-action="load-zambretti">Refresh</button>
+        </div>
+        <div id="zambretti-content" class="prep-empty-state">Loading prediction…</div>
+      </div>
+      <div id="pressure-graph-panel" class="settings-card prep-data-shell prep-form-shell mb-16">
+        <div class="section-header">
+          <span class="section-header-label">PRESSURE HISTORY (48H)</span>
+          <span class="section-line"></span>
+          <button type="button" class="btn btn-sm" data-prep-action="load-pressure-graph">Refresh</button>
+        </div>
+        <canvas id="pressure-canvas" class="prep-weather-canvas" width="600" height="200"></canvas>
+        <div id="pressure-graph-info" class="prep-inline-stats text-center"></div>
+      </div>
+      <div class="prep-ops-grid">
+        <div class="settings-card">
+          <h3>Log Observation</h3>
+          <div class="prep-form-grid prep-form-grid-2 prep-ops-form-grid">
+            <label class="prep-field"><span class="prep-field-label">Pressure (hPa/mbar)</span><input id="wx-pressure" name="wx_pressure" type="number" step="0.1" class="prep-field-control" placeholder="e.g. 1013.25"></label>
+            <label class="prep-field"><span class="prep-field-label">Temperature (F)</span><input id="wx-temp" name="wx_temp" type="number" step="1" class="prep-field-control" placeholder="e.g. 72"></label>
+            <label class="prep-field"><span class="prep-field-label">Wind Direction</span><select id="wx-wind-dir" name="wx_wind_dir" class="prep-field-control"><option value="">Calm</option><option>N</option><option>NE</option><option>E</option><option>SE</option><option>S</option><option>SW</option><option>W</option><option>NW</option></select></label>
+            <label class="prep-field"><span class="prep-field-label">Wind Speed</span><select id="wx-wind-spd" name="wx_wind_spd" class="prep-field-control"><option value="">Calm</option><option>Light (1-7 mph)</option><option>Moderate (8-18 mph)</option><option>Strong (19-31 mph)</option><option>Gale (32-63 mph)</option><option>Storm (64+ mph)</option></select></label>
+            <label class="prep-field"><span class="prep-field-label">Cloud Cover</span><select id="wx-clouds" name="wx_clouds" class="prep-field-control"><option value="">Clear</option><option>Few (1-2/8)</option><option>Scattered (3-4/8)</option><option>Broken (5-7/8)</option><option>Overcast (8/8)</option></select></label>
+            <label class="prep-field"><span class="prep-field-label">Precipitation</span><select id="wx-precip" name="wx_precip" class="prep-field-control"><option value="">None</option><option>Light Rain</option><option>Moderate Rain</option><option>Heavy Rain</option><option>Drizzle</option><option>Snow</option><option>Sleet</option><option>Hail</option><option>Fog</option></select></label>
+            <label class="prep-field prep-field-span-2"><span class="prep-field-label">Notes</span><input id="wx-notes" name="wx_notes" class="prep-field-control" placeholder="Additional observations…"></label>
+          </div>
+          <div class="prep-form-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-prep-action="log-weather">Log Observation</button>
+          </div>
+        </div>
+        <div class="settings-card">
+          <h3>Pressure Trend & Forecast</h3>
+          <div id="wx-trend" class="prep-note-block"></div>
+          <div id="wx-history" class="prep-scroll-shell"></div>
+        </div>
+      </div>
+      <!-- Weather Action Rules -->
+      <div class="settings-card mt-16">
+        <div class="section-header">
+          <span class="section-header-label">WEATHER ACTION RULES</span>
+          <span class="section-line"></span>
+          <button type="button" class="btn btn-sm" data-prep-action="evaluate-weather-rules">Evaluate Now</button>
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="toggle-weather-rule-form">Add Rule</button>
+        </div>
+        <div id="wx-rule-form" class="prep-data-shell prep-form-shell mb-12 is-hidden">
+          <div class="prep-form-grid prep-form-grid-2 prep-ops-form-grid">
+            <label class="prep-field"><span class="prep-field-label">Rule Name</span><input id="wxr-name" name="wxr_name" class="prep-field-control" placeholder="e.g. Storm Warning"></label>
+            <label class="prep-field"><span class="prep-field-label">Condition Type</span><select id="wxr-condition" name="wxr_condition" class="prep-field-control"><option value="pressure_drop">Pressure Drop</option><option value="pressure_rise">Pressure Rise</option><option value="temp_high">Temp High</option><option value="temp_low">Temp Low</option><option value="wind_chill">Wind Chill</option><option value="heat_index">Heat Index</option></select></label>
+            <label class="prep-field"><span class="prep-field-label">Comparison</span><select id="wxr-comparison" name="wxr_comparison" class="prep-field-control"><option value="lt">Less than</option><option value="gt">Greater than</option><option value="lte">Less than or equal</option><option value="gte">Greater than or equal</option></select></label>
+            <label class="prep-field"><span class="prep-field-label">Threshold</span><input id="wxr-threshold" name="wxr_threshold" type="number" step="0.1" class="prep-field-control" placeholder="e.g. -4"></label>
+            <label class="prep-field"><span class="prep-field-label">Action Type</span><select id="wxr-action" name="wxr_action" class="prep-field-control"><option value="alert">Create Alert</option><option value="task">Create Task</option><option value="both">Alert + Task</option></select></label>
+            <label class="prep-field"><span class="prep-field-label">Cooldown (min)</span><input id="wxr-cooldown" name="wxr_cooldown" type="number" value="60" class="prep-field-control"></label>
+            <label class="prep-field"><span class="prep-field-label">Alert Severity</span><select id="wxr-severity" name="wxr_severity" class="prep-field-control"><option value="warning">Warning</option><option value="critical">Critical</option><option value="info">Info</option></select></label>
+            <label class="prep-field"><span class="prep-field-label">Alert Title (optional)</span><input id="wxr-title" name="wxr_title" class="prep-field-control" placeholder="Custom alert title"></label>
+            <label class="prep-field prep-field-span-2"><span class="prep-field-label">Alert Message (optional)</span><input id="wxr-message" name="wxr_message" class="prep-field-control" placeholder="Custom alert message"></label>
+            <label class="prep-field"><span class="prep-field-label">Task Name (if action=task/both)</span><input id="wxr-taskname" name="wxr_taskname" class="prep-field-control" placeholder="Task name"></label>
+            <label class="prep-field"><span class="prep-field-label">Task Category</span><input id="wxr-taskcat" name="wxr_taskcat" value="weather" class="prep-field-control"></label>
+          </div>
+          <div class="prep-form-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-prep-action="create-weather-rule">Save Rule</button>
+            <button type="button" class="btn btn-sm" data-prep-action="hide-weather-rule-form">Cancel</button>
+          </div>
+        </div>
+        <div id="wx-rules-list" class="prep-ops-copy"></div>
+      </div>
+    </div>
+    </div><!-- /psub-weather -->
+
+    <!-- Sub: Signals -->
+    <div id="psub-signals" class="prep-sub">
+    <div class="prep-section">
+      <h3>Signal Schedule & Radio Check-Ins</h3>
+      <div class="settings-card">
+        <div class="prep-form-grid prep-form-grid-2 prep-ops-form-grid">
+          <label class="prep-field"><span class="prep-field-label">Frequency/Channel</span><input id="sig-freq" name="sig_freq" class="prep-field-control" placeholder="e.g. FRS Ch 3"></label>
+          <label class="prep-field"><span class="prep-field-label">Check-in Time</span><input id="sig-time" name="sig_time" type="time" class="prep-field-control"></label>
+          <label class="prep-field"><span class="prep-field-label">Interval</span><select id="sig-interval" name="sig_interval" class="prep-field-control"><option value="1">Every hour</option><option value="2" selected>Every 2 hours</option><option value="4">Every 4 hours</option><option value="6">Every 6 hours</option><option value="8">Every 8 hours</option><option value="12">Every 12 hours</option><option value="24">Once daily</option></select></label>
+          <label class="prep-field"><span class="prep-field-label">Callsign / Purpose</span><input id="sig-purpose" name="sig_purpose" class="prep-field-control" placeholder="e.g. Net Control" data-enter-action="add-signal-schedule"></label>
+        </div>
+        <div class="prep-form-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="add-signal-schedule">Add</button>
+        </div>
+        <div id="signal-schedule-list" class="prep-table-wrap"></div>
+        <div id="signal-next" class="prep-reference-note prep-reference-note-tight" hidden></div>
+      </div>
+      <!-- Comms Log -->
+      <div class="settings-card prep-utility-shell prep-ops-shell layout-margin-top-16">
+        <h3 class="prep-utility-header prep-utility-header-compact"><span class="prep-utility-subtitle">Communications Log</span><button type="button" class="btn btn-sm" data-prep-action="load-comms-log">Refresh</button></h3>
+        <div class="prep-toolbar-row prep-ops-toolbar prep-ops-toolbar-compact">
+          <select id="comms-dir" name="comms_dir" class="preset-select prep-toolbar-select prep-toolbar-select-tight"><option value="rx">RX</option><option value="tx">TX</option></select>
+          <input id="comms-freq" name="comms_freq" class="prep-toolbar-input prep-toolbar-input-compact" placeholder="Freq/Channel">
+          <input id="comms-call" name="comms_call" class="prep-toolbar-input prep-toolbar-input-compact" placeholder="Callsign">
+          <input id="comms-msg" name="comms_msg" class="prep-toolbar-input prep-toolbar-input-wide" placeholder="Message / notes…" data-enter-action="log-comms">
+          <select id="comms-sig" name="comms_sig" class="preset-select prep-toolbar-select prep-toolbar-select-tight"><option value="">Sig?</option><option value="5/5">5/5</option><option value="4/5">4/5</option><option value="3/5">3/5</option><option value="2/5">2/5</option><option value="1/5">1/5</option></select>
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="log-comms">Log</button>
+        </div>
+        <div id="comms-log-list" class="prep-console-shell"></div>
+      </div>
+    </div>
+    </div><!-- /psub-signals -->

@@ -1,0 +1,40 @@
+    <!-- Sub: Contacts -->
+    <div id="psub-contacts" class="prep-sub">
+    <div class="prep-section">
+      <h3 class="prep-heading"><span>Emergency Contacts &amp; Comms Plan</span><span class="prep-heading-actions"><button class="help-icon" data-help="comms-guide" title="Contacts & communications guide">?</button> <button class="btn btn-sm" data-app-frame-title="Contact Directory" data-app-frame-url="/api/contacts/print" title="Printable contact list">Print</button></span></h3>
+      <div class="prep-toolbar prep-toolbar-row prep-data-toolbar">
+        <input id="contact-search" type="search" name="contact_search" class="prep-toolbar-input prep-text-input" placeholder="Search contacts..." data-input-action="load-contacts" autocomplete="off" aria-label="Search contacts">
+        <button class="btn btn-sm btn-primary" data-prep-action="show-contact-form">+ Add Contact</button>
+        <button class="btn btn-sm" data-prep-action="add-emergency-numbers" title="Add standard emergency numbers">+ Emergency Numbers</button>
+        <a class="btn btn-sm" href="/api/contacts/export-csv" title="Export">Export</a>
+        <input type="file" id="ct-import-file" name="ct_import_file" accept=".csv" data-change-action="import-contacts-csv" class="is-hidden">
+        <button class="btn btn-sm" data-click-target="ct-import-file" title="Import from CSV">Import</button>
+      </div>
+      <div id="contact-form" class="prep-form-shell prep-data-shell is-hidden">
+        <div class="prep-form-grid prep-form-grid-3">
+          <div class="prep-field"><label class="prep-field-label">Name *</label><input id="ct-name" name="ct_name" class="prep-field-control"></div>
+          <div class="prep-field"><label class="prep-field-label">Callsign</label><input id="ct-callsign" name="ct_callsign" class="prep-field-control" placeholder="e.g. KD2ABC"></div>
+          <div class="prep-field"><label class="prep-field-label">Role</label><input id="ct-role" name="ct_role" class="prep-field-control" placeholder="e.g. Medic, Comms lead"></div>
+          <div class="prep-field"><label class="prep-field-label">Skills</label><input id="ct-skills" name="ct_skills" class="prep-field-control" placeholder="e.g. First aid, radio, mechanical"></div>
+          <div class="prep-field"><label class="prep-field-label">Phone</label><input id="ct-phone" name="ct_phone" class="prep-field-control"></div>
+          <div class="prep-field"><label class="prep-field-label">Radio Freq</label><input id="ct-freq" name="ct_freq" class="prep-field-control" placeholder="e.g. FRS Ch 3, 146.520"></div>
+          <div class="prep-field"><label class="prep-field-label">Address</label><input id="ct-address" name="ct_address" class="prep-field-control"></div>
+          <div class="prep-field"><label class="prep-field-label">Rally Point</label><input id="ct-rally" name="ct_rally" class="prep-field-control" placeholder="e.g. Church parking lot, GPS coords"></div>
+          <div class="prep-field"><label class="prep-field-label">Blood Type</label><select id="ct-blood" name="ct_blood" class="prep-field-control"><option value="">Unknown</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
+          <div class="prep-field prep-field-span-2"><label class="prep-field-label">Medical Notes</label><input id="ct-medical" name="ct_medical" class="prep-field-control" placeholder="Allergies, conditions, medications"></div>
+          <div class="prep-field prep-field-span-3"><label class="prep-field-label">Notes</label><input id="ct-notes" name="ct_notes" class="prep-field-control"></div>
+        </div>
+        <input type="hidden" id="ct-edit-id" name="ct_edit_id" value="">
+        <div class="prep-form-actions">
+          <button class="btn btn-sm btn-primary" data-prep-action="save-contact">Save</button>
+          <button class="btn btn-sm" data-prep-action="hide-contact-form">Cancel</button>
+        </div>
+      </div>
+      <div id="contacts-grid" class="prep-card-grid prep-contacts-grid"></div>
+      <!-- Skills Matrix -->
+      <div class="prep-secondary-block prep-skills-block">
+        <h3 class="prep-secondary-heading">Skills Matrix <button class="btn btn-sm" data-prep-action="load-skills-matrix">Refresh</button></h3>
+        <div id="skills-matrix" class="skills-grid"></div>
+      </div>
+    </div>
+    </div><!-- /psub-contacts -->

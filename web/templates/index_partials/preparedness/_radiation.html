@@ -1,0 +1,31 @@
+    <!-- Sub: Radiation Log -->
+    <div id="psub-radiation" class="prep-sub">
+    <div class="prep-section">
+      <h3>Radiation Dose Tracker</h3>
+      <div class="prep-note-block">Log radiation readings from a Geiger counter or dosimeter and keep the current risk picture visible at a glance.</div>
+      <div id="radiation-dashboard" class="prep-resource-summary-grid"></div>
+      <div class="prep-toolbar-row prep-ops-toolbar">
+        <label class="prep-field"><span class="prep-field-label">Dose Rate (R/hr or rem/hr) *</span><input id="rad-log-rate" name="rad_log_rate" type="number" min="0" step="0.001" value="" class="prep-toolbar-input prep-toolbar-input-compact" placeholder="e.g. 0.5"></label>
+        <label class="prep-field"><span class="prep-field-label">Location</span><input id="rad-location" name="rad_location" class="prep-toolbar-input prep-toolbar-input-compact" placeholder="Basement, yard, etc."></label>
+        <label class="prep-field"><span class="prep-field-label">Notes</span><input id="rad-notes" name="rad_notes" class="prep-toolbar-input prep-toolbar-input-wide" placeholder="Optional" data-enter-action="log-radiation"></label>
+        <button type="button" class="btn btn-sm btn-primary" data-prep-action="log-radiation">Log Reading</button>
+        <button type="button" class="btn btn-sm prep-inline-delete" data-prep-action="clear-radiation">Clear Log</button>
+      </div>
+      <div class="prep-resource-note">
+        <div class="prep-note-heading">Dose Reference Thresholds</div>
+        <div class="prep-reference-grid">
+          <div class="prep-reference-item prep-reference-item-safe">Background: 0.0001-0.001 R/hr (safe indefinitely)</div>
+          <div class="prep-reference-item prep-reference-item-safe">&lt;0.1 R/hr: Acceptable for continuous occupancy</div>
+          <div class="prep-reference-item prep-reference-item-warn">0.1-2 R/hr: Limit exposure. 2 hrs max/day.</div>
+          <div class="prep-reference-item prep-reference-item-warn">2-10 R/hr: Limit to 30 min. Shelter strongly recommended.</div>
+          <div class="prep-reference-item prep-reference-item-danger">10-100 R/hr: Emergency only. Minutes maximum.</div>
+          <div class="prep-reference-item prep-reference-item-danger">&gt;100 R/hr: Lethal zone. Do not enter.</div>
+          <div class="prep-reference-item">Cumulative 25 rem: Possible long-term health effects</div>
+          <div class="prep-reference-item prep-reference-item-danger">Cumulative 100 rem: Acute radiation syndrome threshold</div>
+          <div class="prep-reference-item prep-reference-item-danger">Cumulative 400 rem: LD50 (lethal to 50% without treatment)</div>
+        </div>
+        <div class="prep-note-block">7-10 Rule: Fallout intensity drops 90% every 7x time after detonation. H+7hr = 10x less than H+1hr. H+49hr = 100x less. H+2wk = safe for most people to exit shelter briefly.</div>
+      </div>
+      <div id="radiation-log-table" class="prep-resource-table-shell"></div>
+    </div>
+    </div><!-- /psub-radiation -->

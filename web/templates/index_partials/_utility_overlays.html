@@ -1,0 +1,219 @@
+<!-- AI SITREP Display Panel -->
+<div id="ai-sitrep-modal" class="modal-overlay settings-modal-overlay is-hidden" data-backdrop-close="ai-sitrep-modal">
+  <div class="modal-card settings-modal-card settings-modal-card-lg">
+    <div class="modal-header settings-heading-row">
+      <h3 class="settings-detail-title">AI-Generated SITREP</h3>
+      <div class="settings-inline-actions">
+        <button class="btn btn-sm" type="button" data-shell-action="print-window">Print</button>
+        <button class="btn btn-sm btn-ghost settings-modal-close" type="button" data-shell-action="close-ai-sitrep" aria-label="Close AI SITREP dialog">x</button>
+      </div>
+    </div>
+    <div id="ai-sitrep-content" class="modal-body settings-sitrep-body"></div>
+  </div>
+</div>
+
+<div id="lan-chat-panel" class="utility-panel utility-panel-shell utility-panel-shell-wide utility-panel-shell-lan is-hidden">
+  <div class="utility-panel-header">
+    <span class="utility-panel-title">LAN Chat</span>
+    <select id="lan-channel" name="lan_channel" class="utility-panel-select" data-change-action="switch-lan-channel" aria-label="LAN chat channel">
+      <option value="">All Channels</option>
+    </select>
+    <div class="utility-panel-actions">
+      <label class="utility-panel-toggle" title="Encrypt LAN messages">
+        <input type="checkbox" id="lan-encrypt-toggle" name="lan_encrypt" class="utility-panel-toggle-input" checked>
+        <span>&#128274;</span>
+      </label>
+      <span class="utility-panel-status" id="lan-chat-status">Local network</span>
+      <button id="lan-chat-compact-toggle" class="btn btn-sm btn-ghost utility-compact-btn" type="button" data-shell-action="toggle-lan-chat-compact" aria-expanded="false" aria-controls="lan-chat-panel" aria-label="Expand LAN chat panel">Expand</button>
+      <button class="btn btn-sm btn-ghost utility-close-btn" type="button" data-shell-action="toggle-lan-chat" aria-label="Close LAN chat panel">x</button>
+    </div>
+  </div>
+  <div class="utility-panel-row">
+    <label class="utility-panel-label">Name:</label>
+    <input id="lan-chat-name" name="lan_chat_name" class="utility-panel-input" data-input-action="save-lan-chat-name" autocomplete="nickname" aria-label="LAN chat display name" placeholder="Your name">
+  </div>
+  <div id="lan-presence-bar" class="utility-panel-presence">
+    <span class="utility-panel-presence-label">Online:</span>
+    <span id="lan-presence-list">—</span>
+  </div>
+  <div id="lan-chat-messages" class="utility-panel-body utility-message-list"></div>
+  <div class="utility-panel-row utility-panel-row-compose">
+    <input id="lan-chat-input" name="lan_chat_message" class="utility-panel-input utility-panel-compose-input" data-enter-action="send-lan-msg" aria-label="LAN chat message" autocomplete="off" placeholder="Type a message…">
+    <button class="btn btn-sm btn-primary" type="button" data-shell-action="send-lan-msg">Send</button>
+  </div>
+</div>
+
+<div id="quick-actions-menu" class="floating-action-menu utility-actions-menu is-hidden">
+  <button class="btn btn-sm btn-primary utility-quick-btn" type="button" data-shell-action="quick-log-incident">Log Incident</button>
+  <button class="btn btn-sm btn-primary utility-quick-btn" type="button" data-shell-action="quick-start-timer">Start Timer</button>
+  <button class="btn btn-sm btn-primary utility-quick-btn" type="button" data-shell-action="quick-add-inventory">Add Supply</button>
+  <button class="btn btn-sm btn-primary utility-quick-btn" type="button" data-shell-action="quick-weather-obs">Weather Obs</button>
+  <button class="btn btn-sm btn-primary utility-quick-btn" type="button" data-shell-action="quick-new-note">New Note</button>
+</div>
+
+<div id="timer-panel" class="utility-panel utility-panel-shell is-hidden">
+  <div class="utility-panel-header">
+    <span class="utility-panel-title">Timers</span>
+    <button class="btn btn-sm btn-ghost utility-close-btn" type="button" data-shell-action="toggle-timer-panel" aria-label="Close timer panel">x</button>
+  </div>
+  <div class="utility-panel-row utility-panel-row-compose">
+    <input id="timer-name" name="timer_name" class="utility-panel-input utility-panel-compose-input" autocomplete="off" aria-label="Timer name" placeholder="Timer name…">
+    <input id="timer-mins" name="timer_minutes" class="utility-panel-input utility-panel-mins" type="number" min="1" max="1440" value="30" inputmode="numeric" aria-label="Timer duration in minutes">
+    <span class="utility-panel-hint">min</span>
+    <button class="btn btn-sm btn-primary" type="button" data-shell-action="create-timer">Start</button>
+  </div>
+  <div class="utility-panel-chip-row">
+    <button class="btn btn-sm utility-chip-btn" type="button" data-shell-action="create-timer-quick" data-timer-name="Water purification" data-timer-mins="30">Water 30m</button>
+    <button class="btn btn-sm utility-chip-btn" type="button" data-shell-action="create-timer-quick" data-timer-name="Medication" data-timer-mins="240">Meds 4h</button>
+    <button class="btn btn-sm utility-chip-btn" type="button" data-shell-action="create-timer-quick" data-timer-name="Watch change" data-timer-mins="120">Watch 2h</button>
+    <button class="btn btn-sm utility-chip-btn" type="button" data-shell-action="create-timer-quick" data-timer-name="Cooking" data-timer-mins="15">Cook 15m</button>
+  </div>
+  <div id="timer-list" class="utility-panel-body utility-timer-list"></div>
+</div>
+
+<!-- Setup Wizard -->
+<div class="wizard-overlay is-hidden" id="wizard" role="dialog" aria-modal="true" aria-label="Setup Wizard">
+  <div class="wizard-card wizard-card-shell">
+    <!-- Page 1: Welcome -->
+    <div id="wiz-page-1" class="wizard-page">
+      <img src="/static/nomad-mark.svg" alt="NOMAD logo" class="wizard-logo">
+      <h2 class="shimmer-text">Welcome to NOMAD</h2>
+      <p class="subtitle">Your desktop workspace for offline planning, reference, and local operations. Everything runs locally — no cloud, no subscriptions, no internet required after setup.</p>
+      <div class="wizard-capability-grid">
+        <div class="wizard-capability-card"><div class="wizard-capability-icon">&#129504;</div><strong>AI Chat</strong><span>Local AI that knows your situation</span></div>
+        <div class="wizard-capability-card"><div class="wizard-capability-icon">&#128218;</div><strong>Offline Library</strong><span>Wikipedia, medical, survival guides</span></div>
+        <div class="wizard-capability-card"><div class="wizard-capability-icon">&#127759;</div><strong>Offline Maps</strong><span>22 regions worldwide + waypoints</span></div>
+        <div class="wizard-capability-card"><div class="wizard-capability-icon">&#128203;</div><strong>Preparedness</strong><span>Checklists, inventory, protocols</span></div>
+        <div class="wizard-capability-card"><div class="wizard-capability-icon">&#128225;</div><strong>Communications</strong><span>Radio ref, LAN chat, mesh network</span></div>
+        <div class="wizard-capability-card"><div class="wizard-capability-icon">&#128274;</div><strong>Encrypted Vault</strong><span>Secure document storage</span></div>
+      </div>
+      <div class="wizard-actions wizard-actions-center">
+        <button class="btn btn-primary wizard-cta-btn" type="button" data-shell-action="wiz-go-page" data-wiz-page="2">Set Up Workspace</button>
+        <button class="btn" type="button" data-shell-action="skip-wizard">Skip for now</button>
+      </div>
+      <div class="wizard-note">This guided setup installs your tools, downloads offline content, and pulls an AI model. It usually takes 5-30 minutes depending on selections and internet speed.</div>
+    </div>
+
+    <!-- Page 2: Storage Location -->
+    <div id="wiz-page-2" class="wizard-page is-hidden">
+      <h2>Where should NOMAD store your data?</h2>
+      <p class="subtitle wizard-subtitle-compact">Choose a drive with plenty of free space. We recommend an external SSD or large secondary drive for maximum content.</p>
+      <div class="wizard-storage-scale">
+        <div class="wizard-storage-chip wizard-storage-chip-essential">Essential: ~10 GB</div>
+        <div class="wizard-storage-chip wizard-storage-chip-standard">Standard: ~80 GB</div>
+        <div class="wizard-storage-chip wizard-storage-chip-maximum">Maximum: ~500+ GB</div>
+      </div>
+      <div id="wiz-drives" class="wizard-drives-grid"></div>
+      <div class="wizard-field">
+        <label class="wizard-field-label">Or enter a custom path:</label>
+        <div class="wizard-inline-form">
+          <input id="wiz-custom-path" name="wizard_custom_path" class="wizard-input" autocomplete="off" aria-label="Custom data path" placeholder="e.g. D:\NOMAD">
+          <button class="btn btn-sm" type="button" data-shell-action="wiz-set-custom-path">Use This Path</button>
+        </div>
+      </div>
+      <div id="wiz-storage-status" class="wizard-status-line"></div>
+      <div class="wizard-actions wizard-actions-between">
+        <button class="btn" type="button" data-shell-action="wiz-go-page" data-wiz-page="1">Back</button>
+        <button class="btn btn-primary wizard-cta-btn wizard-cta-btn-sm" type="button" data-shell-action="wiz-go-page" data-wiz-page="3" id="wiz-storage-next">Next</button>
+      </div>
+    </div>
+
+    <!-- Page 3: Content Level -->
+    <div id="wiz-page-3" class="wizard-page is-hidden">
+      <h2>How much do you want to download?</h2>
+      <p class="subtitle wizard-subtitle-spacious">Everything downloads now and works offline forever. You can always add more later from the Library tab.</p>
+      <div class="wizard-tier-list" id="wiz-tiers"></div>
+      <div id="wiz-tier-detail" class="wizard-tier-detail is-hidden"></div>
+      <!-- Custom selection panel (hidden until "Custom" tier selected) -->
+      <div id="wiz-custom-panel" class="wizard-custom-panel is-hidden">
+        <div class="wizard-custom-title">Choose exactly what to install:</div>
+        <div class="wizard-custom-block">
+          <div class="wizard-custom-heading">Services</div>
+          <div id="wiz-custom-services" class="wizard-custom-grid"></div>
+        </div>
+        <div class="wizard-custom-block">
+          <div class="wizard-custom-heading">AI Models</div>
+          <div id="wiz-custom-models" class="wizard-custom-grid"></div>
+        </div>
+        <div class="wizard-custom-block">
+          <div class="wizard-custom-toolbar">
+            <span class="wizard-custom-heading">Content Packs</span>
+            <div class="wizard-custom-actions">
+              <button class="btn btn-sm wizard-micro-btn" type="button" data-shell-action="wiz-custom-select-all">Select All</button>
+              <button class="btn btn-sm wizard-micro-btn" type="button" data-shell-action="wiz-custom-deselect-all">Deselect All</button>
+            </div>
+          </div>
+          <div id="wiz-custom-zims" class="wizard-custom-zim-list"></div>
+        </div>
+      </div>
+      <div class="wizard-actions wizard-actions-between">
+        <button class="btn" type="button" data-shell-action="wiz-go-page" data-wiz-page="2">Back</button>
+        <button class="btn btn-primary wizard-cta-btn wizard-cta-btn-sm" type="button" data-shell-action="wiz-start-setup">Download Everything Selected</button>
+      </div>
+    </div>
+
+    <!-- Page 4: Installing -->
+    <div id="wiz-page-4" class="wizard-page is-hidden">
+      <div class="wizard-heading-row">
+        <h2 class="wizard-heading-tight">Preparing your workspace…</h2>
+        <button class="btn btn-sm wizard-micro-btn" type="button" data-shell-action="wiz-minimize" title="Minimize — setup continues in background">Minimize</button>
+      </div>
+      <p class="subtitle wizard-subtitle-compact">This may take a while depending on your internet speed and selections. Click Minimize to use the app while setup runs in the background.</p>
+      <div class="wizard-progress-shell">
+        <div class="progress-bar wizard-progress-bar"><div class="fill is-zero-width" id="wiz-overall-fill"></div></div>
+        <div class="wizard-progress-meta">
+          <span id="wiz-phase-label">Preparing…</span>
+          <span id="wiz-overall-pct">0%</span>
+        </div>
+      </div>
+      <div class="wizard-progress-card">
+        <div class="wizard-progress-title" id="wiz-current-item">Starting…</div>
+        <div class="progress-bar"><div class="fill is-zero-width" id="wiz-item-fill"></div></div>
+        <div class="wizard-progress-caption" id="wiz-item-pct">0%</div>
+      </div>
+      <div id="wiz-completed-list" class="wizard-completed-list"></div>
+      <div id="wiz-errors" class="wizard-errors is-hidden"></div>
+      <div id="wiz-stall-help" class="wizard-stall-help is-hidden">
+        <div class="wizard-stall-note">Taking longer than expected? Some downloads can take a while on slower connections.</div>
+        <button class="btn btn-sm" type="button" data-shell-action="wiz-skip-to-complete">Skip & Continue</button>
+      </div>
+    </div>
+
+    <!-- Page 5: Complete -->
+    <div id="wiz-page-5" class="wizard-page is-hidden">
+      <h2 class="wizard-complete-title">NOMAD is ready.</h2>
+      <p class="subtitle">Everything is installed, downloaded, and running. You're fully operational — even without internet.</p>
+      <div id="wiz-summary" class="wizard-summary-grid"></div>
+      <div id="wiz-error-summary" class="wizard-error-summary is-hidden"></div>
+      <div class="wizard-checklist">
+        <strong class="wizard-checklist-title">Recommended next steps:</strong>
+        <div class="wizard-checklist-list">
+          <div>1. Open the <strong>AI Chat</strong> tab and try asking a question</div>
+          <div>2. Check the <strong>Preparedness</strong> tab and create your first checklist</div>
+          <div>3. Add your family/team in <strong>Contacts</strong></div>
+          <div>4. Fill out your <strong>Family Emergency Plan</strong></div>
+          <div>5. Set up your <strong>PACE Communication Plan</strong></div>
+          <div>6. Access the dashboard from other devices: <strong id="wiz-lan-url" class="wizard-lan-url"></strong></div>
+        </div>
+      </div>
+      <div class="wizard-actions wizard-actions-center">
+        <button class="btn btn-primary wizard-cta-btn wizard-cta-btn-sm" type="button" data-shell-action="start-tour">Show Me Around</button>
+        <button class="btn" type="button" data-shell-action="close-tour-wizard">Start Using NOMAD</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Guided Tour -->
+<div id="tour-overlay" class="tour-overlay-shell is-hidden" data-shell-action="tour-next">
+  <div id="tour-card" class="tour-card-shell" data-stop-propagation>
+    <div id="tour-content"></div>
+    <div class="tour-footer">
+      <span id="tour-step-num" class="tour-step"></span>
+      <div class="tour-actions">
+        <button class="btn btn-sm" type="button" data-shell-action="tour-skip">Skip</button>
+        <button class="btn btn-sm btn-primary" type="button" data-shell-action="tour-next" id="tour-next-btn">Next</button>
+      </div>
+    </div>
+  </div>
+</div>

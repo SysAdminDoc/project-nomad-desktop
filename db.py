@@ -5,17 +5,23 @@ import os
 import glob
 import logging
 from contextlib import contextmanager
-from config import get_data_dir
+import config
 
 _log = logging.getLogger('nomad.db')
 
 
 def get_db_path():
-    return os.path.join(get_data_dir(), 'nomad.db')
+    db_path = config.get_config_value('db_path')
+    if isinstance(db_path, str) and db_path:
+        return db_path
+    data_dir = config.get_data_dir()
+    os.makedirs(data_dir, exist_ok=True)
+    return os.path.join(data_dir, 'nomad.db')
 
 
 def get_db():
-    conn = sqlite3.connect(get_db_path(), timeout=30)
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path, timeout=30, uri=db_path.startswith('file:'))
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA journal_mode=WAL')
     conn.execute('PRAGMA foreign_keys=ON')
@@ -59,7 +65,7 @@ def log_activity(event: str, service: str = None, detail: str = None, level: str
 def backup_db():
     """Create a timestamped backup of the database using SQLite backup API."""
     db_path = get_db_path()
-    if not os.path.isfile(db_path):
+    if db_path.startswith('file:') or not os.path.isfile(db_path):
         return
     backup_dir = os.path.join(os.path.dirname(db_path), 'backups')
     os.makedirs(backup_dir, exist_ok=True)

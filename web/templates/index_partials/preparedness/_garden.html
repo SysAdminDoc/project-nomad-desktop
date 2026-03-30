@@ -1,0 +1,177 @@
+    <!-- Sub: Garden & Food Production -->
+    <div id="psub-garden" class="prep-sub">
+    <div class="prep-section prep-utility-section prep-garden-workspace">
+      <div class="prep-command-bar prep-garden-header">
+        <div>
+          <div class="prep-command-note">Food Production</div>
+          <h3 class="prep-utility-title">Garden Operations</h3>
+          <div class="prep-status-copy">Track plots, seed viability, harvest output, preservation, and livestock from one field desk.</div>
+        </div>
+        <button class="help-icon" data-help="garden-guide" title="Food production guide">?</button>
+      </div>
+
+      <div class="prep-form-shell prep-data-shell prep-garden-zone-shell">
+        <div class="prep-utility-header prep-utility-header-compact">
+          <div>
+            <div class="prep-command-note">Climate</div>
+            <h4 class="prep-utility-subtitle">Growing Zone Lookup</h4>
+          </div>
+        </div>
+        <div class="prep-form-grid prep-garden-zone-grid">
+          <label class="prep-field">
+            <span class="prep-field-label">Latitude</span>
+            <input id="garden-lat" name="garden_lat" class="prep-field-control" type="number" step="0.1" value="39.8">
+          </label>
+        </div>
+        <div class="prep-form-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="lookup-garden-zone">Lookup Zone</button>
+          <button type="button" class="btn btn-sm" data-prep-action="use-garden-location">Use My Location</button>
+        </div>
+        <div id="zone-result" class="prep-status-banner prep-garden-zone-result is-hidden"></div>
+      </div>
+
+      <div class="prep-data-shell prep-tab-strip prep-garden-tab-strip">
+        <button class="btn btn-sm prep-utility-tab prep-utility-tab-active" id="garden-tab-plots" data-garden-tab="plots">Plots</button>
+        <button class="btn btn-sm prep-utility-tab" id="garden-tab-seeds" data-garden-tab="seeds">Seed Inventory</button>
+        <button class="btn btn-sm prep-utility-tab" id="garden-tab-harvest" data-garden-tab="harvest">Harvest Log</button>
+        <button class="btn btn-sm prep-utility-tab" id="garden-tab-livestock" data-garden-tab="livestock">Livestock</button>
+        <button class="btn btn-sm prep-utility-tab" id="garden-tab-calendar" data-garden-tab="calendar">Planting Calendar</button>
+        <button class="btn btn-sm prep-utility-tab" id="garden-tab-yield" data-garden-tab="yield">Yield Analysis</button>
+        <button class="btn btn-sm prep-utility-tab" id="garden-tab-preservation" data-garden-tab="preservation">Preservation</button>
+      </div>
+
+      <div id="garden-calendar-panel" class="prep-data-shell prep-utility-shell prep-garden-panel is-hidden">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Season Planner</div>
+            <h4 class="prep-utility-subtitle">Monthly Planting Guide</h4>
+          </div>
+          <span id="calendar-zone-label" class="prep-inline-pill prep-garden-zone-pill is-hidden"></span>
+        </div>
+        <div id="planting-calendar-grid" class="prep-garden-calendar-grid"></div>
+      </div>
+
+      <div id="garden-yield-panel" class="prep-data-shell prep-utility-shell prep-garden-panel is-hidden">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Analysis</div>
+            <h4 class="prep-utility-subtitle">Yield and Caloric Output</h4>
+          </div>
+        </div>
+        <div id="yield-summary" class="prep-dashboard-grid prep-garden-summary"></div>
+        <div id="yield-crops" class="prep-garden-results"></div>
+      </div>
+
+      <div id="garden-preservation-panel" class="prep-data-shell prep-utility-shell prep-garden-panel is-hidden">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Storage</div>
+            <h4 class="prep-utility-subtitle">Preservation Log</h4>
+          </div>
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="show-add-preservation-form">+ Log Batch</button>
+        </div>
+        <div id="preservation-list" class="prep-garden-results"></div>
+      </div>
+
+      <div id="garden-plots-panel" class="prep-data-shell prep-utility-shell prep-garden-panel">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Land Use</div>
+            <h4 class="prep-utility-subtitle">Plots</h4>
+          </div>
+        </div>
+        <div class="prep-form-grid prep-form-grid-4 prep-garden-form-grid">
+          <label class="prep-field"><span class="prep-field-label">Plot Name</span><input id="gp-name" name="gp_name" class="prep-field-control" placeholder="Main Garden"></label>
+          <label class="prep-field"><span class="prep-field-label">Width (ft)</span><input id="gp-width" name="gp_width" class="prep-field-control" type="number" min="1" value="10"></label>
+          <label class="prep-field"><span class="prep-field-label">Length (ft)</span><input id="gp-length" name="gp_length" class="prep-field-control" type="number" min="1" value="20"></label>
+          <label class="prep-field"><span class="prep-field-label">Sun</span><select id="gp-sun" name="gp_sun" class="prep-field-control"><option value="full">Full Sun (6+hr)</option><option value="partial">Partial (3-6hr)</option><option value="shade">Shade (&lt;3hr)</option></select></label>
+        </div>
+        <div class="prep-form-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="add-plot">Add Plot</button>
+        </div>
+        <div id="plots-list" class="prep-record-list prep-garden-records"></div>
+      </div>
+
+      <div id="garden-seeds-panel" class="prep-data-shell prep-utility-shell prep-garden-panel is-hidden">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Inventory</div>
+            <h4 class="prep-utility-subtitle">Seed Library</h4>
+          </div>
+        </div>
+        <div class="prep-form-grid prep-form-grid-4 prep-garden-form-grid">
+          <label class="prep-field"><span class="prep-field-label">Species</span><input id="gs-species" name="gs_species" class="prep-field-control" placeholder="Tomato"></label>
+          <label class="prep-field"><span class="prep-field-label">Variety</span><input id="gs-variety" name="gs_variety" class="prep-field-control" placeholder="Roma"></label>
+          <label class="prep-field"><span class="prep-field-label">Qty</span><input id="gs-qty" name="gs_qty" class="prep-field-control" type="number" min="1" value="50"></label>
+          <label class="prep-field"><span class="prep-field-label">Year Harvested</span><input id="gs-year" name="gs_year" class="prep-field-control" type="number" min="2000" max="2030" placeholder="2025"></label>
+          <label class="prep-field"><span class="prep-field-label">Days to Maturity</span><input id="gs-dtm" name="gs_dtm" class="prep-field-control" type="number" min="20" max="200" placeholder="75"></label>
+          <label class="prep-field"><span class="prep-field-label">Season</span><select id="gs-season" name="gs_season" class="prep-field-control"><option>spring</option><option>summer</option><option>fall</option><option>winter</option></select></label>
+        </div>
+        <div class="prep-form-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="add-seed">Add Seed</button>
+        </div>
+        <div id="seeds-list" class="prep-garden-results"></div>
+      </div>
+
+      <div id="garden-harvest-panel" class="prep-data-shell prep-utility-shell prep-garden-panel is-hidden">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Output</div>
+            <h4 class="prep-utility-subtitle">Harvest Log</h4>
+          </div>
+        </div>
+        <div class="prep-form-grid prep-form-grid-4 prep-garden-form-grid">
+          <label class="prep-field"><span class="prep-field-label">Crop</span><input id="gh-crop" name="gh_crop" class="prep-field-control" placeholder="Tomatoes"></label>
+          <label class="prep-field"><span class="prep-field-label">Quantity</span><input id="gh-qty" name="gh_qty" class="prep-field-control" type="number" min="0.1" step="0.1" value="5"></label>
+          <label class="prep-field"><span class="prep-field-label">Unit</span><select id="gh-unit" name="gh_unit" class="prep-field-control"><option>lbs</option><option>oz</option><option>ea</option><option>bushels</option><option>gallons</option></select></label>
+          <label class="prep-field"><span class="prep-field-label">From Plot</span><select id="gh-plot" name="gh_plot" class="prep-field-control"><option value="">— Any —</option></select></label>
+        </div>
+        <div class="prep-form-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="log-harvest">Log Harvest</button>
+        </div>
+        <div class="prep-status-copy">Harvests automatically add to your inventory.</div>
+        <div id="harvest-list" class="prep-garden-results"></div>
+      </div>
+
+      <div id="garden-livestock-panel" class="prep-data-shell prep-utility-shell prep-garden-panel is-hidden">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Animals</div>
+            <h4 class="prep-utility-subtitle">Livestock</h4>
+          </div>
+        </div>
+        <div class="prep-form-grid prep-form-grid-4 prep-garden-form-grid">
+          <label class="prep-field"><span class="prep-field-label">Species</span><select id="gl-species" name="gl_species" class="prep-field-control"><option>Chicken</option><option>Duck</option><option>Goat</option><option>Rabbit</option><option>Pig</option><option>Cow</option><option>Sheep</option><option>Turkey</option><option>Bee Hive</option><option>Other</option></select></label>
+          <label class="prep-field"><span class="prep-field-label">Name/Tag</span><input id="gl-name" name="gl_name" class="prep-field-control" placeholder="Henrietta"></label>
+          <label class="prep-field"><span class="prep-field-label">Sex</span><select id="gl-sex" name="gl_sex" class="prep-field-control"><option value="">-</option><option>Male</option><option>Female</option></select></label>
+          <label class="prep-field"><span class="prep-field-label">DOB</span><input id="gl-dob" name="gl_dob" class="prep-field-control" type="date"></label>
+          <label class="prep-field"><span class="prep-field-label">Weight (lbs)</span><input id="gl-weight" name="gl_weight" class="prep-field-control" type="number" min="0.1" step="0.1"></label>
+        </div>
+        <div class="prep-form-actions">
+          <button type="button" class="btn btn-sm btn-primary" data-prep-action="add-livestock">Add Animal</button>
+        </div>
+        <div id="livestock-list" class="prep-garden-results"></div>
+      </div>
+
+      <div class="prep-data-shell prep-utility-shell prep-garden-panel">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Reference</div>
+            <h4 class="prep-utility-subtitle">Companion Planting Guide</h4>
+          </div>
+        </div>
+        <input id="companion-search" name="companion_search" class="prep-field-control prep-garden-search" placeholder="Search plants…" data-input-action="filter-companions">
+        <div id="companion-grid" class="prep-companion-grid"></div>
+      </div>
+
+      <div class="prep-data-shell prep-utility-shell prep-garden-panel">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Reference</div>
+            <h4 class="prep-utility-subtitle">Pest and Disease Guide</h4>
+          </div>
+        </div>
+        <div id="pest-guide-grid" class="prep-pest-grid"></div>
+      </div>
+    </div>
+    </div><!-- /psub-garden -->

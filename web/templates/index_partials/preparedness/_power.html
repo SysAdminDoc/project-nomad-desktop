@@ -1,0 +1,98 @@
+    <!-- Sub: Power Management -->
+    <div id="psub-power" class="prep-sub">
+    <div class="prep-section prep-utility-section prep-power-section">
+      <h3 class="prep-heading">Power Management <button class="help-icon" data-help="power-guide" title="Power management guide">?</button></h3>
+
+      <div id="power-dashboard" class="prep-dashboard-grid prep-power-dashboard"></div>
+
+      <div class="prep-subtabs-shell prep-tab-strip">
+        <button type="button" class="btn btn-sm prep-utility-tab prep-utility-tab-active" id="pwr-tab-devices" data-power-tab="devices">Devices</button>
+        <button type="button" class="btn btn-sm prep-utility-tab" id="pwr-tab-log" data-power-tab="log">Power Log</button>
+      </div>
+
+      <div id="power-devices-panel">
+        <div class="prep-form-shell prep-data-shell prep-power-device-form">
+          <div class="prep-form-grid prep-power-device-grid">
+            <label class="prep-field"><span class="prep-field-label">Type</span><select id="pd-type" name="pd_type" class="prep-field-control" data-change-action="update-power-spec-fields">
+              <option value="solar_panel">Solar Panel</option>
+              <option value="battery">Battery</option>
+              <option value="charge_controller">Charge Controller</option>
+              <option value="inverter">Inverter</option>
+              <option value="generator">Generator</option>
+            </select></label>
+            <label class="prep-field"><span class="prep-field-label">Name</span><input id="pd-name" name="pd_name" class="prep-field-control" placeholder="Renogy 200W"></label>
+            <div id="pd-spec-fields" class="prep-form-grid prep-power-spec-grid"></div>
+          </div>
+          <div class="prep-form-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-prep-action="add-power-device">Add</button>
+          </div>
+        </div>
+        <div id="power-devices-list" class="prep-record-list prep-power-device-list"></div>
+      </div>
+
+      <div id="power-log-panel" class="is-hidden">
+        <div class="prep-form-shell prep-data-shell prep-power-log-form">
+          <div class="prep-form-title">Log Power Reading</div>
+          <div class="prep-form-grid prep-power-log-grid">
+            <label class="prep-field"><span class="prep-field-label">Battery V</span><input id="pl-voltage" name="pl_voltage" class="prep-field-control" type="number" step="0.1" min="0" max="60" placeholder="12.8"></label>
+            <label class="prep-field"><span class="prep-field-label">SOC %</span><input id="pl-soc" name="pl_soc" class="prep-field-control" type="number" min="0" max="100" placeholder="85"></label>
+            <label class="prep-field"><span class="prep-field-label">Solar W</span><input id="pl-solar" name="pl_solar" class="prep-field-control" type="number" min="0" step="1" placeholder="350"></label>
+            <label class="prep-field"><span class="prep-field-label">Solar Wh Today</span><input id="pl-solar-wh" name="pl_solar_wh" class="prep-field-control" type="number" min="0" placeholder="1800"></label>
+            <label class="prep-field"><span class="prep-field-label">Load W</span><input id="pl-load" name="pl_load" class="prep-field-control" type="number" min="0" step="1" placeholder="150"></label>
+            <label class="prep-field"><span class="prep-field-label">Load Wh Today</span><input id="pl-load-wh" name="pl_load_wh" class="prep-field-control" type="number" min="0" placeholder="2400"></label>
+            <label class="prep-field"><span class="prep-field-label">Generator</span><select id="pl-gen" name="pl_gen" class="prep-field-control"><option value="0">Off</option><option value="1">Running</option></select></label>
+          </div>
+          <div class="prep-form-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-prep-action="log-power-reading">Log</button>
+          </div>
+        </div>
+        <div id="power-log-list" class="prep-table-wrap prep-power-log-shell"></div>
+      </div>
+    </div>
+      <div class="prep-data-shell prep-utility-shell prep-sensor-shell">
+        <div class="prep-utility-header">
+          <div>
+            <div class="prep-command-note">Telemetry</div>
+            <h4 class="prep-utility-subtitle">Sensor History</h4>
+          </div>
+        </div>
+        <div class="prep-toolbar prep-toolbar-compact prep-sensor-toolbar">
+          <select id="sensor-device-select" name="sensor_device_select" class="prep-toolbar-select prep-toolbar-select-wide" data-change-action="load-sensor-chart">
+            <option value="">Select sensor device…</option>
+          </select>
+          <button type="button" class="btn btn-sm" data-prep-action="load-sensor-devices">Refresh Devices</button>
+        </div>
+        <div id="sensor-chart-container" class="prep-chart-shell is-hidden">
+          <canvas id="sensor-history-chart" class="prep-chart-canvas"></canvas>
+          <div id="sensor-chart-info" class="prep-inline-stats prep-chart-info"></div>
+        </div>
+      </div>
+
+      <div class="prep-section prep-utility-section prep-solar-section">
+        <div class="prep-command-bar prep-solar-command-bar">
+          <div>
+            <div class="prep-command-note">Forecasting</div>
+            <h3 class="prep-utility-title">Solar Forecast</h3>
+          </div>
+        </div>
+        <div class="prep-form-shell prep-data-shell prep-solar-form">
+          <div class="prep-form-grid prep-solar-form-grid">
+            <label class="prep-field"><span class="prep-field-label">Latitude</span><input id="sf-lat" name="sf_lat" class="prep-field-control" type="number" step="0.001" placeholder="39.8"></label>
+            <label class="prep-field"><span class="prep-field-label">Longitude</span><input id="sf-lng" name="sf_lng" class="prep-field-control" type="number" step="0.001" placeholder="-98.5"></label>
+            <label class="prep-field"><span class="prep-field-label">Panel W</span><input id="sf-watts" name="sf_watts" class="prep-field-control" type="number" value="100" min="1"></label>
+            <label class="prep-field"><span class="prep-field-label">Count</span><input id="sf-count" name="sf_count" class="prep-field-control" type="number" value="1" min="1"></label>
+            <label class="prep-field"><span class="prep-field-label">Efficiency</span><input id="sf-eff" name="sf_eff" class="prep-field-control" type="number" value="0.85" min="0.1" max="1" step="0.05"></label>
+          </div>
+          <div class="prep-form-actions">
+            <button type="button" class="btn btn-sm btn-primary" data-prep-action="load-solar-forecast">Forecast</button>
+            <button type="button" class="btn btn-sm" data-prep-action="update-solar-config" title="Auto-detect location from settings">Auto Location</button>
+          </div>
+        </div>
+        <div id="solar-forecast-today" class="prep-dashboard-grid prep-solar-metrics"></div>
+        <div id="solar-cloud-indicator" class="prep-status-banner is-hidden"></div>
+        <div class="prep-data-shell prep-chart-shell prep-solar-chart-shell">
+          <div class="prep-chart-title">7-Day Solar Estimate (kWh/day)</div>
+          <canvas id="solar-7day-chart" width="500" height="160" class="prep-chart-canvas prep-chart-canvas-wide"></canvas>
+        </div>
+      </div>
+    </div><!-- /psub-power -->

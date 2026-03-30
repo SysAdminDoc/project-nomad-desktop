@@ -1,6 +1,7 @@
 """
-N.O.M.A.D. Headless Server — Docker/CLI mode without desktop GUI.
-Runs Flask on 0.0.0.0:8080 with full API access.
+NOMAD Field Desk headless server.
+
+Runs Flask on 0.0.0.0:8080 without the desktop shell.
 """
 
 import os
@@ -28,22 +29,24 @@ if data_dir:
     from config import save_config
     save_config({'data_dir': data_dir})
 
-# Bootstrap dependencies
-def _bootstrap():
+def _check_deps():
+    """Verify required dependencies are installed. Log errors for missing ones."""
     if getattr(sys, 'frozen', False):
         return
-    deps = ['flask', 'requests', 'PIL', 'psutil']
-    pkg_names = {'PIL': 'pillow'}
-    for dep in deps:
+    missing = []
+    deps = {'flask': 'flask', 'requests': 'requests', 'PIL': 'pillow', 'psutil': 'psutil'}
+    for module, package in deps.items():
         try:
-            __import__(dep)
+            __import__(module)
         except ImportError:
-            import subprocess
-            pkg = pkg_names.get(dep, dep)
-            subprocess.check_call([sys.executable, '-m', 'pip', 'install', pkg],
-                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            missing.append(package)
+    if missing:
+        print(f'ERROR: Missing required packages: {", ".join(missing)}')
+        print(f'Install with: pip install {" ".join(missing)}')
+        print(f'Or install all: pip install -r requirements.txt')
+        sys.exit(1)
 
-_bootstrap()
+_check_deps()
 
 from db import init_db, log_activity
 from web.app import create_app
@@ -53,7 +56,7 @@ PORT = int(os.environ.get('NOMAD_PORT', 8080))
 
 
 def main():
-    log.info(f'N.O.M.A.D. Headless Server v{VERSION}')
+    log.info(f'NOMAD Field Desk Headless Server v{VERSION}')
     log.info(f'Data directory: {os.environ.get("NOMAD_DATA_DIR", "default")}')
     log.info(f'Listening on 0.0.0.0:{PORT}')
 
