@@ -112,7 +112,7 @@
 .sr-ribbon-down { color: #e05050; }
 
 /* ─── Map — flexes to fill upper half, atmospheric gradient ─── */
-.sr-map-wrap { position: relative; border-bottom: 1px solid #2a2a2a; display: flex; flex-direction: column; flex: 1 1 40%; min-height: 200px; }
+.sr-map-wrap { position: relative; border-bottom: 1px solid #2a2a2a; display: flex; flex-direction: column; flex: 3 1 60%; min-height: 300px; }
 .sr-map-wrap::after {
   content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background: radial-gradient(ellipse 60% 50% at 50% 50%, #0a2a2010 0%, #020a0800 100%);
@@ -137,7 +137,7 @@
   gap: 4px; background: #0a0a0a; padding: 4px;
   flex: 1 1 auto;
   overflow-y: auto;
-  min-height: 0;
+  min-height: 200px;
 }
 .sr-card {
   background: #141414; border: 1px solid #2a2a2a; border-radius: 0;
