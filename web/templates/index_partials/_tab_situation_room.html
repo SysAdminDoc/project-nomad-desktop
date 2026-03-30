@@ -30,6 +30,7 @@
       <div class="sr-tick"><span class="sr-tick-val" id="sitroom-stat-markets">--</span><span class="sr-tick-lbl">MARKETS</span></div>
       <div class="sr-tick"><span class="sr-tick-val" id="sitroom-stat-aircraft">--</span><span class="sr-tick-lbl">AIRCRAFT</span></div>
       <div class="sr-tick"><span class="sr-tick-val" id="sitroom-stat-volcanoes">--</span><span class="sr-tick-lbl">VOLCANOES</span></div>
+      <div class="sr-tick"><span class="sr-tick-val" id="sitroom-stat-fires">--</span><span class="sr-tick-lbl">FIRES</span></div>
       <div class="sr-tick"><span class="sr-tick-val" id="sitroom-stat-predictions">--</span><span class="sr-tick-lbl">PREDICTIONS</span></div>
     </div>
 
@@ -45,6 +46,7 @@
         <label class="sr-layer"><input type="checkbox" id="sitroom-layer-conflicts" checked data-sitroom-layer="conflicts"> Crises</label>
         <label class="sr-layer"><input type="checkbox" id="sitroom-layer-aviation" data-sitroom-layer="aviation"> Aviation</label>
         <label class="sr-layer"><input type="checkbox" id="sitroom-layer-volcanoes" data-sitroom-layer="volcanoes"> Volcanoes</label>
+        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-fires" data-sitroom-layer="fires"> Fires</label>
       </div>
       <div id="sitroom-map" class="sr-map" role="img" aria-label="Global event map"></div>
     </div>
@@ -95,27 +97,27 @@
         <div id="sitroom-predictions-list" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
-      <!-- Live Webcams -->
-      <div class="sr-card">
-        <div class="sr-card-head">LIVE WEBCAMS</div>
-        <div class="sr-card-body sr-webcam-grid" id="sr-webcams">
-          <div class="sr-webcam" data-webcam="jackson">
-            <img src="https://www.nps.gov/webcams-glte/camera0.jpg" alt="Grand Teton" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22320%22 height=%22180%22><rect fill=%22%23111%22 width=%22320%22 height=%22180%22/><text x=%2250%25%22 y=%2250%25%22 fill=%22%23444%22 font-family=%22monospace%22 font-size=%2212%22 text-anchor=%22middle%22 dy=%22.3em%22>Feed offline</text></svg>'">
-            <span class="sr-webcam-label">Grand Teton NP</span>
-          </div>
-          <div class="sr-webcam" data-webcam="abbey">
-            <img src="https://www.abbeyroad.com/webcam/abbey-road-webcam.jpg" alt="Abbey Road" loading="lazy" onerror="this.parentElement.style.display='none'">
-            <span class="sr-webcam-label">Abbey Road, London</span>
-          </div>
-          <div class="sr-webcam" data-webcam="iss">
-            <img src="https://eol.jsc.nasa.gov/DatabaseImages/ISSMissions/highres/ISS_Crew_Earth_Observations.jpg" alt="ISS" loading="lazy" onerror="this.parentElement.style.display='none'">
-            <span class="sr-webcam-label">ISS Earth View</span>
-          </div>
-          <div class="sr-webcam" data-webcam="yellowstone">
-            <img src="https://www.nps.gov/webcams-yell/oldfaith2.jpg" alt="Old Faithful" loading="lazy" onerror="this.parentElement.style.display='none'">
-            <span class="sr-webcam-label">Old Faithful, Yellowstone</span>
-          </div>
+      <!-- Live News Channels -->
+      <div class="sr-card sr-card-wide">
+        <div class="sr-card-head">
+          LIVE NEWS
+          <div class="sr-channel-btns" id="sr-channel-btns"></div>
         </div>
+        <div class="sr-card-body sr-live-player" id="sr-live-player">
+          <div class="sr-empty">Select a channel above</div>
+        </div>
+      </div>
+
+      <!-- Satellite Fires -->
+      <div class="sr-card">
+        <div class="sr-card-head">FIRES (NASA FIRMS)</div>
+        <div id="sitroom-fires-list" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
+      </div>
+
+      <!-- Disease Outbreaks -->
+      <div class="sr-card">
+        <div class="sr-card-head">DISEASE OUTBREAKS (WHO)</div>
+        <div id="sitroom-diseases-list" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
       <!-- Country Intelligence Index -->
