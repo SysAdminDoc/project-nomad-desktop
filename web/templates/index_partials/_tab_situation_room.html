@@ -13,6 +13,9 @@
         <span class="sr-title">SITUATION ROOM</span>
         <span class="sr-subtitle">Global intelligence &mdash; open-source feeds</span>
       </div>
+      <div class="sr-header-center">
+        <span id="sr-utc-clock" class="sr-utc-clock"></span>
+      </div>
       <div class="sr-header-right">
         <span id="sitroom-last-update" class="sr-ts"></span>
         <span id="sitroom-threat-level" class="sr-threat-badge" title="Composite threat level">LEVEL 5</span>
@@ -32,6 +35,7 @@
       <div class="sr-tick"><span class="sr-tick-val" id="sitroom-stat-aircraft">--</span><span class="sr-tick-lbl">AIRCRAFT</span></div>
       <div class="sr-tick"><span class="sr-tick-val" id="sitroom-stat-volcanoes">--</span><span class="sr-tick-lbl">VOLCANOES</span></div>
       <div class="sr-tick"><span class="sr-tick-val" id="sitroom-stat-fires">--</span><span class="sr-tick-lbl">FIRES</span></div>
+      <div class="sr-tick"><span class="sr-tick-val" id="sitroom-stat-outages">--</span><span class="sr-tick-lbl">OUTAGES</span></div>
       <div class="sr-tick"><span class="sr-tick-val" id="sitroom-stat-predictions">--</span><span class="sr-tick-lbl">PREDICTIONS</span></div>
     </div>
 
@@ -151,6 +155,24 @@
       <div class="sr-card">
         <div class="sr-card-head">INTEL FEED</div>
         <div id="sr-intel-feed" class="sr-card-body sr-scroll"><div class="sr-empty">Defense &amp; security headlines from intel sources</div></div>
+      </div>
+
+      <!-- Radiation Watch -->
+      <div class="sr-card">
+        <div class="sr-card-head">RADIATION WATCH</div>
+        <div id="sitroom-radiation" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
+      </div>
+
+      <!-- GDELT Trending -->
+      <div class="sr-card">
+        <div class="sr-card-head">TRENDING TOPICS</div>
+        <div id="sitroom-trending" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
+      </div>
+
+      <!-- Sanctions & Trade -->
+      <div class="sr-card">
+        <div class="sr-card-head">SANCTIONS &amp; TRADE</div>
+        <div id="sitroom-sanctions" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
     </div>
