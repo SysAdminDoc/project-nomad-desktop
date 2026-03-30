@@ -80,7 +80,13 @@ function initSitroomMap() {
       },
       center: [0, 20], zoom: 1.8, attributionControl: false,
     });
-    _sitroomMap.on('load', () => loadSitroomMapData());
+    _sitroomMap.on('load', () => {
+      _sitroomMap.resize();
+      loadSitroomMapData();
+    });
+    // Force resize after a delay in case container dimensions changed
+    setTimeout(() => { if (_sitroomMap) _sitroomMap.resize(); }, 500);
+    setTimeout(() => { if (_sitroomMap) _sitroomMap.resize(); }, 1500);
     _sitroomMap.on('error', (e) => {
       if (e.error && e.error.status === 0) {
         try {

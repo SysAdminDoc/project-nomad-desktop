@@ -7,13 +7,20 @@
    large full-width map, grid card layout below.
    ═══════════════════════════════════════════════════════════ */
 
+/* Break out of .container padding and max-width */
 #tab-situation-room {
   background: #060608;
   color: #c8ccd0;
   font-family: 'SF Mono', 'Cascadia Code', 'Consolas', var(--font-data, monospace);
   font-size: 12px;
   padding: 0;
-  min-height: 100vh;
+  min-height: calc(100vh - 60px);
+  /* Negate .container padding (34px 42px) to go full-bleed */
+  margin: -34px -42px;
+  width: calc(100% + 84px);
+}
+@media (max-width: 900px) {
+  #tab-situation-room { margin: -20px -16px; width: calc(100% + 32px); }
 }
 
 /* ─── Header ─── */
