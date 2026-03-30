@@ -2069,6 +2069,172 @@ def _fetch_displacement():
     log.info(f"Situation Room: cached {len(items)} displacement records")
 
 
+# ─── Israel OREF Alerts ─────────────────────────────────────────────
+
+def _fetch_oref_alerts():
+    """Fetch Israel Home Front Command (OREF) real-time alerts."""
+    if not _can_fetch('oref_alerts'):
+        return
+    _set_last_fetch('oref_alerts')
+    try:
+        # OREF public API — real-time rocket/siren alerts
+        resp = requests.get('https://www.oref.org.il/WarningMessages/History/AlertsHistory.json',
+                            timeout=_REQ_TIMEOUT,
+                            headers={**_REQ_HEADERS, 'Referer': 'https://www.oref.org.il/',
+                                     'X-Requested-With': 'XMLHttpRequest'})
+        if not resp.ok:
+            return
+        data = resp.json() if resp.text.strip() else []
+    except Exception as e:
+        log.debug(f"OREF fetch failed: {e}")
+        return
+
+    if not data or not isinstance(data, list):
+        return
+
+    with db_session() as db:
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'oref_alert'")
+        for alert in data[:50]:
+            title = alert.get('data', alert.get('title', 'Alert'))
+            cat = alert.get('category', '')
+            alert_date = alert.get('alertDate', '')
+            # Geocode common Israeli areas
+            area = title.lower()
+            lat, lng = 31.5, 34.8  # Default: central Israel
+            if 'tel aviv' in area or 'gush dan' in area:
+                lat, lng = 32.07, 34.78
+            elif 'haifa' in area:
+                lat, lng = 32.79, 34.99
+            elif 'jerusalem' in area:
+                lat, lng = 31.77, 35.23
+            elif 'beer sheva' in area or 'negev' in area:
+                lat, lng = 31.25, 34.79
+            elif 'ashkelon' in area or 'sderot' in area:
+                lat, lng = 31.67, 34.57
+            elif 'eilat' in area:
+                lat, lng = 29.56, 34.95
+            elif 'galil' in area or 'tiberias' in area:
+                lat, lng = 32.79, 35.53
+            eid = hashlib.sha256(f"oref:{title}:{alert_date}".encode()).hexdigest()[:16]
+            db.execute('''INSERT OR IGNORE INTO sitroom_events
+                (event_id, event_type, title, lat, lng, event_time, detail_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                (eid, 'oref_alert', f"OREF: {title}", lat, lng, alert_date,
+                 json.dumps({'category': cat, 'date': alert_date, 'raw': title})))
+        db.commit()
+    log.info(f"Situation Room: cached {len(data)} OREF alerts")
+
+
+# ─── GDELT Full Events ─────────────────────────────────────────────
+
+def _fetch_gdelt_events():
+    """Fetch GDELT event counts and tone timeline (beyond just trending)."""
+    if not _can_fetch('gdelt_events'):
+        return
+    _set_last_fetch('gdelt_events')
+
+    results = {}
+    # GDELT DOC API — event counts by theme in last 24h
+    try:
+        resp = requests.get('https://api.gdeltproject.org/api/v2/doc/doc',
+                            params={'query': '', 'mode': 'TimelineVolInfo', 'format': 'json',
+                                    'TIMESPAN': '24h'},
+                            timeout=15, headers=_REQ_HEADERS)
+        if resp.ok:
+            results['volume'] = resp.json()
+    except Exception as e:
+        log.debug(f"GDELT volume fetch failed: {e}")
+
+    # Tone timeline (sentiment over time)
+    try:
+        resp = requests.get('https://api.gdeltproject.org/api/v2/doc/doc',
+                            params={'query': '', 'mode': 'TimelineTone', 'format': 'json',
+                                    'TIMESPAN': '72h'},
+                            timeout=15, headers=_REQ_HEADERS)
+        if resp.ok:
+            results['tone'] = resp.json()
+    except Exception as e:
+        log.debug(f"GDELT tone fetch failed: {e}")
+
+    # Geographic hotspots (top locations mentioned)
+    try:
+        resp = requests.get('https://api.gdeltproject.org/api/v2/doc/doc',
+                            params={'query': '', 'mode': 'PointData', 'format': 'json',
+                                    'TIMESPAN': '24h', 'MAXPOINTS': 50},
+                            timeout=15, headers=_REQ_HEADERS)
+        if resp.ok:
+            results['hotspots'] = resp.json()
+    except Exception as e:
+        log.debug(f"GDELT hotspots fetch failed: {e}")
+
+    if not results:
+        return
+
+    with db_session() as db:
+        db.execute('''CREATE TABLE IF NOT EXISTS sitroom_gdelt
+            (id INTEGER PRIMARY KEY, data_type TEXT UNIQUE, value_json TEXT,
+             cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        for dtype, data in results.items():
+            db.execute('INSERT OR REPLACE INTO sitroom_gdelt (data_type, value_json) VALUES (?, ?)',
+                       (dtype, json.dumps(data)))
+        db.commit()
+    log.info(f"Situation Room: cached {len(results)} GDELT datasets")
+
+
+# ─── COT Positioning (CFTC) ────────────────────────────────────────
+
+def _fetch_cot_positioning():
+    """Fetch CFTC Commitments of Traders positioning data."""
+    if not _can_fetch('cot_positioning'):
+        return
+    _set_last_fetch('cot_positioning')
+    try:
+        # CFTC Disaggregated Futures — top commodities
+        # Using the open data API (Socrata-compatible)
+        resp = requests.get('https://publicreporting.cftc.gov/resource/jun7-fc8e.json',
+                            params={'$limit': 50, '$order': 'report_date_as_yyyy_mm_dd DESC',
+                                    '$where': "market_and_exchange_names LIKE '%CRUDE OIL%' OR "
+                                              "market_and_exchange_names LIKE '%GOLD%' OR "
+                                              "market_and_exchange_names LIKE '%S&P 500%' OR "
+                                              "market_and_exchange_names LIKE '%EURO FX%' OR "
+                                              "market_and_exchange_names LIKE '%NATURAL GAS%' OR "
+                                              "market_and_exchange_names LIKE '%CORN%' OR "
+                                              "market_and_exchange_names LIKE '%WHEAT%' OR "
+                                              "market_and_exchange_names LIKE '%SILVER%'"},
+                            timeout=15, headers=_REQ_HEADERS)
+        if not resp.ok:
+            return
+        data = resp.json()
+    except Exception as e:
+        log.debug(f"CFTC COT fetch failed: {e}")
+        return
+
+    if not data:
+        return
+
+    with db_session() as db:
+        db.execute('''CREATE TABLE IF NOT EXISTS sitroom_cot
+            (id INTEGER PRIMARY KEY, market TEXT, report_date TEXT,
+             long_positions REAL, short_positions REAL, net_positions REAL,
+             change_long REAL, change_short REAL,
+             cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+             UNIQUE(market, report_date))''')
+        for row in data[:50]:
+            market = row.get('market_and_exchange_names', '')[:100]
+            report_date = row.get('report_date_as_yyyy_mm_dd', '')
+            long_pos = float(row.get('noncomm_positions_long_all', 0) or 0)
+            short_pos = float(row.get('noncomm_positions_short_all', 0) or 0)
+            chg_long = float(row.get('change_in_noncomm_long_all', 0) or 0)
+            chg_short = float(row.get('change_in_noncomm_short_all', 0) or 0)
+            db.execute('''INSERT OR REPLACE INTO sitroom_cot
+                (market, report_date, long_positions, short_positions, net_positions,
+                 change_long, change_short) VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                (market, report_date, long_pos, short_pos, long_pos - short_pos,
+                 chg_long, chg_short))
+        db.commit()
+    log.info(f"Situation Room: cached {len(data)} COT positioning entries")
+
+
 # ─── Refresh Orchestrator ──────────────────────────────────────────────
 
 def refresh_all_feeds():
@@ -2112,6 +2278,9 @@ def refresh_all_feeds():
             _fetch_macro_stress()
             _fetch_central_banks()
             _fetch_arxiv_papers()
+            _fetch_oref_alerts()
+            _fetch_gdelt_events()
+            _fetch_cot_positioning()
             _compute_correlations()
         except Exception as e:
             log.exception(f"Situation Room refresh error: {e}")
@@ -3165,3 +3334,146 @@ def api_sitroom_national_debt():
     except Exception as e:
         log.debug(f"Treasury debt fetch failed: {e}")
     return jsonify({'debt': debt})
+
+
+# ─── P3: New API Routes ───────────────────────────────────────────────
+
+@situation_room_bp.route('/api/sitroom/oref-alerts')
+def api_sitroom_oref_alerts():
+    """Return cached Israel OREF rocket/siren alerts."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT * FROM sitroom_events WHERE event_type = 'oref_alert' ORDER BY event_time DESC LIMIT 50"
+        ).fetchall()
+    return jsonify({'alerts': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/gdelt-full')
+def api_sitroom_gdelt_full():
+    """Return full GDELT data (volume, tone timeline, hotspots)."""
+    with db_session() as db:
+        try:
+            rows = db.execute('SELECT * FROM sitroom_gdelt').fetchall()
+        except Exception:
+            return jsonify({'volume': None, 'tone': None, 'hotspots': None})
+    result = {}
+    for r in rows:
+        try:
+            result[r['data_type']] = json.loads(r['value_json'])
+        except (json.JSONDecodeError, TypeError, KeyError):
+            pass
+    return jsonify(result)
+
+
+@situation_room_bp.route('/api/sitroom/cot-positioning')
+def api_sitroom_cot_positioning():
+    """Return CFTC Commitments of Traders positioning data."""
+    with db_session() as db:
+        try:
+            rows = db.execute(
+                'SELECT * FROM sitroom_cot ORDER BY report_date DESC LIMIT 50'
+            ).fetchall()
+        except Exception:
+            rows = []
+    return jsonify({'positions': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/breaking-news')
+def api_sitroom_breaking_news():
+    """Detect breaking news from cached articles using urgency scoring."""
+    with db_session() as db:
+        # Get recent articles (last 2 hours)
+        rows = db.execute(
+            "SELECT title, link, source_name, category, published, cached_at FROM sitroom_news "
+            "WHERE cached_at > datetime('now', '-2 hours') ORDER BY cached_at DESC LIMIT 200"
+        ).fetchall()
+
+    if not rows:
+        return jsonify({'breaking': [], 'count': 0})
+
+    breaking_keywords = {
+        'breaking': 5, 'just in': 5, 'developing': 4, 'urgent': 5, 'alert': 4,
+        'explosion': 4, 'attack': 3, 'killed': 3, 'shooting': 4, 'missile': 4,
+        'earthquake': 3, 'tsunami': 5, 'invasion': 5, 'war': 3, 'coup': 5,
+        'nuclear': 4, 'crash': 3, 'emergency': 3, 'evacuation': 3, 'hostage': 4,
+        'ceasefire': 3, 'surrender': 4, 'declaration': 3, 'sanctions': 2,
+    }
+
+    scored = []
+    for r in rows:
+        d = dict(r)
+        title_lower = d['title'].lower()
+        score = 0
+        matched = []
+        for kw, weight in breaking_keywords.items():
+            if kw in title_lower:
+                score += weight
+                matched.append(kw)
+        # Boost OSINT and conflict categories
+        if d.get('category') in ('OSINT', 'Conflict', 'Security'):
+            score += 2
+        # Boost if multiple sources cover same topic (crude check)
+        if score > 0:
+            d['urgency_score'] = score
+            d['matched_keywords'] = matched
+            scored.append(d)
+
+    # Sort by urgency score descending, take top 10
+    scored.sort(key=lambda x: x['urgency_score'], reverse=True)
+    return jsonify({'breaking': scored[:10], 'count': len(scored)})
+
+
+@situation_room_bp.route('/api/sitroom/country-brief/<country>')
+def api_sitroom_country_brief(country):
+    """Generate an AI intelligence brief for a specific country using cached data."""
+    # Collect all data mentioning this country
+    country_lower = country.lower()
+
+    with db_session() as db:
+        news = db.execute(
+            "SELECT title, source_name, category FROM sitroom_news WHERE LOWER(title) LIKE ? ORDER BY cached_at DESC LIMIT 20",
+            (f'%{country_lower}%',)
+        ).fetchall()
+        events = db.execute(
+            "SELECT title, event_type, magnitude FROM sitroom_events WHERE LOWER(title) LIKE ? ORDER BY cached_at DESC LIMIT 15",
+            (f'%{country_lower}%',)
+        ).fetchall()
+
+    news_items = [dict(r) for r in news]
+    event_items = [dict(r) for r in events]
+
+    # Build context for AI or structured brief
+    brief = {
+        'country': country,
+        'news_count': len(news_items),
+        'event_count': len(event_items),
+        'recent_news': news_items[:10],
+        'recent_events': event_items[:10],
+        'categories': list(set(n.get('category', '') for n in news_items if n.get('category'))),
+        'event_types': list(set(e.get('event_type', '') for e in event_items if e.get('event_type'))),
+    }
+
+    # Try AI-generated summary if Ollama available
+    try:
+        import ollama
+        context = f"Country: {country}\n\nRecent headlines:\n"
+        for n in news_items[:10]:
+            context += f"- [{n.get('category', '')}] {n['title']} ({n.get('source_name', '')})\n"
+        for e in event_items[:5]:
+            context += f"- [Event: {e.get('event_type', '')}] {e['title']}"
+            if e.get('magnitude'):
+                context += f" (magnitude: {e['magnitude']})"
+            context += "\n"
+
+        prompt = (f"You are an intelligence analyst. Based on the following recent data about {country}, "
+                  f"write a concise 3-paragraph intelligence brief covering: "
+                  f"(1) Current situation overview, (2) Key risks and developments, "
+                  f"(3) Outlook and watch items.\n\n{context}")
+
+        response = ollama.chat(model='llama3.2', messages=[{'role': 'user', 'content': prompt}],
+                               options={'temperature': 0.3, 'num_predict': 500})
+        brief['ai_summary'] = response.get('message', {}).get('content', '')
+    except Exception:
+        brief['ai_summary'] = None
+
+    return jsonify(brief)
