@@ -112,7 +112,7 @@
 .sr-ribbon-down { color: #e05050; }
 
 /* ─── Map — flexes to fill upper half, atmospheric gradient ─── */
-.sr-map-wrap { position: relative; border-bottom: 1px solid #2a2a2a; display: flex; flex-direction: column; flex: 3 1 60%; min-height: 300px; }
+.sr-map-wrap { position: relative; border-bottom: 1px solid #2a2a2a; display: flex; flex-direction: column; flex: 4 1 65%; min-height: 300px; }
 .sr-map-wrap::after {
   content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background: radial-gradient(ellipse 60% 50% at 50% 50%, #0a2a2010 0%, #020a0800 100%);
@@ -144,6 +144,7 @@
   display: flex; flex-direction: column; height: 320px; overflow: hidden;
 }
 .sr-card-tall { height: 420px; }
+.sr-card-wide { grid-column: span 2; grid-row: span 2; min-height: 350px; }
 @media (max-width: 700px) { .sr-cards { grid-template-columns: 1fr; } .sr-card { height: auto; min-height: 220px; } }
 .sr-card-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -262,6 +263,18 @@
 .sitroom-news-title:hover { color: #4aedc4; }
 .sitroom-news-meta { font-size: 8px; color: #333; margin-top: 1px; }
 .sr-load-more { width: 100%; text-align: center; padding: 4px; border-top: 1px solid #2a2a2a; font-size: 10px; }
+
+/* ─── Live Player ─── */
+.sr-live-player { background: #000; display: flex; align-items: center; justify-content: center; }
+.sr-live-player iframe { border-radius: 0; }
+.sr-channel-btns { display: flex; gap: 2px; overflow-x: auto; max-width: 60%; }
+.sr-channel-btn {
+  font-family: inherit; font-size: 8px; font-weight: 600; letter-spacing: 0.04em;
+  padding: 2px 6px; border: 1px solid #2a2a2a; border-radius: 2px;
+  background: #0a0a0a; color: #666; cursor: pointer; white-space: nowrap; transition: all 0.12s;
+}
+.sr-channel-btn:hover { background: #1e1e1e; color: #c8ccd0; }
+.sr-channel-btn.active { background: #cc2020; border-color: #cc2020; color: #fff; }
 
 /* ─── Feed Manager ─── */
 .sr-feed-form { display: flex; gap: 4px; padding: 6px 12px; flex-wrap: wrap; }
