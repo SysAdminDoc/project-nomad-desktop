@@ -29,6 +29,10 @@ function _sitroomRefreshPanels() {
   loadSitroomSummary();
   loadSitroomNews();
   loadSitroomFeeds();
+  loadSitroomIntelFeed();
+  loadSitroomCII();
+  renderSitroomBreakingNews();
+  refreshSitroomWebcams();
 }
 
 async function _sitroomAutoRefreshIfEmpty() {
@@ -199,6 +203,7 @@ async function loadSitroomSummary() {
   }
 
   renderSitroomMarkets(d.markets || []);
+  renderSitroomMarketRibbon(d.markets || []);
   renderSitroomSpaceWeather(d.space_weather);
   renderSitroomQuakes();
   loadSitroomWeather();
@@ -435,6 +440,98 @@ function _timeAgo(date) {
   if (s < 3600) return Math.floor(s / 60) + 'm ago';
   if (s < 86400) return Math.floor(s / 3600) + 'h ago';
   return Math.floor(s / 86400) + 'd ago';
+}
+
+/* ─── Breaking News Banner ─── */
+async function renderSitroomBreakingNews() {
+  const el = document.getElementById('sr-breaking-text');
+  if (!el) return;
+  const d = await safeFetch('/api/sitroom/news?limit=15', {}, null);
+  if (!d || !d.articles?.length) { el.textContent = 'No breaking news'; return; }
+  const text = d.articles.map(a => escapeHtml(a.title)).join('  ///  ');
+  el.innerHTML = text + '  ///  ' + text; // duplicate for seamless scroll
+}
+
+/* ─── Market Ribbon ─── */
+function renderSitroomMarketRibbon(markets) {
+  const el = document.getElementById('sr-market-ribbon');
+  if (!el || !markets?.length) return;
+  el.innerHTML = markets.map(m => {
+    const ch = m.change_24h || 0;
+    const cls = ch >= 0 ? 'sr-ribbon-up' : 'sr-ribbon-down';
+    const arrow = ch >= 0 ? '+' : '';
+    let price;
+    if (m.market_type === 'sentiment') price = m.price + '/100';
+    else if (m.price >= 1) price = '$' + Number(m.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    else price = '$' + Number(m.price).toFixed(4);
+    return `<span class="sr-ribbon-item"><span class="sr-ribbon-sym">${escapeHtml(m.label || m.symbol)}</span> ${price} <span class="${cls}">${arrow}${ch.toFixed(1)}%</span></span>`;
+  }).join('');
+}
+
+/* ─── Country Instability Index ─── */
+async function loadSitroomCII() {
+  const el = document.getElementById('sr-cii-list');
+  if (!el) return;
+  // Compute CII from event data — count events per country
+  const events = await safeFetch('/api/sitroom/events?limit=500', {}, null);
+  if (!events || !events.events?.length) { el.innerHTML = '<div class="sr-empty">No data for CII</div>'; return; }
+  const countryScores = {};
+  events.events.forEach(ev => {
+    let det = {};
+    try { det = ev.detail_json ? JSON.parse(ev.detail_json) : {}; } catch(e) {}
+    const country = det.country || 'Unknown';
+    if (country === 'Unknown' || !country) return;
+    if (!countryScores[country]) countryScores[country] = { events: 0, severity: 0 };
+    countryScores[country].events++;
+    if (ev.magnitude) countryScores[country].severity += ev.magnitude;
+    if (det.severity === 'Extreme') countryScores[country].severity += 5;
+    if (det.severity === 'Severe') countryScores[country].severity += 3;
+    if (det.alert_level === 'Red') countryScores[country].severity += 4;
+    if (det.alert_level === 'Orange') countryScores[country].severity += 2;
+  });
+  const sorted = Object.entries(countryScores)
+    .map(([c, s]) => ({ country: c, score: Math.min(100, Math.round(s.events * 3 + s.severity * 2)), events: s.events }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 20);
+  if (!sorted.length) { el.innerHTML = '<div class="sr-empty">No country data</div>'; return; }
+  const maxScore = sorted[0].score || 1;
+  el.innerHTML = sorted.map(c => {
+    const cls = c.score >= 60 ? 'sr-cii-high' : c.score >= 30 ? 'sr-cii-med' : 'sr-cii-low';
+    const color = c.score >= 60 ? '#e05050' : c.score >= 30 ? '#d4a017' : '#2aad94';
+    return `<div class="sr-cii-row">
+      <span class="sr-cii-country">${escapeHtml(c.country)}</span>
+      <div class="sr-cii-bar"><div class="sr-cii-bar-fill" style="width:${(c.score/maxScore*100).toFixed(0)}%;background:${color}"></div></div>
+      <span class="sr-cii-score ${cls}">${c.score}</span>
+    </div>`;
+  }).join('');
+}
+
+/* ─── Intel Feed ─── */
+async function loadSitroomIntelFeed() {
+  const el = document.getElementById('sr-intel-feed');
+  if (!el) return;
+  // Filter news for Defense, Cyber, Geopolitics categories
+  const d = await safeFetch('/api/sitroom/news?limit=30', {}, null);
+  if (!d || !d.articles?.length) { el.innerHTML = '<div class="sr-empty">No intel data</div>'; return; }
+  const intel = d.articles.filter(a => ['Defense', 'Cyber', 'Geopolitics', 'Disaster'].includes(a.category));
+  if (!intel.length) { el.innerHTML = '<div class="sr-empty">No intel articles</div>'; return; }
+  el.innerHTML = intel.slice(0, 20).map(a => `<div class="sr-intel-item">
+    <span class="sr-intel-src">${escapeHtml(a.category)}</span>
+    <div class="sr-intel-body">
+      <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sr-intel-title">${escapeHtml(a.title)}</a>
+      <div class="sr-intel-meta">${escapeHtml(a.source_name || '')}</div>
+    </div>
+  </div>`).join('');
+}
+
+/* ─── Webcam Refresh ─── */
+function refreshSitroomWebcams() {
+  document.querySelectorAll('.sr-webcam img').forEach(img => {
+    const src = img.getAttribute('src');
+    if (src && !src.startsWith('data:')) {
+      img.src = src.split('?')[0] + '?t=' + Date.now();
+    }
+  });
 }
 
 /* ─── Events ─── */
