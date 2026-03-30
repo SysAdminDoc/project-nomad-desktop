@@ -303,6 +303,12 @@ v1.0.0 — ~51,300 lines across 6 core files (app.py ~17,500 + index.html ~28,50
   - **30+ interactive features**: command palette (Ctrl+K), country deep dive, panel drag reorder (localStorage), panel collapse, map resize drag, map fullscreen (F key), map legend, collapsible layer panel (6 groups), scrolling market ribbon, DEFCON threat badge, UTC + world clock, critical alert toasts, SITREP export, news dedup (Jaccard), card stagger animations, category colors (16), keyboard shortcuts (F/R/Ctrl+K/ESC), layer state persistence, auto-refresh bar, status pulse dot, breaking news with earthquake priority, AI briefing generation, keyword monitor CRUD, story detail modal, playback slider, 3D globe toggle, marker clustering, generic category/keyword card loaders, market brief generation
   - **Full audit (35+ bugs fixed)**: safeFetch, UPSERT, thread safety, SSRF, CSS specificity
   - **DB**: migrations + runtime table creation for monitors/briefings
+  - **Remaining WM gaps** (see `memory/nomad-sitroom-roadmap.md`):
+    - Map layers: 20/45 (44%) — missing: weather radar, GPS jamming, AIS ships, trade route arcs, CII choropleth, protest/disease/radiation map markers
+    - Static data: 440/900+ (49%) — expand bases, data centers, pipelines to 200+ each
+    - Telegram OSINT: 30/45 (67%) — 13 more channels to add
+    - UI polish: deck.gl WebGL, Supercluster clustering, panel row/col resize, virtual scrolling, notification sounds
+    - Backend: ACLED conflicts, GDELT full, OREF Israeli alerts, COT positioning, consumer prices, news clustering Web Worker
 
 ## Run / Build
 ```bash
