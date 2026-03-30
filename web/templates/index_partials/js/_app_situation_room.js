@@ -15,6 +15,7 @@ function initSituationRoom() {
 
   if (_sitroomInitDone) {
     _sitroomRefreshPanels();
+    setTimeout(_sitroomResizeMap, 100);
     return;
   }
   _sitroomInitDone = true;
@@ -70,6 +71,10 @@ function _restoreCopilotDock() {
 }
 
 /* ─── Map ─── */
+function _sitroomResizeMap() {
+  if (_sitroomMap) { _sitroomMap.resize(); }
+}
+
 function initSitroomMap() {
   const container = document.getElementById('sitroom-map');
   if (!container || _sitroomMap) return;
@@ -85,12 +90,14 @@ function initSitroomMap() {
       center: [0, 20], zoom: 1.8, attributionControl: false,
     });
     _sitroomMap.on('load', () => {
-      _sitroomMap.resize();
+      _sitroomResizeMap();
       loadSitroomMapData();
     });
-    // Force resize after a delay in case container dimensions changed
-    setTimeout(() => { if (_sitroomMap) _sitroomMap.resize(); }, 500);
-    setTimeout(() => { if (_sitroomMap) _sitroomMap.resize(); }, 1500);
+    // Resize on window resize for full-bleed flex layout
+    window.addEventListener('resize', _sitroomResizeMap);
+    // Force resize after layout settles
+    setTimeout(_sitroomResizeMap, 300);
+    setTimeout(_sitroomResizeMap, 1000);
     _sitroomMap.on('error', (e) => {
       if (e.error && e.error.status === 0) {
         try {
@@ -540,10 +547,13 @@ document.addEventListener('click', e => {
   if (!ctrl) return;
   const a = ctrl.dataset.sitroomAction;
   if (a === 'refresh') refreshSitroomFeeds();
-  if (a === 'generate-briefing') generateSitroomBriefing();
   if (a === 'add-feed') addSitroomFeed();
   if (a === 'delete-feed') deleteSitroomFeed(ctrl.dataset.feedId);
   if (a === 'load-more-news') loadSitroomNews(true);
+  if (a === 'toggle-feeds') {
+    const fp = document.getElementById('sr-feed-panel');
+    if (fp) { fp.hidden = !fp.hidden; if (!fp.hidden) loadSitroomFeeds(); }
+  }
 });
 
 document.getElementById('sitroom-news-category')?.addEventListener('change', () => loadSitroomNews());
