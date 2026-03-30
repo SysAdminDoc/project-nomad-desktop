@@ -1,7 +1,7 @@
 /* ─── Situation Room v4 — World Monitor Intelligence Dashboard ─── */
 
 let _sitroomMap = null;
-let _sitroomMarkers = { earthquakes: [], weather: [], conflicts: [], aviation: [], volcanoes: [], fires: [], nuclear: [], bases: [], cables: [], datacenters: [], pipelines: [], waterways: [], spaceports: [], shipping: [] };
+let _sitroomMarkers = { earthquakes: [], weather: [], conflicts: [], aviation: [], volcanoes: [], fires: [], nuclear: [], bases: [], cables: [], datacenters: [], pipelines: [], waterways: [], spaceports: [], shipping: [], ucdp: [] };
 let _sitroomNewsOffset = 0;
 const SITROOM_NEWS_PAGE = 50;
 let _sitroomAutoTimer = null;
@@ -51,6 +51,9 @@ function _sitroomRefreshPanels() {
   loadSitroomSanctions();
   loadSitroomDisplacement();
   loadSitroomTimeline();
+  loadSitroomUcdp();
+  loadSitroomCyber();
+  loadSitroomThinkTanks();
   loadSitroomOsint();
   _checkCriticalAlerts();
   loadSitroomLiveChannels();
@@ -384,6 +387,19 @@ async function loadSitroomMapData() {
     clearSitroomMarkers('shipping');
     _SHIPPING_HUBS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'shipping'}, 'shipping'));
   } else { clearSitroomMarkers('shipping'); }
+
+  // UCDP armed conflicts (live data)
+  if (document.getElementById('sitroom-layer-ucdp')?.checked) {
+    const uc = await safeFetch('/api/sitroom/ucdp?limit=50', {}, null);
+    if (uc && uc.conflicts) {
+      clearSitroomMarkers('ucdp');
+      uc.conflicts.forEach(c => {
+        if (!c.lat || !c.lng) return;
+        addSitroomMarker({lat:c.lat,lng:c.lng,title:c.title||'Conflict',
+          event_type:'ucdp_conflict',magnitude:c.magnitude,depth_km:null,detail_json:c.detail_json}, 'ucdp');
+      });
+    }
+  } else { clearSitroomMarkers('ucdp'); }
 }
 
 function clearSitroomMarkers(layerType) {
@@ -393,7 +409,7 @@ function clearSitroomMarkers(layerType) {
 
 function addSitroomMarker(ev, layerType) {
   if (!_sitroomMap) return;
-  const colors = { earthquakes: '#ff4444', weather: '#ffaa00', conflicts: '#ff6600', aviation: '#44aaff', volcanoes: '#ff3366', fires: '#ff8800', nuclear: '#ffff00', bases: '#44ff88', cables: '#3388ff', datacenters: '#aa66ff', pipelines: '#cc8844', waterways: '#00ddff', spaceports: '#ff66ff', shipping: '#88ccaa' };
+  const colors = { earthquakes: '#ff4444', weather: '#ffaa00', conflicts: '#ff6600', aviation: '#44aaff', volcanoes: '#ff3366', fires: '#ff8800', nuclear: '#ffff00', bases: '#44ff88', cables: '#3388ff', datacenters: '#aa66ff', pipelines: '#cc8844', waterways: '#00ddff', spaceports: '#ff66ff', shipping: '#88ccaa', ucdp: '#dd2222' };
   const color = colors[layerType] || '#ffffff';
   let size = layerType === 'aviation' ? 5 : 8;
   if (ev.magnitude) size = Math.max(6, Math.min(24, ev.magnitude * 3));
@@ -893,6 +909,7 @@ function _updateMapLegend() {
     cables: {color:'#3388ff',label:'Cables'}, datacenters: {color:'#aa66ff',label:'Data Ctrs'},
     pipelines: {color:'#cc8844',label:'Pipelines'}, waterways: {color:'#00ddff',label:'Waterways'},
     spaceports: {color:'#ff66ff',label:'Spaceports'}, shipping: {color:'#88ccaa',label:'Shipping'},
+    ucdp: {color:'#dd2222',label:'Armed Conflicts'},
   };
   const active = [];
   document.querySelectorAll('[data-sitroom-layer]').forEach(cb => {
@@ -1379,6 +1396,60 @@ function _showSitroomAlert(type, message) {
   stack.appendChild(toast);
   // Auto-dismiss after 15s
   setTimeout(() => { if (toast.parentElement) toast.remove(); }, 15000);
+}
+
+/* ─── UCDP Armed Conflicts ─── */
+async function loadSitroomUcdp() {
+  const d = await safeFetch('/api/sitroom/ucdp', {}, null);
+  const el = document.getElementById('sitroom-ucdp');
+  if (!el) return;
+  if (!d || !d.conflicts?.length) { el.innerHTML = '<div class="sr-empty">No UCDP data</div>'; return; }
+  el.innerHTML = d.conflicts.slice(0, 20).map(c => {
+    let det = {}; try { det = c.detail_json ? JSON.parse(c.detail_json) : {}; } catch(e) {}
+    const deaths = c.magnitude || 0;
+    const cls = deaths >= 10 ? 'sitroom-mag-high' : deaths >= 3 ? 'sitroom-mag-med' : 'sitroom-mag-low';
+    return `<div class="sitroom-event-item">
+      <span class="sitroom-mag ${cls}">${deaths}</span>
+      <div class="sitroom-event-info">
+        <div class="sitroom-event-title">${escapeHtml(c.title || '')}</div>
+        <div class="sitroom-event-meta">${escapeHtml(det.country || '')}${det.violence_type ? ' | ' + escapeHtml(det.violence_type) : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ─── Cyber Threats ─── */
+async function loadSitroomCyber() {
+  const d = await safeFetch('/api/sitroom/cyber-threats', {}, null);
+  const el = document.getElementById('sitroom-cyber');
+  if (!el) return;
+  if (!d || !d.threats?.length) { el.innerHTML = '<div class="sr-empty">No cyber threat data</div>'; return; }
+  el.innerHTML = d.threats.map(t => {
+    let det = {}; try { det = t.detail_json ? JSON.parse(t.detail_json) : {}; } catch(e) {}
+    const sevColor = det.severity === 'high' ? '#e05050' : '#d4a017';
+    return `<div class="sitroom-event-item">
+      <span class="sitroom-mag" style="background:${sevColor};color:#000">${(det.severity || '?').substring(0,1).toUpperCase()}</span>
+      <div class="sitroom-event-info">
+        <div class="sitroom-event-title">${escapeHtml(t.title || '')}</div>
+        <div class="sitroom-event-meta">${escapeHtml(det.source || '')}${det.date ? ' | ' + escapeHtml(det.date) : ''}</div>
+      </div>
+      ${t.source_url ? `<a href="${escapeAttr(t.source_url)}" target="_blank" rel="noopener" class="sitroom-event-link">&#8599;</a>` : ''}
+    </div>`;
+  }).join('');
+}
+
+/* ─── Think Tanks ─── */
+async function loadSitroomThinkTanks() {
+  const d = await safeFetch('/api/sitroom/news?category=Think+Tanks&limit=20', {}, null);
+  const el = document.getElementById('sitroom-think-tanks');
+  if (!el) return;
+  if (!d || !d.articles?.length) { el.innerHTML = '<div class="sr-empty">No think tank data</div>'; return; }
+  el.innerHTML = d.articles.map(a => `<div class="sitroom-news-item">
+    <span class="sitroom-news-cat" data-cat="Think Tanks" style="background:#1a1a40;color:#8888cc">${escapeHtml(a.source_name || '')}</span>
+    <div class="sitroom-news-body">
+      <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
+    </div>
+  </div>`).join('');
 }
 
 /* ─── OSINT Feed (Telegram via RSS) ─── */
