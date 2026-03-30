@@ -125,6 +125,8 @@ function _sitroomRefreshPanels() {
   loadSitroomMarketRegime();
   loadSitroomLiveCounters();
   loadSitroomSpecies();
+  loadSitroomAptGroups();
+  loadSitroomSnapshot();
   _checkCriticalAlerts();
   _updateDataFreshness();
   _checkQuakeAlerts();
@@ -3396,6 +3398,56 @@ async function loadSitroomSpecies() {
     });
   }
   el.innerHTML = html || '<div class="sitroom-empty">No species data</div>';
+}
+
+/* ─── P7: APT Groups Card ─── */
+async function loadSitroomAptGroups() {
+  const el = document.getElementById('sitroom-apt-groups');
+  if (!el) return;
+  const d = await safeFetch('/api/sitroom/apt-groups', {}, null);
+  if (!d || !d.groups) { el.innerHTML = '<div class="sitroom-empty">No data</div>'; return; }
+  let html = `<div class="sr-mini-label">${d.active_count} Active Groups</div>`;
+  d.groups.forEach(g => {
+    const color = g.active ? '#ff4444' : '#666';
+    const badge = g.active ? '<span class="sr-badge-live">ACTIVE</span>' : '';
+    html += `<div class="sr-feed-item" style="border-left:3px solid ${color}">
+      <div><span class="sr-feed-title">${escapeHtml(g.name)}</span> ${badge}</div>
+      <div style="font-size:9px;color:#666">${escapeHtml(g.origin)} | ${escapeHtml(g.targets)}</div>
+      <div style="font-size:9px;color:#555">${escapeHtml(g.notable)}</div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+/* ─── Situation Snapshot Card ─── */
+async function loadSitroomSnapshot() {
+  const el = document.getElementById('sitroom-snapshot');
+  if (!el) return;
+  const d = await safeFetch('/api/sitroom/situation-snapshot', {}, null);
+  if (!d) { el.innerHTML = '<div class="sitroom-empty">No data</div>'; return; }
+  const stats = [
+    {label: 'Articles', value: d.total_articles || 0, color: '#4aedc4'},
+    {label: 'Events', value: d.total_events || 0, color: '#44aaff'},
+    {label: 'Earthquakes', value: d.earthquakes || 0, color: '#ff4444'},
+    {label: 'Fires', value: d.active_fires || 0, color: '#ff8800'},
+    {label: 'Conflicts', value: d.conflicts || 0, color: '#ff6600'},
+    {label: 'Cyber', value: d.cyber_threats || 0, color: '#aa66ff'},
+    {label: 'OREF', value: d.oref_alerts || 0, color: '#ff2222'},
+    {label: 'Markets', value: d.market_symbols || 0, color: '#44dd88'},
+    {label: 'Sources', value: d.live_sources || 0, color: '#4aedc4'},
+  ];
+  let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px">';
+  stats.forEach(s => {
+    html += `<div style="text-align:center;padding:4px;background:#0a0a0a;border-radius:4px">
+      <div style="font-size:16px;font-weight:bold;color:${s.color}">${s.value.toLocaleString()}</div>
+      <div style="font-size:8px;color:#555;text-transform:uppercase">${s.label}</div>
+    </div>`;
+  });
+  html += '</div>';
+  if (d.max_magnitude) {
+    html += `<div style="text-align:center;font-size:10px;color:#888;padding:4px">Max quake: M${d.max_magnitude} | ${d.is_refreshing ? 'Refreshing...' : 'Idle'}</div>`;
+  }
+  el.innerHTML = html;
 }
 
 /* ─── P4: Smart Poll Loop ─── */
