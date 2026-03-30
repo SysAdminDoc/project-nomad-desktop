@@ -16,6 +16,7 @@
       <div class="sr-header-right">
         <span id="sitroom-last-update" class="sr-ts"></span>
         <span id="sitroom-online-badge" class="sitroom-badge sitroom-badge-offline">OFFLINE</span>
+        <button class="sr-btn" data-sitroom-action="toggle-feeds" title="Manage feeds">&#9881;</button>
         <button class="sr-btn sr-btn-accent" id="sitroom-refresh-btn" data-sitroom-action="refresh">REFRESH</button>
       </div>
     </div>
@@ -49,7 +50,7 @@
     </div>
 
     <!-- Card Grid -->
-    <div class="sr-cards">
+    <div class="sr-cards" id="sr-cards-anchor">
 
       <!-- Live News Feed -->
       <div class="sr-card sr-card-tall">
@@ -59,15 +60,6 @@
         </div>
         <div id="sitroom-news-list" class="sr-card-body sr-scroll sr-scroll-tall"><div class="sr-empty">Loading...</div></div>
         <button class="sr-btn sr-btn-ghost sr-load-more" id="sitroom-news-more" data-sitroom-action="load-more-news" style="display:none">LOAD MORE</button>
-      </div>
-
-      <!-- AI Insights / Strategic Posture -->
-      <div class="sr-card">
-        <div class="sr-card-head">
-          AI STRATEGIC POSTURE
-          <button class="sr-btn" id="sitroom-gen-briefing" data-sitroom-action="generate-briefing">GENERATE</button>
-        </div>
-        <div id="sitroom-briefing-content" class="sr-card-body sr-scroll"><div class="sr-empty">Click GENERATE to create AI-powered intelligence briefing from current data feeds</div></div>
       </div>
 
       <!-- Markets & Indices -->
@@ -141,20 +133,21 @@
         <div id="sr-intel-feed" class="sr-card-body sr-scroll"><div class="sr-empty">Defense &amp; security headlines from intel sources</div></div>
       </div>
 
-      <!-- Manage Feeds -->
-      <details class="sr-card">
-        <summary class="sr-card-head sr-card-head-toggle">MANAGE FEEDS</summary>
-        <div class="sr-card-body">
-          <div class="sr-feed-form">
-            <input type="text" id="sitroom-feed-name" placeholder="Name" class="sr-input" maxlength="200">
-            <input type="url" id="sitroom-feed-url" placeholder="RSS URL" class="sr-input sr-input-grow" maxlength="2000">
-            <input type="text" id="sitroom-feed-category" placeholder="Category" class="sr-input" maxlength="100" value="Custom">
-            <button class="sr-btn sr-btn-accent" data-sitroom-action="add-feed">ADD</button>
-          </div>
-          <div id="sitroom-custom-feeds-list" class="sr-custom-feeds"></div>
-          <div class="sr-feed-stats"><span id="sitroom-builtin-count">0</span> built-in | <span id="sitroom-custom-count">0</span> custom</div>
-        </div>
-      </details>
+    </div>
 
+    <!-- Feed Manager Panel (toggled from header gear) -->
+    <div class="sr-feed-panel" id="sr-feed-panel" hidden>
+      <div class="sr-feed-panel-head">
+        <span>MANAGE FEEDS</span>
+        <button class="sr-btn sr-btn-ghost" data-sitroom-action="toggle-feeds" aria-label="Close feed manager">&#10005;</button>
+      </div>
+      <div class="sr-feed-form">
+        <input type="text" id="sitroom-feed-name" placeholder="Name" class="sr-input" maxlength="200">
+        <input type="url" id="sitroom-feed-url" placeholder="RSS URL" class="sr-input sr-input-grow" maxlength="2000">
+        <input type="text" id="sitroom-feed-category" placeholder="Category" class="sr-input" maxlength="100" value="Custom">
+        <button class="sr-btn sr-btn-accent" data-sitroom-action="add-feed">ADD</button>
+      </div>
+      <div id="sitroom-custom-feeds-list" class="sr-custom-feeds"></div>
+      <div class="sr-feed-stats"><span id="sitroom-builtin-count">0</span> built-in | <span id="sitroom-custom-count">0</span> custom</div>
     </div>
   </div>
