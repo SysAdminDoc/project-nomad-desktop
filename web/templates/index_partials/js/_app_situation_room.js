@@ -1,7 +1,7 @@
 /* ─── Situation Room v4 — World Monitor Intelligence Dashboard ─── */
 
 let _sitroomMap = null;
-let _sitroomMarkers = { earthquakes: [], weather: [], conflicts: [], aviation: [], volcanoes: [], fires: [], nuclear: [], bases: [], cables: [], datacenters: [], pipelines: [], waterways: [], spaceports: [], shipping: [], ucdp: [], airports: [], fincenters: [], mining: [], techHQs: [], diseases: [], radiation: [], protests: [], ships: [], cloudRegions: [], exchanges: [], commodityHubs: [], startupHubs: [] };
+let _sitroomMarkers = { earthquakes: [], weather: [], conflicts: [], aviation: [], volcanoes: [], fires: [], nuclear: [], bases: [], cables: [], datacenters: [], pipelines: [], waterways: [], spaceports: [], shipping: [], ucdp: [], airports: [], fincenters: [], mining: [], techHQs: [], diseases: [], radiation: [], protests: [], ships: [], cloudRegions: [], exchanges: [], commodityHubs: [], startupHubs: [], gpsJamming: [], tradeRoutes: [], accelerators: [] };
 let _sitroomRadarLayer = null; // RainViewer radar tile layer state
 let _sitroomNewsOffset = 0;
 const SITROOM_NEWS_PAGE = 50;
@@ -757,6 +757,52 @@ const _STARTUP_HUBS = [
   {lat:6.52,lng:3.38,name:'Yaba/Lagos, Nigeria'},{lat:-1.29,lng:36.82,name:'iHub, Nairobi'},
   {lat:-33.93,lng:18.42,name:'Cape Town, South Africa'},{lat:25.20,lng:55.27,name:'Dubai/DIFC, UAE'},
 ];
+const _GPS_JAMMING_ZONES = [
+  // Known chronic GPS interference zones (sourced from GPSJAM.org / OPSGROUP reports)
+  {lat:34.70,lng:33.05,name:'Eastern Mediterranean (chronic)'},{lat:35.00,lng:38.00,name:'Syria/NE Med conflict zone'},
+  {lat:33.90,lng:35.50,name:'Beirut/Lebanon'},{lat:31.50,lng:34.50,name:'Gaza/Southern Israel'},
+  {lat:32.90,lng:35.30,name:'Northern Israel/Golan'},{lat:36.20,lng:37.15,name:'Aleppo, Syria'},
+  {lat:33.30,lng:44.40,name:'Baghdad, Iraq'},{lat:35.70,lng:51.40,name:'Tehran, Iran'},
+  {lat:59.90,lng:30.30,name:'St Petersburg, Russia'},{lat:55.75,lng:37.62,name:'Moscow, Russia'},
+  {lat:54.70,lng:20.50,name:'Kaliningrad, Russia'},{lat:69.00,lng:33.00,name:'Kola Peninsula, Russia'},
+  {lat:44.60,lng:33.50,name:'Crimea, Ukraine'},{lat:48.50,lng:37.50,name:'Donbas, Ukraine'},
+  {lat:41.00,lng:29.00,name:'Istanbul/Bosphorus'},{lat:39.93,lng:32.86,name:'Ankara, Turkey'},
+  {lat:36.90,lng:30.70,name:'Antalya, Turkey'},{lat:25.25,lng:55.36,name:'Dubai, UAE'},
+  {lat:26.20,lng:50.55,name:'Bahrain/Persian Gulf'},{lat:15.40,lng:44.20,name:'Sana\'a, Yemen'},
+  {lat:2.05,lng:45.32,name:'Mogadishu, Somalia'},{lat:11.55,lng:43.15,name:'Djibouti/Gulf of Aden'},
+  {lat:39.03,lng:125.75,name:'Pyongyang, DPRK'},{lat:22.30,lng:114.17,name:'South China Sea (variable)'},
+  {lat:8.50,lng:115.00,name:'Indonesia/Bali Strait (variable)'},{lat:34.05,lng:-118.24,name:'LA Basin (test/spoof events)'},
+];
+const _TRADE_ROUTES = [
+  // Major shipping lane waypoints (simplified routes)
+  {lat:31.00,lng:121.00,name:'Shanghai-Singapore lane'},{lat:10.00,lng:108.00,name:'South China Sea transit'},
+  {lat:1.30,lng:104.00,name:'Singapore Strait'},{lat:5.00,lng:80.00,name:'Indian Ocean crossroads'},
+  {lat:12.50,lng:53.00,name:'Arabian Sea/Gulf of Aden'},{lat:13.00,lng:42.50,name:'Red Sea/Bab el-Mandeb'},
+  {lat:29.00,lng:33.00,name:'Suez approach'},{lat:35.50,lng:24.00,name:'Central Mediterranean'},
+  {lat:36.00,lng:-5.50,name:'Gibraltar transit'},{lat:48.00,lng:-5.00,name:'English Channel/Biscay'},
+  {lat:51.00,lng:2.00,name:'Dover Strait'},{lat:57.00,lng:1.00,name:'North Sea corridor'},
+  {lat:60.00,lng:-15.00,name:'GIUK Gap (Atlantic chokepoint)'},{lat:40.00,lng:-50.00,name:'Mid-Atlantic route'},
+  {lat:25.00,lng:-80.00,name:'Florida Straits'},{lat:10.00,lng:-80.00,name:'Panama approach'},
+  {lat:-5.00,lng:-35.00,name:'South Atlantic crossing'},{lat:-34.00,lng:18.50,name:'Cape route'},
+  {lat:-35.00,lng:115.00,name:'Southern Indian Ocean'},{lat:-42.00,lng:147.00,name:'Bass Strait, Australia'},
+  {lat:35.00,lng:140.00,name:'Pacific approach Japan'},{lat:50.00,lng:-130.00,name:'North Pacific route'},
+  {lat:20.00,lng:-155.00,name:'Hawaii mid-Pacific waypoint'},{lat:-10.00,lng:-170.00,name:'South Pacific route'},
+];
+const _ACCELERATORS = [
+  {lat:37.39,lng:-122.08,name:'Y Combinator, Mountain View'},{lat:37.78,lng:-122.41,name:'500 Global, San Francisco'},
+  {lat:40.74,lng:-73.99,name:'Techstars NYC'},{lat:42.36,lng:-71.06,name:'MassChallenge, Boston'},
+  {lat:47.61,lng:-122.33,name:'Techstars Seattle'},{lat:30.27,lng:-97.74,name:'Capital Factory, Austin'},
+  {lat:34.05,lng:-118.24,name:'Amplify LA'},{lat:51.52,lng:-0.08,name:'Seedcamp, London'},
+  {lat:52.52,lng:13.41,name:'Techstars Berlin'},{lat:48.86,lng:2.35,name:'Station F / Techstars Paris'},
+  {lat:55.68,lng:12.57,name:'Accelerace, Copenhagen'},{lat:52.37,lng:4.90,name:'Rockstart, Amsterdam'},
+  {lat:41.39,lng:2.17,name:'Startupbootcamp, Barcelona'},{lat:53.35,lng:-6.26,name:'NDRC, Dublin'},
+  {lat:32.07,lng:34.78,name:'8200 EISP, Tel Aviv'},{lat:1.30,lng:103.85,name:'JFDI, Singapore'},
+  {lat:12.97,lng:77.59,name:'T-Hub, Bangalore'},{lat:22.28,lng:114.17,name:'Cyberport, Hong Kong'},
+  {lat:35.68,lng:139.69,name:'Plug and Play, Tokyo'},{lat:37.57,lng:126.98,name:'SparkLabs, Seoul'},
+  {lat:-33.87,lng:151.21,name:'Startmate, Sydney'},{lat:-23.55,lng:-46.63,name:'ACE, Sao Paulo'},
+  {lat:6.52,lng:3.38,name:'CcHUB, Lagos'},{lat:-1.29,lng:36.82,name:'Nairobi Garage, Kenya'},
+  {lat:25.20,lng:55.27,name:'in5, Dubai'},{lat:43.65,lng:-79.38,name:'Creative Destruction Lab, Toronto'},
+];
 
 function initSitroomMap() {
   const container = document.getElementById('sitroom-map');
@@ -1029,6 +1075,24 @@ async function loadSitroomMapData() {
     _STARTUP_HUBS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'startup_hub'}, 'startupHubs'));
   } else { clearSitroomMarkers('startupHubs'); }
 
+  // GPS Jamming Zones (static — known chronic interference areas)
+  if (document.getElementById('sitroom-layer-gpsJamming')?.checked) {
+    clearSitroomMarkers('gpsJamming');
+    _GPS_JAMMING_ZONES.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'gps_jamming'}, 'gpsJamming'));
+  } else { clearSitroomMarkers('gpsJamming'); }
+
+  // Trade Routes (static waypoints along major shipping lanes)
+  if (document.getElementById('sitroom-layer-tradeRoutes')?.checked) {
+    clearSitroomMarkers('tradeRoutes');
+    _TRADE_ROUTES.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'trade_route'}, 'tradeRoutes'));
+  } else { clearSitroomMarkers('tradeRoutes'); }
+
+  // Accelerators (static)
+  if (document.getElementById('sitroom-layer-accelerators')?.checked) {
+    clearSitroomMarkers('accelerators');
+    _ACCELERATORS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'accelerator'}, 'accelerators'));
+  } else { clearSitroomMarkers('accelerators'); }
+
   // Weather radar overlay (RainViewer tile layer)
   _toggleWeatherRadar();
 }
@@ -1098,7 +1162,7 @@ function addSitroomMarker(ev, layerType) {
   if (!_sitroomMap) return;
   // Skip if would cluster with existing marker at this zoom
   if (_shouldCluster(ev.lat, ev.lng, layerType)) return;
-  const colors = { earthquakes: '#ff4444', weather: '#ffaa00', conflicts: '#ff6600', aviation: '#44aaff', volcanoes: '#ff3366', fires: '#ff8800', nuclear: '#ffff00', bases: '#44ff88', cables: '#3388ff', datacenters: '#aa66ff', pipelines: '#cc8844', waterways: '#00ddff', spaceports: '#ff66ff', shipping: '#88ccaa', ucdp: '#dd2222', airports: '#cccccc', fincenters: '#44dd88', mining: '#cc8844', techHQs: '#44aadd', diseases: '#ff44ff', radiation: '#66ff00', protests: '#ffcc00', ships: '#22bbdd', cloudRegions: '#6688ff', exchanges: '#ddaa22', commodityHubs: '#dd8866', startupHubs: '#ff88dd' };
+  const colors = { earthquakes: '#ff4444', weather: '#ffaa00', conflicts: '#ff6600', aviation: '#44aaff', volcanoes: '#ff3366', fires: '#ff8800', nuclear: '#ffff00', bases: '#44ff88', cables: '#3388ff', datacenters: '#aa66ff', pipelines: '#cc8844', waterways: '#00ddff', spaceports: '#ff66ff', shipping: '#88ccaa', ucdp: '#dd2222', airports: '#cccccc', fincenters: '#44dd88', mining: '#cc8844', techHQs: '#44aadd', diseases: '#ff44ff', radiation: '#66ff00', protests: '#ffcc00', ships: '#22bbdd', cloudRegions: '#6688ff', exchanges: '#ddaa22', commodityHubs: '#dd8866', startupHubs: '#ff88dd', gpsJamming: '#ff2200', tradeRoutes: '#66ccff', accelerators: '#cc66ff' };
   const color = colors[layerType] || '#ffffff';
   let size = layerType === 'aviation' ? 5 : 8;
   if (ev.magnitude) size = Math.max(6, Math.min(24, ev.magnitude * 3));
