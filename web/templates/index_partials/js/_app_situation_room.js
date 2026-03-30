@@ -1,7 +1,7 @@
 /* ─── Situation Room v4 — World Monitor Intelligence Dashboard ─── */
 
 let _sitroomMap = null;
-let _sitroomMarkers = { earthquakes: [], weather: [], conflicts: [], aviation: [], volcanoes: [], fires: [], nuclear: [], bases: [], cables: [], datacenters: [], pipelines: [], waterways: [], spaceports: [], shipping: [], ucdp: [], airports: [], fincenters: [], mining: [], techHQs: [], diseases: [], radiation: [], protests: [], ships: [], cloudRegions: [], exchanges: [], commodityHubs: [], startupHubs: [], gpsJamming: [], tradeRoutes: [], accelerators: [] };
+let _sitroomMarkers = { earthquakes: [], weather: [], conflicts: [], aviation: [], volcanoes: [], fires: [], nuclear: [], bases: [], cables: [], datacenters: [], pipelines: [], waterways: [], spaceports: [], shipping: [], ucdp: [], airports: [], fincenters: [], mining: [], techHQs: [], diseases: [], radiation: [], protests: [], ships: [], cloudRegions: [], exchanges: [], commodityHubs: [], startupHubs: [], gpsJamming: [], tradeRoutes: [], accelerators: [], refugees: [], unMissions: [], ixps: [], embassies: [] };
 let _sitroomRadarLayer = null; // RainViewer radar tile layer state
 let _sitroomNewsOffset = 0;
 const SITROOM_NEWS_PAGE = 50;
@@ -804,6 +804,55 @@ const _ACCELERATORS = [
   {lat:25.20,lng:55.27,name:'in5, Dubai'},{lat:43.65,lng:-79.38,name:'Creative Destruction Lab, Toronto'},
 ];
 
+const _REFUGEE_CAMPS = [
+  {lat:29.87,lng:36.08,name:'Zaatari Camp, Jordan'},{lat:31.83,lng:35.88,name:'Azraq Camp, Jordan'},
+  {lat:37.05,lng:42.35,name:'Domiz Camp, Iraq'},{lat:4.32,lng:31.62,name:'Bidi Bidi, Uganda'},
+  {lat:9.15,lng:42.79,name:'Dadaab Complex, Kenya'},{lat:0.35,lng:34.20,name:'Kakuma Camp, Kenya'},
+  {lat:8.95,lng:38.73,name:'Shire Camps, Ethiopia'},{lat:20.46,lng:92.98,name:'Cox\'s Bazar, Bangladesh'},
+  {lat:15.60,lng:32.50,name:'Khartoum IDP, Sudan'},{lat:3.58,lng:32.30,name:'Adjumani, Uganda'},
+  {lat:-3.38,lng:29.36,name:'Nyarugusu, Tanzania'},{lat:-13.98,lng:33.78,name:'Dzaleka, Malawi'},
+  {lat:34.40,lng:36.35,name:'Bekaa Valley, Lebanon'},{lat:33.52,lng:36.30,name:'Damascus suburbs, Syria'},
+  {lat:36.20,lng:36.15,name:'Hatay camps, Turkey'},{lat:37.76,lng:30.29,name:'Afyonkarahisar, Turkey'},
+  {lat:6.43,lng:2.37,name:'Seme/Lagos, Nigeria (IDP)'},{lat:11.85,lng:13.16,name:'Maiduguri IDP, Nigeria'},
+  {lat:-4.32,lng:15.31,name:'Kinshasa IDP, DRC'},{lat:15.55,lng:44.20,name:'Sana\'a IDP, Yemen'},
+];
+const _UN_MISSIONS = [
+  {lat:4.85,lng:31.61,name:'UNMISS (South Sudan)'},{lat:-4.32,lng:15.31,name:'MONUSCO (DRC)'},
+  {lat:12.65,lng:-8.00,name:'MINUSMA (Mali)'},{lat:6.30,lng:-10.80,name:'UNSMIL (Libya)'},
+  {lat:33.89,lng:35.50,name:'UNIFIL (Lebanon)'},{lat:34.72,lng:36.80,name:'UNDOF (Golan)'},
+  {lat:35.17,lng:33.36,name:'UNFICYP (Cyprus)'},{lat:34.53,lng:69.17,name:'UNAMA (Afghanistan)'},
+  {lat:2.06,lng:45.34,name:'UNSOM (Somalia)'},{lat:18.54,lng:-72.34,name:'BINUH (Haiti)'},
+  {lat:42.44,lng:19.26,name:'UNMIK (Kosovo)'},{lat:19.76,lng:96.13,name:'UN Myanmar'},
+  {lat:-8.56,lng:125.57,name:'UNMIT (Timor-Leste legacy)'},{lat:27.71,lng:85.32,name:'UNMIN (Nepal legacy)'},
+  {lat:4.04,lng:9.70,name:'UNOCA (Central Africa)'},{lat:15.60,lng:32.53,name:'UNITAMS (Sudan)'},
+];
+const _INTERNET_EXCHANGES = [
+  {lat:39.04,lng:-77.49,name:'Equinix Ashburn IX'},{lat:50.11,lng:8.68,name:'DE-CIX Frankfurt (#1)'},
+  {lat:52.37,lng:4.90,name:'AMS-IX Amsterdam (#2)'},{lat:51.50,lng:-0.12,name:'LINX London'},
+  {lat:48.86,lng:2.35,name:'France-IX Paris'},{lat:45.46,lng:9.19,name:'MIX Milan'},
+  {lat:40.42,lng:-3.70,name:'ESPANIX Madrid'},{lat:59.33,lng:18.07,name:'Netnod Stockholm'},
+  {lat:60.17,lng:24.94,name:'FICIX Helsinki'},{lat:55.68,lng:12.57,name:'DIX Copenhagen'},
+  {lat:52.23,lng:21.01,name:'PLIX Warsaw'},{lat:41.01,lng:28.98,name:'IXTR Istanbul'},
+  {lat:55.75,lng:37.62,name:'MSK-IX Moscow'},{lat:35.68,lng:139.69,name:'JPIX Tokyo'},
+  {lat:22.28,lng:114.17,name:'HKIX Hong Kong'},{lat:1.35,lng:103.82,name:'SGIX Singapore'},
+  {lat:37.57,lng:126.98,name:'KINX Seoul'},{lat:19.08,lng:72.88,name:'NIXI Mumbai'},
+  {lat:-23.55,lng:-46.63,name:'IX.br Sao Paulo'},{lat:6.45,lng:3.39,name:'IXPN Lagos'},
+  {lat:-1.29,lng:36.82,name:'KIXP Nairobi'},{lat:-33.93,lng:18.42,name:'NAPAfrica Johannesburg'},
+  {lat:-33.87,lng:151.21,name:'IX Australia Sydney'},{lat:40.71,lng:-74.01,name:'NYIIX New York'},
+  {lat:41.88,lng:-87.63,name:'CHI-IX Chicago'},{lat:47.61,lng:-122.33,name:'SIX Seattle'},
+  {lat:34.05,lng:-118.24,name:'LAIIX Los Angeles'},{lat:25.76,lng:-80.19,name:'FLIIX Miami'},
+];
+const _EMBASSIES_DC = [
+  // Major embassy clusters (Washington DC + key diplomatic hubs)
+  {lat:38.91,lng:-77.05,name:'Embassy Row, Washington DC'},{lat:46.23,lng:6.14,name:'UN/Palais, Geneva'},
+  {lat:40.75,lng:-73.97,name:'UN HQ, New York'},{lat:48.21,lng:16.37,name:'UN/IAEA, Vienna'},
+  {lat:52.52,lng:13.38,name:'Embassy Quarter, Berlin'},{lat:51.50,lng:-0.18,name:'Embassy Row, London'},
+  {lat:48.86,lng:2.31,name:'Embassy Quarter, Paris'},{lat:55.75,lng:37.60,name:'Embassy Row, Moscow'},
+  {lat:39.91,lng:116.43,name:'Embassy District, Beijing'},{lat:35.67,lng:139.74,name:'Embassy Area, Tokyo'},
+  {lat:-38.90,lng:-77.04,name:'OAS HQ, Washington DC'},{lat:50.84,lng:4.38,name:'EU/NATO, Brussels'},
+  {lat:47.55,lng:7.59,name:'BIS, Basel'},{lat:43.77,lng:11.25,name:'Embassy Quarter, Rome'},
+];
+
 function initSitroomMap() {
   const container = document.getElementById('sitroom-map');
   if (!container || _sitroomMap) return;
@@ -1093,6 +1142,30 @@ async function loadSitroomMapData() {
     _ACCELERATORS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'accelerator'}, 'accelerators'));
   } else { clearSitroomMarkers('accelerators'); }
 
+  // Refugee Camps / IDP Sites (static)
+  if (document.getElementById('sitroom-layer-refugees')?.checked) {
+    clearSitroomMarkers('refugees');
+    _REFUGEE_CAMPS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'refugee_camp'}, 'refugees'));
+  } else { clearSitroomMarkers('refugees'); }
+
+  // UN Peacekeeping Missions (static)
+  if (document.getElementById('sitroom-layer-unMissions')?.checked) {
+    clearSitroomMarkers('unMissions');
+    _UN_MISSIONS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'un_mission'}, 'unMissions'));
+  } else { clearSitroomMarkers('unMissions'); }
+
+  // Internet Exchange Points (static)
+  if (document.getElementById('sitroom-layer-ixps')?.checked) {
+    clearSitroomMarkers('ixps');
+    _INTERNET_EXCHANGES.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'ixp'}, 'ixps'));
+  } else { clearSitroomMarkers('ixps'); }
+
+  // Embassies / Diplomatic Hubs (static)
+  if (document.getElementById('sitroom-layer-embassies')?.checked) {
+    clearSitroomMarkers('embassies');
+    _EMBASSIES_DC.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'embassy'}, 'embassies'));
+  } else { clearSitroomMarkers('embassies'); }
+
   // Weather radar overlay (RainViewer tile layer)
   _toggleWeatherRadar();
 }
@@ -1162,7 +1235,7 @@ function addSitroomMarker(ev, layerType) {
   if (!_sitroomMap) return;
   // Skip if would cluster with existing marker at this zoom
   if (_shouldCluster(ev.lat, ev.lng, layerType)) return;
-  const colors = { earthquakes: '#ff4444', weather: '#ffaa00', conflicts: '#ff6600', aviation: '#44aaff', volcanoes: '#ff3366', fires: '#ff8800', nuclear: '#ffff00', bases: '#44ff88', cables: '#3388ff', datacenters: '#aa66ff', pipelines: '#cc8844', waterways: '#00ddff', spaceports: '#ff66ff', shipping: '#88ccaa', ucdp: '#dd2222', airports: '#cccccc', fincenters: '#44dd88', mining: '#cc8844', techHQs: '#44aadd', diseases: '#ff44ff', radiation: '#66ff00', protests: '#ffcc00', ships: '#22bbdd', cloudRegions: '#6688ff', exchanges: '#ddaa22', commodityHubs: '#dd8866', startupHubs: '#ff88dd', gpsJamming: '#ff2200', tradeRoutes: '#66ccff', accelerators: '#cc66ff' };
+  const colors = { earthquakes: '#ff4444', weather: '#ffaa00', conflicts: '#ff6600', aviation: '#44aaff', volcanoes: '#ff3366', fires: '#ff8800', nuclear: '#ffff00', bases: '#44ff88', cables: '#3388ff', datacenters: '#aa66ff', pipelines: '#cc8844', waterways: '#00ddff', spaceports: '#ff66ff', shipping: '#88ccaa', ucdp: '#dd2222', airports: '#cccccc', fincenters: '#44dd88', mining: '#cc8844', techHQs: '#44aadd', diseases: '#ff44ff', radiation: '#66ff00', protests: '#ffcc00', ships: '#22bbdd', cloudRegions: '#6688ff', exchanges: '#ddaa22', commodityHubs: '#dd8866', startupHubs: '#ff88dd', gpsJamming: '#ff2200', tradeRoutes: '#66ccff', accelerators: '#cc66ff', refugees: '#ff8866', unMissions: '#4488ff', ixps: '#88ffcc', embassies: '#ddddaa' };
   const color = colors[layerType] || '#ffffff';
   let size = layerType === 'aviation' ? 5 : 8;
   if (ev.magnitude) size = Math.max(6, Math.min(24, ev.magnitude * 3));

@@ -4399,3 +4399,230 @@ def api_sitroom_heatmap_data():
         weight = max(1, (d.get('magnitude') or 1))
         points.append({'lat': d['lat'], 'lng': d['lng'], 'weight': weight, 'type': d.get('event_type', '')})
     return jsonify({'points': points, 'count': len(points)})
+
+
+@situation_room_bp.route('/api/sitroom/sentiment-timeline')
+def api_sitroom_sentiment_timeline():
+    """Return news sentiment over time (positive/negative keyword ratio)."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title, strftime('%Y-%m-%d %H:00', cached_at) as hour FROM sitroom_news "
+            "WHERE cached_at > datetime('now', '-48 hours') ORDER BY cached_at"
+        ).fetchall()
+    positive = ['peace', 'agreement', 'growth', 'recovery', 'ceasefire', 'breakthrough', 'deal', 'progress']
+    negative = ['attack', 'killed', 'war', 'crisis', 'crash', 'explosion', 'collapse', 'sanctions']
+    timeline = {}
+    for r in rows:
+        d = dict(r)
+        hour = d['hour']
+        if hour not in timeline:
+            timeline[hour] = {'pos': 0, 'neg': 0, 'total': 0}
+        title_l = d['title'].lower()
+        timeline[hour]['total'] += 1
+        if any(w in title_l for w in positive): timeline[hour]['pos'] += 1
+        if any(w in title_l for w in negative): timeline[hour]['neg'] += 1
+    return jsonify({'timeline': [{'hour': k, **v} for k, v in sorted(timeline.items())]})
+
+
+@situation_room_bp.route('/api/sitroom/threat-level')
+def api_sitroom_threat_level():
+    """Compute composite global threat level (1-5)."""
+    score = 0
+    with db_session() as db:
+        # Active conflicts
+        conflicts = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE event_type IN ('conflict', 'ucdp_conflict', 'oref_alert')").fetchone()[0]
+        if conflicts > 20: score += 2
+        elif conflicts > 10: score += 1
+        # Large earthquakes
+        big_quakes = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'earthquake' AND magnitude >= 6").fetchone()[0]
+        if big_quakes > 0: score += 1
+        # Market stress
+        vix = db.execute("SELECT price FROM sitroom_markets WHERE LOWER(symbol) LIKE '%vix%' LIMIT 1").fetchone()
+        if vix and dict(vix)['price'] > 30: score += 1
+        # Active fires
+        fires = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'fire'").fetchone()[0]
+        if fires > 400: score += 1
+    level = min(5, max(1, score))
+    labels = {1: 'LOW', 2: 'GUARDED', 3: 'ELEVATED', 4: 'HIGH', 5: 'SEVERE'}
+    return jsonify({'level': level, 'label': labels[level], 'score': score})
+
+
+@situation_room_bp.route('/api/sitroom/region-overview/<region>')
+def api_sitroom_region_overview(region):
+    """Return intelligence overview for a geographic region."""
+    region_countries = {
+        'middle-east': ['israel', 'iran', 'iraq', 'syria', 'yemen', 'lebanon', 'jordan', 'saudi', 'uae', 'qatar', 'kuwait', 'bahrain', 'oman'],
+        'europe': ['ukraine', 'russia', 'germany', 'france', 'uk', 'poland', 'romania', 'turkey', 'greece', 'italy', 'spain'],
+        'asia-pacific': ['china', 'taiwan', 'japan', 'korea', 'india', 'pakistan', 'myanmar', 'philippines', 'indonesia', 'vietnam', 'thailand'],
+        'africa': ['nigeria', 'sudan', 'ethiopia', 'kenya', 'congo', 'south africa', 'somalia', 'mali', 'libya', 'egypt', 'morocco'],
+        'americas': ['united states', 'mexico', 'brazil', 'colombia', 'venezuela', 'argentina', 'chile', 'cuba', 'haiti', 'canada'],
+    }
+    countries = region_countries.get(region.lower(), [])
+    if not countries:
+        return jsonify({'error': 'Unknown region', 'valid': list(region_countries.keys())}), 400
+
+    conditions = ' OR '.join([f"LOWER(title) LIKE '%{c}%'" for c in countries])
+    with db_session() as db:
+        news = db.execute(f"SELECT title, category, source_name FROM sitroom_news WHERE {conditions} ORDER BY cached_at DESC LIMIT 30").fetchall()
+        events = db.execute(f"SELECT title, event_type, magnitude FROM sitroom_events WHERE {conditions} ORDER BY cached_at DESC LIMIT 20").fetchall()
+    return jsonify({
+        'region': region, 'countries': countries,
+        'news': [dict(r) for r in news], 'events': [dict(r) for r in events],
+        'news_count': len(list(news)), 'event_count': len(list(events)),
+    })
+
+
+@situation_room_bp.route('/api/sitroom/daily-summary')
+def api_sitroom_daily_summary():
+    """Return a structured daily intelligence summary."""
+    with db_session() as db:
+        total_news = db.execute("SELECT COUNT(*) FROM sitroom_news WHERE cached_at > datetime('now', '-24 hours')").fetchone()[0]
+        total_events = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE cached_at > datetime('now', '-24 hours')").fetchone()[0]
+        top_stories = db.execute("SELECT title, category, source_name FROM sitroom_news ORDER BY cached_at DESC LIMIT 5").fetchall()
+        major_events = db.execute(
+            "SELECT title, event_type, magnitude FROM sitroom_events WHERE magnitude IS NOT NULL "
+            "ORDER BY magnitude DESC LIMIT 5"
+        ).fetchall()
+        market_summary = db.execute(
+            "SELECT symbol, price, change_24h FROM sitroom_markets WHERE market_type = 'index'"
+        ).fetchall()
+    return jsonify({
+        'date': datetime.now().strftime('%Y-%m-%d'),
+        'articles_24h': total_news,
+        'events_24h': total_events,
+        'top_stories': [dict(r) for r in top_stories],
+        'major_events': [dict(r) for r in major_events],
+        'market_indices': [dict(r) for r in market_summary],
+    })
+
+
+@situation_room_bp.route('/api/sitroom/compare-markets')
+def api_sitroom_compare_markets():
+    """Compare performance across all market types."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT market_type, AVG(change_24h) as avg_change, COUNT(*) as count, "
+            "MIN(change_24h) as worst, MAX(change_24h) as best "
+            "FROM sitroom_markets GROUP BY market_type"
+        ).fetchall()
+    return jsonify({'comparison': [dict(r) for r in rows]})
+
+
+@situation_room_bp.route('/api/sitroom/hot-topics')
+def api_sitroom_hot_topics():
+    """Identify hot topics by counting keyword frequency across recent headlines."""
+    from collections import Counter
+    stopwords = {'the','a','an','in','on','at','to','for','of','and','is','are','was','were',
+                 'has','have','had','be','been','will','with','from','by','as','that','this',
+                 'it','not','but','or','if','all','no','its','their','than','they','he','she',
+                 'we','our','my','new','over','after','into','up','out','about','more','says',
+                 'could','would','may','also','us','how','what','who','which','can','do','said'}
+    with db_session() as db:
+        rows = db.execute("SELECT title FROM sitroom_news WHERE cached_at > datetime('now', '-12 hours')").fetchall()
+    words = Counter()
+    for r in rows:
+        tokens = re.sub(r'[^\w\s]', '', dict(r)['title'].lower()).split()
+        for t in tokens:
+            if len(t) > 2 and t not in stopwords:
+                words[t] += 1
+    top = words.most_common(30)
+    return jsonify({'topics': [{'word': w, 'count': c} for w, c in top]})
+
+
+@situation_room_bp.route('/api/sitroom/feed-stats')
+def api_sitroom_feed_stats():
+    """Return detailed feed statistics."""
+    with db_session() as db:
+        total = db.execute("SELECT COUNT(*) FROM sitroom_news").fetchone()[0]
+        by_type = db.execute(
+            "SELECT source_type, COUNT(*) as c FROM sitroom_news GROUP BY source_type ORDER BY c DESC"
+        ).fetchall()
+        oldest = db.execute("SELECT MIN(cached_at) FROM sitroom_news").fetchone()[0]
+        newest = db.execute("SELECT MAX(cached_at) FROM sitroom_news").fetchone()[0]
+        custom = db.execute("SELECT COUNT(*) FROM sitroom_custom_feeds").fetchone()[0]
+    return jsonify({
+        'total_articles': total,
+        'by_source_type': [dict(r) for r in by_type],
+        'oldest_article': oldest,
+        'newest_article': newest,
+        'custom_feeds': custom,
+    })
+
+
+@situation_room_bp.route('/api/sitroom/map-stats')
+def api_sitroom_map_stats():
+    """Return statistics about map data layers."""
+    with db_session() as db:
+        event_counts = db.execute(
+            "SELECT event_type, COUNT(*) as c FROM sitroom_events WHERE lat != 0 AND lng != 0 "
+            "GROUP BY event_type ORDER BY c DESC"
+        ).fetchall()
+    # Static layer counts
+    static_layers = {
+        'military_bases': 149, 'nuclear_sites': 106, 'data_centers': 129,
+        'pipelines': 98, 'cables': 54, 'shipping': 44, 'airports': 62,
+        'financial_centers': 30, 'mining': 40, 'tech_hqs': 20,
+        'waterways': 26, 'spaceports': 26, 'cloud_regions': 63,
+        'stock_exchanges': 51, 'commodity_hubs': 37, 'startup_hubs': 32,
+        'gps_jamming': 26, 'trade_routes': 24, 'accelerators': 26,
+        'refugee_camps': 20, 'un_missions': 16, 'internet_exchanges': 28,
+        'embassies': 14,
+    }
+    return jsonify({
+        'live_events': [dict(r) for r in event_counts],
+        'static_layers': static_layers,
+        'total_static': sum(static_layers.values()),
+    })
+
+
+@situation_room_bp.route('/api/sitroom/risk-radar')
+def api_sitroom_risk_radar():
+    """Multi-dimensional risk assessment across 6 domains."""
+    with db_session() as db:
+        geo = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE event_type IN ('conflict','ucdp_conflict','oref_alert')").fetchone()[0]
+        eco = db.execute("SELECT COUNT(*) FROM sitroom_markets WHERE ABS(change_24h) > 2").fetchone()[0]
+        cyber = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'cyber_threat'").fetchone()[0]
+        env = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE event_type IN ('earthquake','fire','volcano') AND (magnitude IS NULL OR magnitude >= 4)").fetchone()[0]
+        health = db.execute("SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'disease'").fetchone()[0]
+        space_val = db.execute("SELECT value_json FROM sitroom_space_weather WHERE data_type = 'kp_index' LIMIT 1").fetchone()
+
+    space_risk = 0
+    if space_val:
+        try:
+            kp = json.loads(dict(space_val)['value_json']).get('latest', [None, None, None, None, '0'])
+            space_risk = min(10, int(float(kp[4] if len(kp) > 4 else 0)))
+        except Exception:
+            pass
+
+    def _scale(val, low, high):
+        return min(10, max(0, int((val - low) / max(1, high - low) * 10)))
+
+    return jsonify({
+        'domains': {
+            'geopolitical': {'score': _scale(geo, 0, 30), 'events': geo},
+            'economic': {'score': _scale(eco, 0, 15), 'volatiles': eco},
+            'cyber': {'score': _scale(cyber, 0, 10), 'threats': cyber},
+            'environmental': {'score': _scale(env, 0, 20), 'events': env},
+            'health': {'score': _scale(health, 0, 10), 'outbreaks': health},
+            'space_weather': {'score': space_risk, 'kp': space_risk},
+        }
+    })
+
+
+@situation_room_bp.route('/api/sitroom/version')
+def api_sitroom_version():
+    """Return Situation Room version and capabilities."""
+    return jsonify({
+        'version': '6.17',
+        'api_routes': 120,
+        'map_layers': 36,
+        'static_points': 1121,
+        'data_sources': 36,
+        'fetch_workers': 34,
+        'telegram_channels': 43,
+        'ui_cards': 102,
+        'features': ['smart_polling', 'notification_sounds', 'data_freshness',
+                      'news_clustering', 'ai_deduction', 'breaking_detection',
+                      'country_briefs', 'watchlist', 'export_csv_json',
+                      'full_text_search', 'anomaly_detection', 'circuit_breaker'],
+    })
