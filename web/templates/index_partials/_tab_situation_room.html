@@ -1,11 +1,17 @@
   <!-- Situation Room Tab -->
   <div id="tab-situation-room" class="tab-content active">
 
-    <!-- Header Bar -->
+    <!-- Breaking News Banner -->
+    <div class="sr-breaking" id="sr-breaking">
+      <span class="sr-breaking-badge">BREAKING</span>
+      <div class="sr-breaking-scroll" id="sr-breaking-text"></div>
+    </div>
+
+    <!-- Header -->
     <div class="sr-header">
       <div class="sr-header-left">
         <span class="sr-title">SITUATION ROOM</span>
-        <span class="sr-subtitle">Global intelligence &mdash; open-source data feeds</span>
+        <span class="sr-subtitle">Global intelligence &mdash; open-source feeds</span>
       </div>
       <div class="sr-header-right">
         <span id="sitroom-last-update" class="sr-ts"></span>
@@ -26,13 +32,17 @@
       <div class="sr-tick"><span class="sr-tick-val" id="sitroom-stat-predictions">--</span><span class="sr-tick-lbl">PREDICTIONS</span></div>
     </div>
 
+    <!-- Market Ticker Ribbon -->
+    <div class="sr-market-ribbon" id="sr-market-ribbon"></div>
+
     <!-- Full-Width Map -->
     <div class="sr-map-wrap">
       <div class="sr-map-toolbar">
+        <span class="sr-map-toolbar-label">LAYERS</span>
         <label class="sr-layer"><input type="checkbox" id="sitroom-layer-quakes" checked data-sitroom-layer="earthquakes"> Quakes</label>
         <label class="sr-layer"><input type="checkbox" id="sitroom-layer-weather" checked data-sitroom-layer="weather"> Weather</label>
         <label class="sr-layer"><input type="checkbox" id="sitroom-layer-conflicts" checked data-sitroom-layer="conflicts"> Crises</label>
-        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-aviation" data-sitroom-layer="aviation"> Aircraft</label>
+        <label class="sr-layer"><input type="checkbox" id="sitroom-layer-aviation" data-sitroom-layer="aviation"> Aviation</label>
         <label class="sr-layer"><input type="checkbox" id="sitroom-layer-volcanoes" data-sitroom-layer="volcanoes"> Volcanoes</label>
       </div>
       <div id="sitroom-map" class="sr-map" role="img" aria-label="Global event map"></div>
@@ -41,58 +51,94 @@
     <!-- Card Grid -->
     <div class="sr-cards">
 
-      <!-- Markets -->
-      <div class="sr-card">
-        <div class="sr-card-head">MARKETS &amp; COMMODITIES</div>
-        <div id="sitroom-market-ticker" class="sr-card-body sr-market-grid"><div class="sr-empty">No data</div></div>
+      <!-- Live News Feed -->
+      <div class="sr-card sr-card-tall">
+        <div class="sr-card-head">
+          LIVE NEWS
+          <select id="sitroom-news-category" class="sr-select" aria-label="Category"><option value="">All</option></select>
+        </div>
+        <div id="sitroom-news-list" class="sr-card-body sr-scroll sr-scroll-tall"><div class="sr-empty">Loading...</div></div>
+        <button class="sr-btn sr-btn-ghost sr-load-more" id="sitroom-news-more" data-sitroom-action="load-more-news" style="display:none">LOAD MORE</button>
       </div>
 
-      <!-- Seismic -->
+      <!-- AI Insights / Strategic Posture -->
+      <div class="sr-card">
+        <div class="sr-card-head">
+          AI STRATEGIC POSTURE
+          <button class="sr-btn" id="sitroom-gen-briefing" data-sitroom-action="generate-briefing">GENERATE</button>
+        </div>
+        <div id="sitroom-briefing-content" class="sr-card-body sr-scroll"><div class="sr-empty">Click GENERATE to create AI-powered intelligence briefing from current data feeds</div></div>
+      </div>
+
+      <!-- Markets & Indices -->
+      <div class="sr-card">
+        <div class="sr-card-head">MARKETS &amp; INDICES</div>
+        <div id="sitroom-market-ticker" class="sr-card-body sr-market-grid"><div class="sr-empty">Loading...</div></div>
+      </div>
+
+      <!-- Seismic Activity -->
       <div class="sr-card">
         <div class="sr-card-head">
           SEISMIC ACTIVITY
-          <select id="sitroom-quake-filter" class="sr-select" aria-label="Magnitude filter">
-            <option value="0">All</option><option value="3">M3+</option><option value="4" selected>M4+</option><option value="5">M5+</option><option value="6">M6+</option>
-          </select>
+          <select id="sitroom-quake-filter" class="sr-select" aria-label="Magnitude"><option value="0">All</option><option value="3">M3+</option><option value="4" selected>M4+</option><option value="5">M5+</option><option value="6">M6+</option></select>
         </div>
-        <div id="sitroom-quake-list" class="sr-card-body sr-scroll"><div class="sr-empty">No data</div></div>
-      </div>
-
-      <!-- Weather -->
-      <div class="sr-card">
-        <div class="sr-card-head">SEVERE WEATHER</div>
-        <div id="sitroom-weather-list" class="sr-card-body sr-scroll"><div class="sr-empty">No data</div></div>
+        <div id="sitroom-quake-list" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
       <!-- Space Weather -->
       <div class="sr-card">
-        <div class="sr-card-head">SPACE WEATHER</div>
-        <div id="sitroom-space-weather" class="sr-card-body"><div class="sr-empty">No data</div></div>
+        <div class="sr-card-head">SPACE WEATHER (NOAA)</div>
+        <div id="sitroom-space-weather" class="sr-card-body"><div class="sr-empty">Loading...</div></div>
       </div>
 
-      <!-- Predictions -->
+      <!-- Severe Weather -->
+      <div class="sr-card">
+        <div class="sr-card-head">SEVERE WEATHER</div>
+        <div id="sitroom-weather-list" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
+      </div>
+
+      <!-- Prediction Markets -->
       <div class="sr-card">
         <div class="sr-card-head">PREDICTION MARKETS</div>
-        <div id="sitroom-predictions-list" class="sr-card-body sr-scroll"><div class="sr-empty">No data</div></div>
+        <div id="sitroom-predictions-list" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
-      <!-- AI Briefing -->
+      <!-- Live Webcams -->
       <div class="sr-card">
-        <div class="sr-card-head">
-          AI INTELLIGENCE BRIEFING
-          <button class="sr-btn" id="sitroom-gen-briefing" data-sitroom-action="generate-briefing">GENERATE</button>
+        <div class="sr-card-head">LIVE WEBCAMS</div>
+        <div class="sr-card-body sr-webcam-grid" id="sr-webcams">
+          <div class="sr-webcam" data-webcam="jackson">
+            <img src="https://www.nps.gov/webcams-glte/camera0.jpg" alt="Grand Teton" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22320%22 height=%22180%22><rect fill=%22%23111%22 width=%22320%22 height=%22180%22/><text x=%2250%25%22 y=%2250%25%22 fill=%22%23444%22 font-family=%22monospace%22 font-size=%2212%22 text-anchor=%22middle%22 dy=%22.3em%22>Feed offline</text></svg>'">
+            <span class="sr-webcam-label">Grand Teton NP</span>
+          </div>
+          <div class="sr-webcam" data-webcam="abbey">
+            <img src="https://www.abbeyroad.com/webcam/abbey-road-webcam.jpg" alt="Abbey Road" loading="lazy" onerror="this.parentElement.style.display='none'">
+            <span class="sr-webcam-label">Abbey Road, London</span>
+          </div>
+          <div class="sr-webcam" data-webcam="iss">
+            <img src="https://eol.jsc.nasa.gov/DatabaseImages/ISSMissions/highres/ISS_Crew_Earth_Observations.jpg" alt="ISS" loading="lazy" onerror="this.parentElement.style.display='none'">
+            <span class="sr-webcam-label">ISS Earth View</span>
+          </div>
+          <div class="sr-webcam" data-webcam="yellowstone">
+            <img src="https://www.nps.gov/webcams-yell/oldfaith2.jpg" alt="Old Faithful" loading="lazy" onerror="this.parentElement.style.display='none'">
+            <span class="sr-webcam-label">Old Faithful, Yellowstone</span>
+          </div>
         </div>
-        <div id="sitroom-briefing-content" class="sr-card-body sr-scroll"><div class="sr-empty">Click Generate for AI SITREP</div></div>
       </div>
 
-      <!-- News Feed (spans 2 columns) -->
-      <div class="sr-card sr-card-wide">
-        <div class="sr-card-head">
-          NEWS FEED
-          <select id="sitroom-news-category" class="sr-select" aria-label="Category filter"><option value="">All</option></select>
+      <!-- Country Intelligence Index -->
+      <div class="sr-card">
+        <div class="sr-card-head">COUNTRY INSTABILITY INDEX</div>
+        <div id="sr-cii" class="sr-card-body sr-scroll">
+          <div class="sr-cii-intro">Composite risk scoring from earthquake, weather, conflict, and news signal density per country.</div>
+          <div id="sr-cii-list"></div>
         </div>
-        <div id="sitroom-news-list" class="sr-card-body sr-scroll sr-scroll-tall"><div class="sr-empty">No news</div></div>
-        <button class="sr-btn sr-btn-ghost sr-load-more" id="sitroom-news-more" data-sitroom-action="load-more-news" style="display:none">Load More</button>
+      </div>
+
+      <!-- Intel Feed -->
+      <div class="sr-card">
+        <div class="sr-card-head">INTEL FEED</div>
+        <div id="sr-intel-feed" class="sr-card-body sr-scroll"><div class="sr-empty">Defense &amp; security headlines from intel sources</div></div>
       </div>
 
       <!-- Manage Feeds -->
