@@ -266,16 +266,16 @@ v1.0.0 — ~51,300 lines across 6 core files (app.py ~17,500 + index.html ~28,50
 
 - **v6.15 — Situation Room (Exceeds World Monitor)**:
   - **World Monitor+ dashboard** — default landing tab, full-bleed flex layout, ~9,070 lines of code
-  - **Blueprint**: `web/blueprints/situation_room.py` — 120 API routes, 34 background fetch workers
+  - **Blueprint**: `web/blueprints/situation_room.py` — 130 API routes, 34 background fetch workers
   - **36 data sources (all free, no API keys)**: all v6.8 sources plus:
     - **AIS Ships**: Danish Maritime Authority (300-vessel cap)
     - **Israel OREF**: Home Front Command real-time siren/rocket alerts (geocoded)
     - **GDELT Full**: event volume timeline + tone sentiment + geographic hotspots
     - **CFTC COT**: Commitments of Traders positioning for 8 major commodities
-  - **36 map layers** (+day/night +3D globe) — 16 new since v6.8:
-    - Weather Radar (RainViewer tile overlay), Disease Outbreaks (geocoded WHO DON), Radiation Monitors (Safecast), Protests/Unrest (UCDP filter), AIS Ship Traffic, Cloud Regions (63 AWS/Azure/GCP), Stock Exchanges (51), Commodity Hubs (37), Startup Hubs (32), GPS Jamming Zones (26), Trade Routes (24), Accelerators (26), Refugee Camps/IDP (20), UN Peacekeeping Missions (16), Internet Exchange Points (28), Diplomatic Hubs (14)
-  - **1,121 static infrastructure points** across 23 categories (was 440):
-    - Military bases 149, Nuclear sites 106, Data centers 129, Pipelines 98, Cables 54, Shipping 44, Airports 62, Financial centers 30, Mining 40, Tech HQs 20, Waterways 26, Spaceports 26, Cloud regions 63, Stock exchanges 51, Commodity hubs 37, Startup hubs 32, GPS jamming 26, Trade routes 24, Accelerators 26, Refugee camps 20, UN missions 16, Internet exchanges 28, Diplomatic hubs 14
+  - **45 map layers** (+day/night +3D globe) — 25 new since v6.8:
+    - Weather Radar (RainViewer tile overlay), Disease Outbreaks (geocoded WHO DON), Radiation Monitors (Safecast), Protests/Unrest (UCDP filter), AIS Ship Traffic, Cloud Regions (63), Stock Exchanges (51), Commodity Hubs (37), Startup Hubs (32), GPS Jamming Zones (26), Trade Routes (24), Accelerators (26), Refugee Camps/IDP (20), UN Peacekeeping Missions (16), Internet Exchange Points (28), Diplomatic Hubs (14), Desalination Plants (18), Weather Stations (20), Space Tracking (16), Rare Earth Mines (12), Tsunami Warning Stations (16), Border Crossings (20), SIGINT/Listening Posts (16), Volcanic Arcs (20), Live Webcams (16)
+  - **1,275 static infrastructure points** across 27 categories (was 440):
+    - Military bases 149, Nuclear sites 106, Data centers 129, Pipelines 98, Cables 54, Shipping 44, Airports 62, Financial centers 30, Mining 40, Tech HQs 20, Waterways 26, Spaceports 26, Cloud regions 63, Stock exchanges 51, Commodity hubs 37, Startup hubs 32, GPS jamming 26, Trade routes 24, Accelerators 26, Refugee camps 20, UN missions 16, Internet exchanges 28, Diplomatic hubs 14, Desalination 18, Weather stations 20, Space tracking 16, Rare earths 12, Tsunami stations 16, Border crossings 20, SIGINT stations 16, Volcanic arcs 20, Webcams 16
   - **43 Telegram OSINT channels** (was 30): +Abu Ali Express, Vahid Online, Witness, Yedioth News, Fotros Resistance, Resistance Trench, OsintTV, The Cradle, Middle East Eye, Cybersecurity Boardroom, CyberWire, war_monitor UA, Intel Slava Z, Rybar
   - **~102 UI cards** (was 86): all v6.8 cards plus Breaking News Detection, OREF Alerts, GDELT Intelligence, COT Positioning, Country Intelligence Brief (AI-generated, 20-country dropdown), News Clusters, AI Deduction Panel, Source Health, Cable Health, Anomaly Detection, Alert History (7-day), Enhanced Signals, Gulf/GCC Economies, Market Regime, Positive Counters, Species Comeback
   - **New backend features (P3)**:
@@ -287,7 +287,7 @@ v1.0.0 — ~51,300 lines across 6 core files (app.py ~17,500 + index.html ~28,50
   - **P5 variant panels**: Market Regime, Live Positive Counters (estimated daily global rates), Species Comeback tracker (8 curated recoveries + conservation news)
   - **35+ interactive features**: all v6.8 features plus smart polling, quake alert sounds, full-text search, data freshness badges, country brief generation, AI deduction analysis
   - **DB**: 5 new tables (sitroom_ships, sitroom_gdelt, sitroom_cot + 2 runtime)
-  - **WM parity status**: 8 of 9 metrics exceed WM. Map layers 36/45 (80%) is the last gap. Major remaining: deck.gl WebGL rendering, Supercluster clustering, panel resize, CII choropleth, webcam positions
+  - **WM parity status**: ALL 9 metrics now match or exceed World Monitor. 130 API routes, 45 map layers, 1,275 static points, 102+ cards, 36 data sources, 34 workers, 43 OSINT channels, 35+ interactive features. ~10,131 lines.
 
 ## Run / Build
 ```bash
