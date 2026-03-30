@@ -1,12 +1,12 @@
 <div align="center">
-<img src="project_nomad_logo.png" width="200" height="200"/>
+<img src="nomad-mark.png" width="180" height="180"/>
 
-# Project N.O.M.A.D. v1.0.0
-### The Most Complete Offline Survival Command Center Available
+# NOMAD Field Desk v1.0.0
+### Desktop-First Offline Preparedness and Field Operations Workspace
 
 **Free. Open Source. No Internet Required After Setup.**
 
-Cross-platform — runs natively on Windows, Linux, and macOS. No Docker, no WSL, no VMs. 8 managed services, 590+ API routes, 90 database tables, situation-aware AI with persistent memory, vision, and action execution, conversation branching with "What If" scenarios, Zambretti offline weather prediction, full inventory management with barcode/UPC scanning and receipt OCR, 42 interactive calculators, wiki-linked notes, media library with resume playback, VIPTrack military aircraft tracker, and a fully customizable dashboard with 5 themes including night vision and e-ink modes.
+Cross-platform — runs natively on Windows, Linux, and macOS. No Docker, no WSL, no VMs. 8 managed services, 600+ API routes, 95 database tables, **Situation Room** global intelligence dashboard (inspired by [World Monitor](https://github.com/koala73/worldmonitor)), situation-aware AI with persistent memory, vision, and action execution, conversation branching with "What If" scenarios, Zambretti offline weather prediction, full inventory management with barcode/UPC scanning and receipt OCR, 42 interactive calculators, wiki-linked notes, media library with resume playback, VIPTrack military aircraft tracker, and a fully customizable dashboard with 5 themes including night vision and e-ink modes.
 
 [![Release](https://img.shields.io/github/v/release/SysAdminDoc/project-nomad-desktop?include_prereleases&label=Download&color=blue)](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest)
 [![Website](https://img.shields.io/badge/Website-projectnomad.us-blue)](https://www.projectnomad.us)
@@ -16,21 +16,22 @@ Cross-platform — runs natively on Windows, Linux, and macOS. No Docker, no WSL
 
 ---
 
-> Competitors charge $280+ for a USB stick with curated content (Prepper Disk, Prep Drive). N.O.M.A.D. does everything they do and 10x more — for free. Offline weather forecasting, 42 interactive calculators, 56 reference cards, 21 decision guides, 17 emergency procedures, 15 checklist templates, 4 training scenarios, NukeMap v3.2.0, VIPTrack military aircraft tracker, medical module with TCCC/triage and vital signs trending, receipt scanner with AI Vision OCR, food production with companion planting and pest guide, community intelligence network, power management, DTMF tone generator, NATO phonetic trainer, wiki-linked notes with templates, media library with resume playback, AI document intelligence with SITREP generation, multimodal AI chat with image analysis, conversation branching, built-in BitTorrent client, 210 survival channels, watch rotation planner, analytics dashboard, and a 38-section user guide.
+> Competitors charge $280+ for a USB stick with curated content (Prepper Disk, Prep Drive). NOMAD Field Desk gives you a richer local-first workspace for preparedness planning, field reference, operations tracking, AI-assisted decision support, and offline knowledge management — without subscriptions or cloud lock-in.
 
-**[Download for Windows (Portable)](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-Windows.exe)** — single file, no install needed, run from anywhere (USB, desktop, etc.)
+**[Download for Windows (Portable)](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/NOMADFieldDesk-Windows.exe)** — single file, no install needed, run from anywhere (USB, desktop, etc.)
 
-**[Download for Windows (Installer)](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-Setup.exe)** — installs to Program Files with Start Menu shortcut and desktop icon
+**[Download for Windows (Installer)](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/NOMAD-Setup.exe)** — installs to Program Files with Start Menu shortcut and desktop icon
 
-**[Download for Linux](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-Linux)** — portable binary, `chmod +x` and run
+**[Download for Linux](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/NOMADFieldDesk-Linux)** — portable binary, `chmod +x` and run
 
-**[Download for macOS](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-macOS)** — portable binary, `chmod +x` and run
+**[Download for macOS](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/NOMADFieldDesk-macOS)** — portable binary, `chmod +x` and run
 
 ---
 
 ## What Makes This Different
 
 ### Intelligence & Awareness
+- **Situation Room** — World Monitor-inspired global intelligence dashboard as the default landing page. Aggregates 25+ curated RSS feeds across 11 categories (World, US, Tech, Science, Cyber, Defense, Disaster, Finance, Energy, Health), USGS earthquake monitoring (M2.5+ with magnitude/depth/alert level), NWS severe weather alerts (Extreme/Severe with polygon geometry), GDACS crisis events (earthquakes, cyclones, floods, volcanoes, droughts), crypto/commodity market data (BTC, ETH, Gold via CoinGecko + Fear & Greed Index), and AI-powered intelligence briefings via local Ollama. Interactive dark-themed MapLibre GL globe with toggleable event layers, magnitude-scaled markers, and map popups. Custom RSS/Atom feed management. All data cached to SQLite for full offline access. Background thread-safe fetch workers with per-source cooldown timers.
 - **Zambretti Offline Weather Prediction** — Pure barometric pressure-based forecasting that works without any internet. Pressure history graph, trend analysis, weather-triggered alerts and automated action rules when storms approach.
 - **Proactive + Predictive Alerts** — Background engine monitors burn rates, expiring items, pressure drops, and incident clusters every 5 minutes. Alerts fire for rapid pressure drops (>4 hPa = storm warning), extreme temps, and inventory depletion.
 - **Situation-Aware AI with Memory & Vision** — The AI knows your actual inventory, burn rates, incidents, contacts, weather, power, patients, and garden data. Persistent memory remembers your location, group size, and ongoing situations. AI can execute actions directly ("Add 50 gallons of water to inventory"). Multimodal support lets you attach images for AI analysis.
@@ -98,7 +99,7 @@ Cross-platform — runs natively on Windows, Linux, and macOS. No Docker, no WSL
 - **Persistent AI Copilot Dock** — Fixed bottom bar available on every tab. Ask questions, get answers, dismiss when done. Ctrl+/ focuses instantly. Voice input supported.
 - **5 Themes** — Desert (default light), Night Ops (tactical dark), Cyber (blue dark), Red Light (night vision preserving scotopic vision), E-Ink (high-contrast black-and-white for e-readers and paper-like displays).
 - **Status Strip Pills** — Colored pill indicators with live status dots for services, supplies, contacts, alerts, and situation.
-- **Mobile Bottom Navigation** — Touch-friendly 56px bottom tab bar on mobile with slide-out sidebar drawer and 44px minimum touch targets.
+- **Desktop Window Layout** — Desktop-first shell with dense but orderly workspace layouts, predictable window resizing, and keyboard-friendly navigation.
 - **Voice Input** — Hands-free inventory entry and AI chat via Web Speech API with natural language parsing.
 - **Form State Recovery** — Auto-saves form inputs to localStorage. Prevents data loss on accidental navigation or crash.
 - **RTL Language Support** — Full right-to-left layout for Arabic, Hebrew, and other RTL languages.
@@ -106,10 +107,11 @@ Cross-platform — runs natively on Windows, Linux, and macOS. No Docker, no WSL
 
 ---
 
-## 11 Main Tabs
+## 12 Main Tabs
 
 | Tab | What It Does |
 |-----|-------------|
+| **Situation Room** | Default landing page — global intelligence dashboard with RSS news feeds, USGS earthquakes, NWS weather alerts, GDACS crisis events, market data, interactive event map, AI briefings, custom feed management |
 | **Home** | Bento grid dashboard with configurable widgets, needs overview, services, field documents, activity log |
 | **AI Chat** | Local AI with 19 presets, multimodal vision, conversation branching, model cards, situation awareness, persistent memory, SITREP generation, action execution, document intelligence, RAG pipeline |
 | **Library** | ZIM content library (100+ datasets, 14 categories) with Wikipedia tier selector, content updates, bulk downloads |
@@ -119,7 +121,7 @@ Cross-platform — runs natively on Windows, Linux, and macOS. No Docker, no WSL
 | **Tools** | NukeMap, VIPTrack, Meshtastic, DTMF generator, phonetic trainer, guided drills, immersive training scenarios |
 | **Preparedness** | 26 sub-tabs: inventory, medical, garden, power, security, radio, analytics, calculators, guides, and more |
 | **Readiness** | Readiness score dashboard with category breakdown, improvement actions, coverage overview |
-| **Benchmark** | CPU, memory, disk, AI inference, storage I/O, network throughput scoring with trend history |
+| **Diagnostics** | CPU, memory, disk, AI inference, storage I/O, network throughput scoring with trend history |
 | **Settings** | System monitoring, AI models, task scheduler, watch rotation, serial ports, system health, CSV import, sync, i18n, preferences |
 
 ## 8 Managed Services
@@ -185,27 +187,27 @@ Cross-platform — runs natively on Windows, Linux, and macOS. No Docker, no WSL
 ## Quick Start
 
 ### Option 1: Windows Portable (no install)
-1. Download **[ProjectNOMAD-Windows.exe](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-Windows.exe)**
+1. Download **[NOMADFieldDesk-Windows.exe](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/NOMADFieldDesk-Windows.exe)**
 2. Double-click to run — works from USB drives, desktops, anywhere
 3. Follow the setup wizard (choose Essential, Standard, Maximum, or Custom)
 
 ### Option 2: Windows Installer
-1. Download **[ProjectNOMAD-Setup.exe](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-Setup.exe)**
+1. Download **[NOMAD-Setup.exe](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/NOMAD-Setup.exe)**
 2. Run installer — adds Start Menu shortcut and desktop icon
 3. Launch from Start Menu
 
 ### Option 3: Linux
 ```bash
-wget https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-Linux
-chmod +x ProjectNOMAD-Linux
-./ProjectNOMAD-Linux
+wget https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/NOMADFieldDesk-Linux
+chmod +x NOMADFieldDesk-Linux
+./NOMADFieldDesk-Linux
 ```
 
 ### Option 4: macOS
 ```bash
-curl -LO https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/ProjectNOMAD-macOS
-chmod +x ProjectNOMAD-macOS
-./ProjectNOMAD-macOS
+curl -LO https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest/download/NOMADFieldDesk-macOS
+chmod +x NOMADFieldDesk-macOS
+./NOMADFieldDesk-macOS
 ```
 
 ### Option 5: Run from source (any platform)
@@ -214,13 +216,13 @@ git clone https://github.com/SysAdminDoc/project-nomad-desktop.git
 cd project-nomad-desktop
 python nomad.py
 ```
-Dependencies auto-install on first run.
+Then install dependencies with `pip install -r requirements.txt` before launch.
 
 ### Option 6: Build your own binary
 ```bash
 pip install pyinstaller
 pyinstaller build.spec
-# Output: dist/ProjectNOMAD (or ProjectNOMAD.exe on Windows)
+# Output: dist/NOMADFieldDesk (or NOMADFieldDesk.exe on Windows)
 ```
 
 ---
@@ -239,11 +241,12 @@ pyinstaller build.spec
 | Component | Technology |
 |-----------|-----------|
 | Window | pywebview (WebView2 on Windows, WebKit on macOS, GTK on Linux) |
-| Backend | Flask with 15 Blueprints — 590+ API routes |
-| Database | SQLite (90 tables, WAL mode, auto-backups, 120 performance indexes, migration system) |
+| Backend | Flask with 16 Blueprints — 600+ API routes |
+| Database | SQLite (95 tables, WAL mode, auto-backups, 128 performance indexes, migration system) |
 | AI | Ollama native + GPU auto-config (NVIDIA/AMD/Intel) + multimodal vision |
 | Config | `Config` class with environment variable overrides and `.env` file support |
 | Security | CSRF tokens, rate limiting (flask-limiter), SQL injection prevention, input validation |
+| Situation Room | RSS/Atom aggregation (25+ feeds, 11 categories) + USGS earthquakes + NWS weather + GDACS crises + CoinGecko markets + AI briefings + MapLibre GL globe |
 | Alerts | Background engine (5-min cycle) + weather-triggered action rules + predictive trend analysis |
 | Weather | Zambretti barometric algorithm (pure offline) + pressure graphing + automated action rules |
 | Scheduler | Recurring tasks with auto-recurrence (daily/weekly/monthly) + watch rotation planner |
@@ -274,12 +277,12 @@ pyinstaller build.spec
 ## Data Location
 
 Data stored in platform-appropriate location:
-- **Windows**: `%APPDATA%\ProjectNOMAD\`
-- **Linux**: `~/.local/share/ProjectNOMAD/` (or `$XDG_DATA_HOME`)
-- **macOS**: `~/Library/Application Support/ProjectNOMAD/`
+- **Windows**: `%APPDATA%\NOMADFieldDesk\` for new installs, with legacy `ProjectNOMAD` upgrades still supported
+- **Linux**: `~/.local/share/NOMADFieldDesk/` (or `$XDG_DATA_HOME`)
+- **macOS**: `~/Library/Application Support/NOMADFieldDesk/`
 
 ```
-nomad.db                # SQLite (90 tables, WAL mode)
+nomad.db                # SQLite (95 tables, WAL mode)
 logs/                   # Application logs (rotating, 5MB max)
 backups/                # Automatic DB backups (5 rotation, optional encryption)
 db_migrations/          # SQL migration scripts
@@ -309,24 +312,25 @@ Both share the same core philosophy: an offline-first, self-contained knowledge 
 
 ### What the Desktop Edition Adds
 
-Everything from the original plus: 26 preparedness sub-tabs, proactive + predictive + weather-triggered alerts with automated action rules, Zambretti offline weather prediction with pressure graphing, AI SITREP generation + action execution + persistent memory + multimodal vision + conversation branching + model cards, VIPTrack military aircraft tracker, receipt scanner with AI Vision OCR, UPC barcode database, task scheduler, watch rotation planner, 21 decision guides, medical module (TCCC/triage/SBAR/vital signs trending/drug interactions/expiring meds/dosage calculator/Medical Flipbook), 4 training scenarios + multi-node group exercises, food production (companion planting, pest guide, seed inventory, yield analysis, geo overlay), power management with sensor charts, security cameras + perimeter zones, multi-node federation with vector clocks + mutual aid agreements + community readiness + skill matching + alert relay + group exercises, NukeMap v3.2.0, media library (210 channels, resume playback, playlists, 152 torrents), DTMF tone generator, NATO phonetic trainer, antenna calculator, HF propagation forecast, dead drop encrypted messaging, wiki-linked notes with templates + backlinks + attachments, serial hardware bridge, mesh radio, 9+ printable field documents with PDF export, CSV import wizard, 5 inventory templates (155 items), inventory barcode/QR + UPC database + lot tracking + check-in/out + photos + auto-shopping list, map measurement + print + style switcher + GPX + elevation profiles + geocode + perimeter zones, AI inference + storage + network benchmarks, LAN chat channels + AES-GCM encryption + presence, analytics dashboard, QR code generation, database migration system, CSRF + rate limiting + SQL injection prevention, undo system, full UI customization panel with widget configuration, bento grid dashboard, PWA with offline caching + push notifications, 5 themes (including E-Ink), voice input, form recovery, RTL support, i18n, 42 calculators, 56 reference cards, 17 emergency procedures, encrypted vault, and a 38-section user guide.
+Everything from the original plus: Situation Room global intelligence dashboard (RSS/earthquakes/weather/markets/AI briefings), 26 preparedness sub-tabs, proactive + predictive + weather-triggered alerts with automated action rules, Zambretti offline weather prediction with pressure graphing, AI SITREP generation + action execution + persistent memory + multimodal vision + conversation branching + model cards, VIPTrack military aircraft tracker, receipt scanner with AI Vision OCR, UPC barcode database, task scheduler, watch rotation planner, 21 decision guides, medical module (TCCC/triage/SBAR/vital signs trending/drug interactions/expiring meds/dosage calculator/Medical Flipbook), 4 training scenarios + multi-node group exercises, food production (companion planting, pest guide, seed inventory, yield analysis, geo overlay), power management with sensor charts, security cameras + perimeter zones, multi-node federation with vector clocks + mutual aid agreements + community readiness + skill matching + alert relay + group exercises, NukeMap v3.2.0, media library (210 channels, resume playback, playlists, 152 torrents), DTMF tone generator, NATO phonetic trainer, antenna calculator, HF propagation forecast, dead drop encrypted messaging, wiki-linked notes with templates + backlinks + attachments, serial hardware bridge, mesh radio, 9+ printable field documents with PDF export, CSV import wizard, 5 inventory templates (155 items), inventory barcode/QR + UPC database + lot tracking + check-in/out + photos + auto-shopping list, map measurement + print + style switcher + GPX + elevation profiles + geocode + perimeter zones, AI inference + storage + network benchmarks, LAN chat channels + AES-GCM encryption + presence, analytics dashboard, QR code generation, database migration system, CSRF + rate limiting + SQL injection prevention, undo system, full UI customization panel with widget configuration, bento grid dashboard, PWA with offline caching + push notifications, 5 themes (including E-Ink), voice input, form recovery, RTL support, i18n, 42 calculators, 56 reference cards, 17 emergency procedures, encrypted vault, and a 38-section user guide.
 
 ### Platform Differences
 | | Original | Desktop Edition |
 |---|----------|-----------------|
 | Installation | `curl` + bash script, requires Docker | Download .exe / .AppImage / .dmg and run |
 | Runtime | Docker containers on Linux | Native processes (Windows/Linux/macOS) |
-| Database | MySQL | SQLite (zero config, 90 tables, migration system) |
+| Database | MySQL | SQLite (zero config, 95 tables, migration system) |
 | Frontend | React + Inertia.js | Single-file HTML/CSS/JS with asset bundling |
-| Backend | AdonisJS (Node.js) | Flask + 15 Blueprints (Python, 590+ routes) |
+| Backend | AdonisJS (Node.js) | Flask + 16 Blueprints (Python, 600+ routes) |
 | Build | Docker image | PyInstaller + Inno Setup |
 
 ---
 
 ## v1.0.0 Highlights
 
-- **566 API routes** across 89 SQLite tables with 122 performance indexes
-- **15 Flask Blueprints** — modular architecture with dedicated `sql_safety.py`, `validation.py`, and `state.py`
+- **600+ API routes** across 95 SQLite tables with 128 performance indexes
+- **16 Flask Blueprints** — modular architecture with dedicated `sql_safety.py`, `validation.py`, and `state.py`
+- **Situation Room** — World Monitor-inspired global intelligence dashboard with real-time OSINT feeds cached for offline
 - **9 audit rounds** — security hardening, XSS prevention, DB connection safety (db_session context manager), cascade integrity, input validation, CSRF tokens, rate limiting
 - **338 automated tests** across 34 test files
 - **5 themes** — Desert, Night Ops, Cyber, Red Light, E-Ink
