@@ -1,7 +1,7 @@
-"""Situation Room v2 — World Monitor-inspired global intelligence dashboard.
+"""Situation Room v4 — World Monitor-inspired global intelligence dashboard.
 
 Data sources (all free, no API keys required):
-  - 35+ curated RSS/Atom feeds across 12 categories
+  - 100+ curated RSS/Atom feeds across 20 categories
   - USGS earthquakes (M2.5+ GeoJSON)
   - NWS severe weather alerts (Extreme/Severe)
   - GDACS crisis events (Orange/Red alert)
@@ -14,6 +14,9 @@ Data sources (all free, no API keys required):
   - NOAA SWPC space weather (Kp index, storm scales, solar flares)
   - Smithsonian GVP volcanic activity
   - Polymarket prediction markets
+  - NASA FIRMS satellite fire detection (VIIRS)
+  - WHO disease outbreak notifications
+  - 12 live YouTube news channel embeds
 
 All data cached to SQLite for full offline access.
 Background fetch workers with per-source cooldowns and thread safety.
@@ -61,7 +64,24 @@ FETCH_COOLDOWN = {
     'rss': 300, 'earthquakes': 120, 'weather_alerts': 300,
     'markets': 300, 'conflicts': 600, 'aviation': 180,
     'space_weather': 300, 'volcanoes': 3600, 'predictions': 600,
+    'fires': 600, 'disease_outbreaks': 1800,
 }
+
+# ─── Live YouTube Channels ────────────────────────────────────────────
+LIVE_CHANNELS = [
+    {'name': 'Al Jazeera English', 'handle': '@aborigi', 'video_id': 'bNyUyrR0PHo', 'region': 'World'},
+    {'name': 'France 24 English', 'handle': '@FRANCE24English', 'video_id': 'h3MuIUNCCzI', 'region': 'World'},
+    {'name': 'DW News', 'handle': '@DWNews', 'video_id': '', 'region': 'Europe'},
+    {'name': 'Sky News', 'handle': '@SkyNews', 'video_id': '9Auq9mYxFEE', 'region': 'UK'},
+    {'name': 'NBC News NOW', 'handle': '@NBCNews', 'video_id': '', 'region': 'US'},
+    {'name': 'ABC News Live', 'handle': '@ABCNews', 'video_id': '', 'region': 'US'},
+    {'name': 'Reuters', 'handle': '@Reuters', 'video_id': '', 'region': 'World'},
+    {'name': 'WION', 'handle': '@ABORIG', 'video_id': '', 'region': 'Asia'},
+    {'name': 'NHK World', 'handle': '@NHKWORLDJAPAN', 'video_id': '', 'region': 'Asia'},
+    {'name': 'TRT World', 'handle': '@taborig', 'video_id': '', 'region': 'Middle East'},
+    {'name': 'CGTN', 'handle': '@CGTNOfficial', 'video_id': '', 'region': 'Asia'},
+    {'name': 'Euronews', 'handle': '@euronews', 'video_id': '', 'region': 'Europe'},
+]
 
 
 def _can_fetch(source_key):
@@ -79,57 +99,131 @@ RSS_FEEDS = {
         {'name': 'AP Top Headlines', 'url': 'https://rsshub.app/apnews/topics/apf-topnews', 'category': 'World'},
         {'name': 'BBC World', 'url': 'https://feeds.bbci.co.uk/news/world/rss.xml', 'category': 'World'},
         {'name': 'Al Jazeera', 'url': 'https://www.aljazeera.com/xml/rss/all.xml', 'category': 'World'},
+        {'name': 'The Guardian World', 'url': 'https://www.theguardian.com/world/rss', 'category': 'World'},
+        {'name': 'France 24', 'url': 'https://www.france24.com/en/rss', 'category': 'World'},
+        {'name': 'DW News', 'url': 'https://rss.dw.com/xml/rss-en-all', 'category': 'World'},
+        {'name': 'Euronews', 'url': 'https://www.euronews.com/rss', 'category': 'World'},
+        {'name': 'UN News', 'url': 'https://news.un.org/feed/subscribe/en/news/all/rss.xml', 'category': 'World'},
     ],
     'us_news': [
         {'name': 'Reuters US', 'url': 'https://feeds.reuters.com/Reuters/domesticNews', 'category': 'US'},
         {'name': 'NPR Headlines', 'url': 'https://feeds.npr.org/1001/rss.xml', 'category': 'US'},
         {'name': 'PBS NewsHour', 'url': 'https://www.pbs.org/newshour/feeds/rss/headlines', 'category': 'US'},
+        {'name': 'ABC News', 'url': 'https://feeds.abcnews.com/abcnews/topstories', 'category': 'US'},
+        {'name': 'CBS News', 'url': 'https://www.cbsnews.com/latest/rss/main', 'category': 'US'},
+        {'name': 'Politico', 'url': 'https://rss.politico.com/politics-news.xml', 'category': 'US'},
+        {'name': 'The Hill', 'url': 'https://thehill.com/news/feed', 'category': 'US'},
+        {'name': 'Axios', 'url': 'https://api.axios.com/feed/', 'category': 'US'},
+    ],
+    'europe': [
+        {'name': 'BBC Europe', 'url': 'https://feeds.bbci.co.uk/news/world/europe/rss.xml', 'category': 'Europe'},
+        {'name': 'Guardian Europe', 'url': 'https://www.theguardian.com/world/europe-news/rss', 'category': 'Europe'},
+        {'name': 'EUobserver', 'url': 'https://euobserver.com/rss.xml', 'category': 'Europe'},
+    ],
+    'middle_east': [
+        {'name': 'BBC Middle East', 'url': 'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml', 'category': 'Middle East'},
+        {'name': 'Al Monitor', 'url': 'https://www.al-monitor.com/rss', 'category': 'Middle East'},
+        {'name': 'Middle East Eye', 'url': 'https://www.middleeasteye.net/rss', 'category': 'Middle East'},
+    ],
+    'asia_pacific': [
+        {'name': 'BBC Asia', 'url': 'https://feeds.bbci.co.uk/news/world/asia/rss.xml', 'category': 'Asia-Pacific'},
+        {'name': 'South China Morning Post', 'url': 'https://www.scmp.com/rss/91/feed', 'category': 'Asia-Pacific'},
+        {'name': 'Nikkei Asia', 'url': 'https://asia.nikkei.com/rss', 'category': 'Asia-Pacific'},
+    ],
+    'africa': [
+        {'name': 'BBC Africa', 'url': 'https://feeds.bbci.co.uk/news/world/africa/rss.xml', 'category': 'Africa'},
+        {'name': 'AllAfrica', 'url': 'https://allafrica.com/tools/headlines/rdf/latest/headlines.rdf', 'category': 'Africa'},
+    ],
+    'latin_america': [
+        {'name': 'BBC Latin America', 'url': 'https://feeds.bbci.co.uk/news/world/latin_america/rss.xml', 'category': 'Latin America'},
+        {'name': 'Reuters LatAm', 'url': 'https://feeds.reuters.com/reuters/latAmNews', 'category': 'Latin America'},
     ],
     'technology': [
         {'name': 'Ars Technica', 'url': 'https://feeds.arstechnica.com/arstechnica/technology-lab', 'category': 'Tech'},
         {'name': 'Hacker News', 'url': 'https://hnrss.org/frontpage', 'category': 'Tech'},
         {'name': 'The Verge', 'url': 'https://www.theverge.com/rss/index.xml', 'category': 'Tech'},
         {'name': 'TechCrunch', 'url': 'https://techcrunch.com/feed/', 'category': 'Tech'},
+        {'name': 'VentureBeat', 'url': 'https://venturebeat.com/feed/', 'category': 'Tech'},
+        {'name': 'MIT Tech Review', 'url': 'https://www.technologyreview.com/feed/', 'category': 'Tech'},
+        {'name': 'Wired', 'url': 'https://www.wired.com/feed/rss', 'category': 'Tech'},
+    ],
+    'ai_ml': [
+        {'name': 'ArXiv AI', 'url': 'https://export.arxiv.org/rss/cs.AI', 'category': 'AI/ML'},
+        {'name': 'Google AI Blog', 'url': 'https://blog.google/technology/ai/rss/', 'category': 'AI/ML'},
+        {'name': 'OpenAI Blog', 'url': 'https://openai.com/blog/rss.xml', 'category': 'AI/ML'},
     ],
     'science': [
         {'name': 'Nature News', 'url': 'https://www.nature.com/nature.rss', 'category': 'Science'},
         {'name': 'NASA Breaking', 'url': 'https://www.nasa.gov/rss/dyn/breaking_news.rss', 'category': 'Science'},
         {'name': 'Science Daily', 'url': 'https://www.sciencedaily.com/rss/all.xml', 'category': 'Science'},
+        {'name': 'New Scientist', 'url': 'https://www.newscientist.com/feed/home', 'category': 'Science'},
     ],
     'security': [
         {'name': 'Krebs on Security', 'url': 'https://krebsonsecurity.com/feed/', 'category': 'Cyber'},
         {'name': 'The Hacker News', 'url': 'https://feeds.feedburner.com/TheHackersNews', 'category': 'Cyber'},
         {'name': 'BleepingComputer', 'url': 'https://www.bleepingcomputer.com/feed/', 'category': 'Cyber'},
         {'name': 'Dark Reading', 'url': 'https://www.darkreading.com/rss_simple.asp', 'category': 'Cyber'},
+        {'name': 'CISA Advisories', 'url': 'https://www.cisa.gov/cybersecurity-advisories/all.xml', 'category': 'Cyber'},
+        {'name': 'Threatpost', 'url': 'https://threatpost.com/feed/', 'category': 'Cyber'},
     ],
     'military_defense': [
         {'name': 'Defense One', 'url': 'https://www.defenseone.com/rss/', 'category': 'Defense'},
         {'name': 'War on the Rocks', 'url': 'https://warontherocks.com/feed/', 'category': 'Defense'},
         {'name': 'Breaking Defense', 'url': 'https://breakingdefense.com/feed/', 'category': 'Defense'},
         {'name': 'The Drive - War Zone', 'url': 'https://www.thedrive.com/the-war-zone/feed', 'category': 'Defense'},
+        {'name': 'Defense News', 'url': 'https://www.defensenews.com/arc/outboundfeeds/rss/', 'category': 'Defense'},
+        {'name': 'Task & Purpose', 'url': 'https://taskandpurpose.com/feed/', 'category': 'Defense'},
+        {'name': 'gCaptain', 'url': 'https://gcaptain.com/feed/', 'category': 'Defense'},
+        {'name': 'Oryx', 'url': 'https://www.oryxspioenkop.com/feeds/posts/default?alt=rss', 'category': 'Defense'},
     ],
     'disasters': [
         {'name': 'GDACS Alerts', 'url': 'https://www.gdacs.org/xml/rss.xml', 'category': 'Disaster'},
         {'name': 'ReliefWeb Updates', 'url': 'https://reliefweb.int/updates/rss.xml', 'category': 'Disaster'},
         {'name': 'FEMA', 'url': 'https://www.fema.gov/feeds/disasters-702-702all.xml', 'category': 'Disaster'},
+        {'name': 'USGS Earthquake Hazards', 'url': 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom', 'category': 'Disaster'},
     ],
     'finance': [
         {'name': 'MarketWatch Top', 'url': 'https://feeds.content.dowjones.io/public/rss/mw_topstories', 'category': 'Finance'},
         {'name': 'CNBC Top News', 'url': 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114', 'category': 'Finance'},
         {'name': 'Bloomberg Markets', 'url': 'https://feeds.bloomberg.com/markets/news.rss', 'category': 'Finance'},
+        {'name': 'Yahoo Finance', 'url': 'https://finance.yahoo.com/news/rssindex', 'category': 'Finance'},
+        {'name': 'Seeking Alpha', 'url': 'https://seekingalpha.com/market_currents.xml', 'category': 'Finance'},
+        {'name': 'Fed Reserve', 'url': 'https://www.federalreserve.gov/feeds/press_all.xml', 'category': 'Finance'},
+        {'name': 'SEC Press', 'url': 'https://www.sec.gov/news/pressreleases.rss', 'category': 'Finance'},
+    ],
+    'crypto': [
+        {'name': 'CoinDesk', 'url': 'https://www.coindesk.com/arc/outboundfeeds/rss/', 'category': 'Crypto'},
+        {'name': 'CoinTelegraph', 'url': 'https://cointelegraph.com/rss', 'category': 'Crypto'},
+        {'name': 'Decrypt', 'url': 'https://decrypt.co/feed', 'category': 'Crypto'},
+        {'name': 'The Defiant', 'url': 'https://thedefiant.io/feed', 'category': 'Crypto'},
+        {'name': 'Bitcoin Magazine', 'url': 'https://bitcoinmagazine.com/feed', 'category': 'Crypto'},
     ],
     'energy': [
         {'name': 'EIA Today in Energy', 'url': 'https://www.eia.gov/rss/todayinenergy.xml', 'category': 'Energy'},
         {'name': 'OilPrice.com', 'url': 'https://oilprice.com/rss/main', 'category': 'Energy'},
+        {'name': 'Rigzone', 'url': 'https://www.rigzone.com/news/rss/rigzone_latest.aspx', 'category': 'Energy'},
     ],
     'health': [
         {'name': 'WHO Disease Outbreaks', 'url': 'https://www.who.int/feeds/entity/don/en/rss.xml', 'category': 'Health'},
         {'name': 'CDC MMWR', 'url': 'https://tools.cdc.gov/api/v2/resources/media/316422.rss', 'category': 'Health'},
         {'name': 'CIDRAP News', 'url': 'https://www.cidrap.umn.edu/news/rss.xml', 'category': 'Health'},
+        {'name': 'WHO News', 'url': 'https://www.who.int/rss-feeds/news-english.xml', 'category': 'Health'},
+        {'name': 'IAEA', 'url': 'https://www.iaea.org/feeds/topnews', 'category': 'Health'},
     ],
     'geopolitics': [
         {'name': 'Foreign Affairs', 'url': 'https://www.foreignaffairs.com/rss.xml', 'category': 'Geopolitics'},
         {'name': 'The Diplomat', 'url': 'https://thediplomat.com/feed/', 'category': 'Geopolitics'},
+        {'name': 'Foreign Policy', 'url': 'https://foreignpolicy.com/feed/', 'category': 'Geopolitics'},
+        {'name': 'IISS', 'url': 'https://www.iiss.org/rss', 'category': 'Geopolitics'},
+    ],
+    'government': [
+        {'name': 'White House', 'url': 'https://www.whitehouse.gov/feed/', 'category': 'Government'},
+        {'name': 'State Dept', 'url': 'https://www.state.gov/rss-feed/press-releases/feed/', 'category': 'Government'},
+        {'name': 'FAO News', 'url': 'https://www.fao.org/feeds/fao-newsroom-rss', 'category': 'Government'},
+    ],
+    'commodities': [
+        {'name': 'Mining.com', 'url': 'https://www.mining.com/feed/', 'category': 'Commodities'},
+        {'name': 'Mining Technology', 'url': 'https://www.mining-technology.com/feed/', 'category': 'Commodities'},
     ],
 }
 
@@ -622,6 +716,95 @@ def _fetch_predictions():
     log.info(f"Situation Room: cached {len(markets)} prediction markets")
 
 
+def _fetch_fires():
+    """Fetch active fire detections from NASA FIRMS (MODIS/VIIRS CSV)."""
+    if not _can_fetch('fires'):
+        return
+    _set_last_fetch('fires')
+    try:
+        # FIRMS VIIRS active fires (last 24h, CSV format, no API key for web service)
+        resp = requests.get('https://firms.modaps.eosdis.nasa.gov/api/area/csv/DEMO_KEY/VIIRS_SNPP_NRT/world/1',
+                            timeout=30, headers=_REQ_HEADERS)
+        if not resp.ok:
+            return
+    except Exception as e:
+        log.debug(f"NASA FIRMS fetch failed: {e}")
+        return
+
+    lines = resp.text.strip().split('\n')
+    if len(lines) < 2:
+        return
+
+    header = lines[0].split(',')
+    lat_i = header.index('latitude') if 'latitude' in header else 0
+    lng_i = header.index('longitude') if 'longitude' in header else 1
+    bright_i = header.index('bright_ti4') if 'bright_ti4' in header else -1
+    conf_i = header.index('confidence') if 'confidence' in header else -1
+    acq_date_i = header.index('acq_date') if 'acq_date' in header else -1
+
+    fires = []
+    for line in lines[1:501]:  # Cap at 500 fire points
+        cols = line.split(',')
+        if len(cols) < max(lat_i, lng_i) + 1:
+            continue
+        try:
+            lat = float(cols[lat_i])
+            lng = float(cols[lng_i])
+            brightness = float(cols[bright_i]) if bright_i >= 0 and cols[bright_i] else 0
+            confidence = cols[conf_i] if conf_i >= 0 else ''
+            acq_date = cols[acq_date_i] if acq_date_i >= 0 else ''
+            fires.append((lat, lng, brightness, confidence, acq_date))
+        except (ValueError, IndexError):
+            continue
+
+    if not fires:
+        return
+
+    with db_session() as db:
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'fire'")
+        for lat, lng, brightness, confidence, acq_date in fires:
+            eid = hashlib.sha256(f"fire:{lat:.3f}:{lng:.3f}:{acq_date}".encode()).hexdigest()[:16]
+            db.execute('''INSERT OR IGNORE INTO sitroom_events
+                (event_id, event_type, title, magnitude, lat, lng, event_time, detail_json)
+                VALUES (?, ?, ?, ?, ?, ?, 0, ?)''',
+                (eid, 'fire', f"Fire detection ({confidence})" if confidence else 'Fire detection',
+                 brightness, lat, lng,
+                 json.dumps({'brightness': brightness, 'confidence': confidence, 'acq_date': acq_date})))
+        db.commit()
+    log.info(f"Situation Room: cached {len(fires)} fire detections")
+
+
+def _fetch_disease_outbreaks():
+    """Fetch disease outbreak data from WHO RSS."""
+    if not _can_fetch('disease_outbreaks'):
+        return
+    _set_last_fetch('disease_outbreaks')
+    try:
+        resp = requests.get('https://www.who.int/feeds/entity/don/en/rss.xml',
+                            timeout=_REQ_TIMEOUT, headers=_REQ_HEADERS)
+        if not resp.ok:
+            return
+        items = _parse_feed(resp.text, 'WHO DON', 'Health')
+    except Exception as e:
+        log.debug(f"WHO outbreaks fetch failed: {e}")
+        return
+
+    if not items:
+        return
+
+    with db_session() as db:
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'disease'")
+        for item in items[:30]:
+            eid = hashlib.sha256((item['title'] + item.get('link', '')).encode()).hexdigest()[:16]
+            db.execute('''INSERT OR IGNORE INTO sitroom_events
+                (event_id, event_type, title, lat, lng, event_time, source_url, detail_json)
+                VALUES (?, ?, ?, 0, 0, 0, ?, ?)''',
+                (eid, 'disease', item['title'], item.get('link', ''),
+                 json.dumps({'description': item.get('description', ''), 'published': item.get('published', '')})))
+        db.commit()
+    log.info(f"Situation Room: cached {len(items)} disease outbreak entries")
+
+
 # ─── Refresh Orchestrator ──────────────────────────────────────────────
 
 def refresh_all_feeds():
@@ -643,6 +826,8 @@ def refresh_all_feeds():
             _fetch_space_weather()
             _fetch_volcanoes()
             _fetch_predictions()
+            _fetch_fires()
+            _fetch_disease_outbreaks()
         except Exception as e:
             log.exception(f"Situation Room refresh error: {e}")
         finally:
@@ -781,7 +966,9 @@ def api_sitroom_summary():
             (SELECT COUNT(*) FROM sitroom_aviation) as aircraft,
             (SELECT COUNT(*) FROM sitroom_volcanoes) as volcanoes,
             (SELECT COUNT(*) FROM sitroom_predictions WHERE active = 1) as predictions,
-            (SELECT COUNT(*) FROM sitroom_custom_feeds) as custom_feeds
+            (SELECT COUNT(*) FROM sitroom_custom_feeds) as custom_feeds,
+            (SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'fire') as fires,
+            (SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'disease') as diseases
         ''').fetchone()
 
         top_quakes = db.execute(
@@ -800,6 +987,7 @@ def api_sitroom_summary():
         'market_count': counts['markets'], 'aircraft_count': counts['aircraft'],
         'volcano_count': counts['volcanoes'], 'prediction_count': counts['predictions'],
         'custom_feed_count': counts['custom_feeds'],
+        'fire_count': counts['fires'], 'disease_count': counts['diseases'],
         'top_earthquakes': [dict(r) for r in top_quakes],
         'markets': [dict(r) for r in market_rows],
         'space_weather': space_weather,
@@ -925,3 +1113,27 @@ def api_sitroom_briefings():
     with db_session() as db:
         rows = db.execute('SELECT * FROM sitroom_briefings ORDER BY generated_at DESC LIMIT ?', (limit,)).fetchall()
     return jsonify({'briefings': [dict(r) for r in rows]})
+
+
+@situation_room_bp.route('/api/sitroom/fires')
+def api_sitroom_fires():
+    """Return cached fire detections."""
+    limit = min(request.args.get('limit', 200, type=int), 500)
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'fire' ORDER BY magnitude DESC LIMIT ?",
+                          (limit,)).fetchall()
+    return jsonify({'fires': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/diseases')
+def api_sitroom_diseases():
+    """Return cached disease outbreak data."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'disease' ORDER BY cached_at DESC LIMIT 30").fetchall()
+    return jsonify({'outbreaks': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/live-channels')
+def api_sitroom_live_channels():
+    """Return list of live YouTube news channels."""
+    return jsonify({'channels': LIVE_CHANNELS})

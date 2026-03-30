@@ -1,7 +1,7 @@
 /* ─── Situation Room v2 — Global Intelligence Dashboard ─── */
 
 let _sitroomMap = null;
-let _sitroomMarkers = { earthquakes: [], weather: [], conflicts: [], aviation: [], volcanoes: [] };
+let _sitroomMarkers = { earthquakes: [], weather: [], conflicts: [], aviation: [], volcanoes: [], fires: [] };
 let _sitroomNewsOffset = 0;
 const SITROOM_NEWS_PAGE = 50;
 let _sitroomAutoTimer = null;
@@ -33,7 +33,9 @@ function _sitroomRefreshPanels() {
   loadSitroomIntelFeed();
   loadSitroomCII();
   renderSitroomBreakingNews();
-  refreshSitroomWebcams();
+  loadSitroomFires();
+  loadSitroomDiseases();
+  loadSitroomLiveChannels();
 }
 
 async function _sitroomAutoRefreshIfEmpty() {
@@ -142,6 +144,20 @@ async function loadSitroomMapData() {
     }
   }
 
+  // Fire layer
+  if (document.getElementById('sitroom-layer-fires')?.checked) {
+    const fr = await safeFetch('/api/sitroom/fires?limit=300', {}, null);
+    if (fr && fr.fires) {
+      clearSitroomMarkers('fires');
+      fr.fires.forEach(f => {
+        if (!f.lat || !f.lng) return;
+        addSitroomMarker({lat: f.lat, lng: f.lng, title: f.title || 'Fire',
+          event_type: 'fire', magnitude: f.magnitude, depth_km: null,
+          detail_json: f.detail_json}, 'fires');
+      });
+    }
+  }
+
   // Volcano layer
   if (document.getElementById('sitroom-layer-volcanoes')?.checked) {
     const vol = await safeFetch('/api/sitroom/volcanoes', {}, null);
@@ -163,7 +179,7 @@ function clearSitroomMarkers(layerType) {
 
 function addSitroomMarker(ev, layerType) {
   if (!_sitroomMap) return;
-  const colors = { earthquakes: '#ff4444', weather: '#ffaa00', conflicts: '#ff6600', aviation: '#44aaff', volcanoes: '#ff3366' };
+  const colors = { earthquakes: '#ff4444', weather: '#ffaa00', conflicts: '#ff6600', aviation: '#44aaff', volcanoes: '#ff3366', fires: '#ff8800' };
   const color = colors[layerType] || '#ffffff';
   let size = layerType === 'aviation' ? 5 : 8;
   if (ev.magnitude) size = Math.max(6, Math.min(24, ev.magnitude * 3));
@@ -195,6 +211,7 @@ async function loadSitroomSummary() {
   s('sitroom-stat-markets', d.market_count || 0);
   s('sitroom-stat-aircraft', d.aircraft_count || 0);
   s('sitroom-stat-volcanoes', d.volcano_count || 0);
+  s('sitroom-stat-fires', d.fire_count || 0);
   s('sitroom-stat-predictions', d.prediction_count || 0);
 
   const badge = document.getElementById('sitroom-online-badge');
@@ -531,14 +548,63 @@ async function loadSitroomIntelFeed() {
   </div>`).join('');
 }
 
-/* ─── Webcam Refresh ─── */
-function refreshSitroomWebcams() {
-  document.querySelectorAll('.sr-webcam img').forEach(img => {
-    const src = img.getAttribute('src');
-    if (src && !src.startsWith('data:')) {
-      img.src = src.split('?')[0] + '?t=' + Date.now();
-    }
-  });
+/* ─── Fires ─── */
+async function loadSitroomFires() {
+  const d = await safeFetch('/api/sitroom/fires?limit=50', {}, null);
+  const el = document.getElementById('sitroom-fires-list');
+  if (!el) return;
+  if (!d || !d.fires?.length) { el.innerHTML = '<div class="sr-empty">No fire data</div>'; return; }
+  el.innerHTML = d.fires.slice(0, 30).map(f => {
+    let det = {}; try { det = f.detail_json ? JSON.parse(f.detail_json) : {}; } catch(e) {}
+    const bright = f.magnitude ? f.magnitude.toFixed(0) + 'K' : '?';
+    return `<div class="sitroom-event-item">
+      <span class="sitroom-mag" style="background:#ff8800">${bright}</span>
+      <div class="sitroom-event-info">
+        <div class="sitroom-event-title">${escapeHtml(f.title || 'Fire detection')}</div>
+        <div class="sitroom-event-meta">${f.lat?.toFixed(2)}, ${f.lng?.toFixed(2)}${det.acq_date ? ' | ' + escapeHtml(det.acq_date) : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ─── Disease Outbreaks ─── */
+async function loadSitroomDiseases() {
+  const d = await safeFetch('/api/sitroom/diseases', {}, null);
+  const el = document.getElementById('sitroom-diseases-list');
+  if (!el) return;
+  if (!d || !d.outbreaks?.length) { el.innerHTML = '<div class="sr-empty">No outbreak data</div>'; return; }
+  el.innerHTML = d.outbreaks.map(o => {
+    let det = {}; try { det = o.detail_json ? JSON.parse(o.detail_json) : {}; } catch(e) {}
+    return `<div class="sitroom-event-item">
+      <div class="sitroom-event-info">
+        <div class="sitroom-event-title" title="${escapeAttr(o.title || '')}">${escapeHtml(o.title || 'Outbreak')}</div>
+        <div class="sitroom-event-meta">${det.published ? escapeHtml(det.published) : ''}</div>
+      </div>
+      ${o.source_url ? `<a href="${escapeAttr(o.source_url)}" target="_blank" rel="noopener" class="sitroom-event-link">&#8599;</a>` : ''}
+    </div>`;
+  }).join('');
+}
+
+/* ─── Live YouTube Channels ─── */
+let _sitroomChannelsLoaded = false;
+async function loadSitroomLiveChannels() {
+  if (_sitroomChannelsLoaded) return;
+  _sitroomChannelsLoaded = true;
+  const d = await safeFetch('/api/sitroom/live-channels', {}, null);
+  const btns = document.getElementById('sr-channel-btns');
+  if (!btns || !d || !d.channels?.length) return;
+  btns.innerHTML = d.channels.map((ch, i) =>
+    `<button class="sr-channel-btn${i === 0 ? ' active' : ''}" data-channel-idx="${i}" data-channel-vid="${escapeAttr(ch.video_id || '')}" data-channel-handle="${escapeAttr(ch.handle || '')}" title="${escapeAttr(ch.name)}">${escapeHtml(ch.name.split(' ')[0])}</button>`
+  ).join('');
+  // Auto-play first channel with a known video_id
+  const first = d.channels.find(c => c.video_id);
+  if (first) _sitroomPlayChannel(first.video_id);
+}
+
+function _sitroomPlayChannel(videoId) {
+  const player = document.getElementById('sr-live-player');
+  if (!player || !videoId) return;
+  player.innerHTML = `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=1&mute=1&controls=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen style="width:100%;height:100%;border:0;background:#000"></iframe>`;
 }
 
 /* ─── Events ─── */
@@ -559,3 +625,13 @@ document.addEventListener('click', e => {
 document.getElementById('sitroom-news-category')?.addEventListener('change', () => loadSitroomNews());
 document.getElementById('sitroom-quake-filter')?.addEventListener('change', () => renderSitroomQuakes());
 document.querySelectorAll('[data-sitroom-layer]').forEach(cb => cb.addEventListener('change', () => loadSitroomMapData()));
+
+// Live channel button clicks
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.sr-channel-btn');
+  if (!btn) return;
+  document.querySelectorAll('.sr-channel-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const vid = btn.dataset.channelVid;
+  if (vid) _sitroomPlayChannel(vid);
+});
