@@ -515,6 +515,20 @@
 .sitroom-custom-feed-name { font-weight: 600; color: #c8ccd0; }
 .sr-feed-stats { font-size: 8px; color: #333; padding: 3px 12px 6px; }
 
+/* ─── Sentiment Gauge ─── */
+.sr-sentiment-row { display: flex; gap: 4px; padding: 12px; align-items: center; }
+.sr-sentiment-bar { flex: 1; height: 24px; border-radius: 2px; display: flex; overflow: hidden; }
+.sr-sentiment-pos { background: #0f5040; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #4aedc4; min-width: 20px; }
+.sr-sentiment-neu { background: #2a2a2a; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #888; min-width: 20px; }
+.sr-sentiment-neg { background: #3a1515; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #e05050; min-width: 20px; }
+.sr-sentiment-score { text-align: center; padding: 8px; font-size: 22px; font-weight: 700; }
+.sr-sentiment-label { text-align: center; font-size: 8px; letter-spacing: 0.1em; color: #555; }
+
+/* ─── Macro Stress ─── */
+.sr-macro-row { display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-bottom: 1px solid #1e1e1e; }
+.sr-macro-label { flex: 1; font-size: 10px; color: #888; }
+.sr-macro-val { font-size: 12px; font-weight: 700; color: #e0e4e8; }
+
 /* ─── Intelligence Gap ─── */
 .sr-gap-row { display: flex; align-items: center; gap: 6px; padding: 3px 12px; border-bottom: 1px solid #151515; font-size: 10px; }
 .sr-gap-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
