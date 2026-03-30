@@ -264,17 +264,39 @@ v1.0.0 — ~51,300 lines across 6 core files (app.py ~17,500 + index.html ~28,50
   - **E-ink display mode** — New `[data-theme="eink"]` CSS theme: pure black/white, no shadows/gradients/animations, 2px solid borders, grayscale images, 16px base font, high contrast; theme button added to all 3 theme switcher locations + customize panel
   - **Dead drop encrypted USB messaging** — `dead_drop_messages` table; `POST /api/deaddrop/compose` encrypts message with XOR (SHA-256 derived key) + checksum verification; `POST /api/deaddrop/decrypt` decrypts with secret validation; `POST /api/deaddrop/import` stores encrypted messages; `GET /api/deaddrop/messages` lists received; compose UI with recipient/message/secret fields, download as JSON for USB transfer; import with inline decryption prompt
 
-- **v5.5.0 → v4.8 — Situation Room (World Monitor port)**:
+- **v5.4 — Situation Room (World Monitor comprehensive port)**:
   - **Pure World Monitor dashboard** — default landing tab, full-bleed flex layout filling all available space
-  - **Blueprint**: `web/blueprints/situation_room.py` — 28 API routes, 15 background fetch workers
-  - **18 data sources (all free, no API keys)**: 100+ RSS feeds (20 categories), USGS earthquakes, NWS severe weather, GDACS crises, Yahoo Finance (indices + forex + sectors), CoinGecko (7 crypto), metals.dev+EIA commodities, OpenSky aircraft ADS-B, NOAA SWPC space weather, Smithsonian GVP volcanoes, Polymarket predictions, Fear & Greed Index, NASA FIRMS fires, WHO disease outbreaks, Cloudflare/IODA internet outages, Safecast radiation monitoring, GDELT trending topics, OFAC sanctions, UNHCR displacement
-  - **14 map layers** (+day/night): earthquakes, weather, crises, aviation, volcanoes, fires, nuclear sites (25), military bases (32), undersea cables (20), data centers (20), pipelines (16), waterways (14), spaceports (16), day/night terminator
-  - **3D globe** via MapLibre GL v4.7.1 native globe projection (2D/3D toggle)
-  - **22 UI cards**: news (w/ category colors), markets (~40 symbols), sector heatmap (11 ETFs), F&G gauge, seismic, space weather, severe weather, predictions, live YouTube channels (12), fires, diseases, internet outages, radiation watch, GDELT trending, sanctions, displacement, CII, intel feed, world clock (12 zones), event timeline
-  - **Interactive features**: command palette (Ctrl+K), country deep dive (slide-in panel), panel drag reorder (localStorage), panel collapse, map resize drag, map fullscreen (F key), map legend, scrolling market ribbon, DEFCON threat badge, UTC clock, auto-refresh progress bar, status dot with pulse, breaking news with earthquake priority, keyboard shortcuts (F/R/Ctrl+K/ESC)
-  - **189 static infrastructure points** across 8 categories
+  - **Blueprint**: `web/blueprints/situation_room.py` — 43 API routes, 20 background fetch workers
+  - **23 data sources (all free, no API keys)**:
+    - **News**: 200+ RSS feeds across 31 categories (World, US, Europe, Middle East, Asia-Pacific, Africa, Latin America, Tech, AI/ML, Science, Cyber, Defense, Disaster, Finance, Crypto, Energy, Health, Geopolitics, Government, Commodities, OSINT, Think Tanks, Startups, Regional/Intl, Layoffs, Semiconductors, Nuclear, Maritime, Space, Supply Chain, custom feeds)
+    - **OSINT**: 17 Telegram channels via rsshub RSS bridge (BNO News, NEXTA, OSINTdefender, Aurora Intel, Liveuamap, DeepState UA, Bellingcat, Clash Report, FalconFeeds, Geopolitics Prime, etc.)
+    - **Think Tanks**: Atlantic Council, CSIS, Brookings, Carnegie, RAND, ICG CrisisWatch, Chatham House, CFR
+    - **Seismic**: USGS earthquakes (M2.5+ GeoJSON)
+    - **Weather**: NWS severe weather alerts (Extreme/Severe)
+    - **Crises**: GDACS crisis events (Orange/Red, dynamic 90-day window)
+    - **Conflicts**: UCDP armed conflict events (geocoded, death tolls, violence types)
+    - **Markets**: Yahoo Finance (indices: S&P 500, NASDAQ, DOW, FTSE, DAX, Nikkei, Hang Seng, Euro Stoxx; forex: EUR/USD, GBP/USD, USD/JPY, DXY; 11 sector ETFs), CoinGecko (BTC, ETH, SOL, BNB, XRP, ADA, DOGE + stablecoins USDT/USDC/DAI/FDUSD), metals.dev (gold/silver), EIA (Brent oil), Fear & Greed Index
+    - **Financial**: US Treasury Fiscal Data (yield curve, national debt)
+    - **Aviation**: OpenSky Network aircraft ADS-B (500 cap)
+    - **Space Weather**: NOAA SWPC (Kp index, G/S/R storm scales, solar flares)
+    - **Volcanoes**: Smithsonian GVP volcanic eruptions
+    - **Predictions**: Polymarket prediction markets (top 20)
+    - **Fires**: NASA FIRMS satellite fire detection (VIIRS, 500 points)
+    - **Disease**: WHO DON disease outbreak notifications
+    - **Internet**: Cloudflare Radar + IODA internet outage monitoring
+    - **Radiation**: Safecast radiation monitoring network
+    - **Intelligence**: GDELT trending topics with tone analysis
+    - **Sanctions**: OFAC updates + trade.gov trade policy
+    - **Displacement**: UNHCR refugee/asylum data (API + RSS fallback)
+    - **Cyber**: CISA KEV (Known Exploited Vulnerabilities) + CISA cybersecurity advisories
+    - **Correlation Engine**: Cross-domain signal detection (military-economic, disaster-cascade, cyber-infrastructure, escalation, energy-geopolitical, radiation)
+  - **16 map layers** (+day/night +3D globe): earthquakes (red), weather (amber), crises (orange), aviation (blue), volcanoes (pink), fires (orange), nuclear sites (35, yellow), military bases (40, green), undersea cables (20, blue), data centers (28, purple), pipelines (16, brown), strategic waterways (14, cyan), spaceports (16, magenta), shipping hubs (16, sea-green), UCDP armed conflicts (dark red), day/night terminator
+  - **3D globe** via MapLibre GL v4.7.1 native globe projection (2D/3D toggle button)
+  - **33 UI cards**: Live News (deduplicated, 16 category colors), Markets (grouped: indices/forex/crypto/commodities), Sector Heatmap (11 S&P ETFs), Fear & Greed Gauge (needle + arc), Cross-Source Signals (correlation engine), Yield Curve (bar chart), Stablecoins (depeg detection), Seismic Activity (magnitude filter), Space Weather (R/S/G scales), Severe Weather, Prediction Markets, Live YouTube Channels (12 channels), Fires (NASA FIRMS), Disease Outbreaks (WHO), UCDP Armed Conflicts, Cyber Threats (CISA), Think Tanks, Internet Disruptions, Country Instability Index (multi-signal scoring), Intel Feed, OSINT Feed (17 Telegram), World Clock (12 timezones), Event Timeline (horizontal scroll), Radiation Watch, GDELT Trending, Sanctions & Trade, UNHCR Displacement, AI Strategic Briefing (Ollama + fallback), Keyword Monitors (persistent watches), Economic Calendar, National Debt (US Treasury), Country Deep Dive (slide-in panel), Story Detail Modal
+  - **Interactive features**: command palette (Ctrl+K), country deep dive (click CII row), panel drag reorder (localStorage), panel collapse/expand, map resize drag handle, map fullscreen (F key), map legend (auto-updating), collapsible layer panel (categorized: Live Data/Infrastructure/Maritime/Overlays), scrolling market ribbon (60s loop), DEFCON-style threat level badge (composite scoring), UTC clock + world clock, critical alert toasts (M6+ quakes, extreme weather), intelligence report export (text SITREP download), news deduplication (Jaccard similarity), card stagger entrance animations, news category color coding (16 colors), keyboard shortcuts (F/R/Ctrl+K/ESC), layer state persistence (localStorage), auto-refresh progress bar, status dot with live pulse, breaking news with earthquake priority, AI briefing generation (Ollama → structured fallback), keyword monitor CRUD, story detail modal, playback time slider (UI foundation), 3D globe toggle
+  - **~231 static infrastructure points** across 9 categories
   - **Full audit (35+ bugs fixed)**: safeFetch misuse, UPSERT pattern, thread safety, SSRF protection, CSS specificity
-  - **DB migrations**: `002_situation_room_tables.sql` + `003_situation_room_v2.sql`
+  - **DB migrations**: `002_situation_room_tables.sql` + `003_situation_room_v2.sql` + runtime table creation for monitors/briefings
 
 ## Run / Build
 ```bash
