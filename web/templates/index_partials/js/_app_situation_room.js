@@ -97,6 +97,11 @@ function _sitroomRefreshPanels() {
   _loadKeywordCard('sitroom-internet-health', '/api/sitroom/keyword-search/internet outage|dns|bgp|cdn|ddos|cloudflare|bandwidth', 'articles');
   loadSitroomPopExposure();
   loadSitroomMarketBriefInit();
+  _loadKeywordCard('sitroom-unicorns', '/api/sitroom/keyword-search/unicorn|valuation|billion|funding round|series', 'articles');
+  _loadKeywordCard('sitroom-gulf', '/api/sitroom/keyword-search/opec|saudi|uae|qatar|bahrain|kuwait|gcc|aramco', 'articles');
+  _loadCategoryCard('sitroom-commodities-news', 'Commodities');
+  _loadKeywordCard('sitroom-market-analysis', '/api/sitroom/keyword-search/market analysis|outlook|forecast|rally|correction|bear|bull', 'articles');
+  _loadKeywordCard('sitroom-protests', '/api/sitroom/keyword-search/protest|demonstration|riot|unrest|strike|uprising|march', 'articles');
   loadSitroomLayoffs();
   loadSitroomAirline();
   loadSitroomSupplyChain();
