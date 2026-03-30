@@ -67,6 +67,8 @@ function _sitroomRefreshPanels() {
   loadSitroomRenewable();
   loadSitroomGithub();
   loadSitroomFuel();
+  loadSitroomProductHunt();
+  loadSitroomEarnings();
   loadSitroomIntelGap();
   loadSitroomHumanitarian();
   _checkCriticalAlerts();
@@ -1465,6 +1467,34 @@ function _showSitroomAlert(type, message) {
   stack.appendChild(toast);
   // Auto-dismiss after 15s
   setTimeout(() => { if (toast.parentElement) toast.remove(); }, 15000);
+}
+
+/* ─── Product Hunt ─── */
+async function loadSitroomProductHunt() {
+  const d = await safeFetch('/api/sitroom/product-hunt', {}, null);
+  const el = document.getElementById('sitroom-producthunt');
+  if (!el) return;
+  if (!d || !d.products?.length) { el.innerHTML = '<div class="sr-empty">No Product Hunt data</div>'; return; }
+  el.innerHTML = d.products.map(p => `<div class="sitroom-news-item">
+    <span class="sitroom-news-cat" style="background:#3a1a08;color:#ff6600">PH</span>
+    <div class="sitroom-news-body">
+      <a href="${escapeAttr(p.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(p.title)}</a>
+    </div>
+  </div>`).join('');
+}
+
+/* ─── Earnings & Revenue ─── */
+async function loadSitroomEarnings() {
+  const d = await safeFetch('/api/sitroom/earnings', {}, null);
+  const el = document.getElementById('sitroom-earnings');
+  if (!el) return;
+  if (!d || !d.earnings?.length) { el.innerHTML = '<div class="sr-empty">No earnings data</div>'; return; }
+  el.innerHTML = d.earnings.map(e => `<div class="sitroom-news-item">
+    <span class="sitroom-news-cat" data-cat="Finance">${escapeHtml(e.source_name || '')}</span>
+    <div class="sitroom-news-body">
+      <a href="${escapeAttr(e.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(e.title)}</a>
+    </div>
+  </div>`).join('');
 }
 
 /* ─── GitHub Trending ─── */
