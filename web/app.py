@@ -42,6 +42,7 @@ except Exception:
         CHANNEL_CATALOG = []
         CHANNEL_CATEGORIES = []
 from db import get_db, get_db_path, db_session, log_activity
+from web.print_templates import render_print_document
 from web.sql_safety import safe_table, safe_columns, build_update, build_insert
 from services import ollama, kiwix, cyberchef, kolibri, qdrant, stirling, flatnotes
 from services.manager import (
@@ -618,7 +619,7 @@ def create_app():
 
                     # Disk benchmark
                     _benchmark_state.update({'progress': 50, 'stage': 'Disk benchmark...'})
-                    test_dir = os.path.join(get_data_base(), 'ProjectNOMAD', 'benchmark')
+                    test_dir = os.path.join(get_data_dir(), 'benchmark')
                     os.makedirs(test_dir, exist_ok=True)
                     test_file = os.path.join(test_dir, 'bench.tmp')
 
@@ -1349,78 +1350,120 @@ def create_app():
         sit_colors = {'green': '#2d6a2d', 'yellow': '#8a7a00', 'orange': '#a84a12', 'red': '#993333'}
         sit_labels = {'green': 'GOOD', 'yellow': 'CAUTION', 'orange': 'CONCERN', 'red': 'CRITICAL'}
 
-        html = f'''<!DOCTYPE html><html><head><meta charset="UTF-8"><title>N.O.M.A.D. Emergency Card</title>
-        <style>
-        @media print {{ @page {{ margin: 0.5in; }} }}
-        * {{ margin:0; padding:0; box-sizing:border-box; }}
-        body {{ font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #111; line-height: 1.4; }}
-        h1 {{ font-size: 16px; text-align: center; margin-bottom: 4px; }}
-        h2 {{ font-size: 12px; background: #222; color: #fff; padding: 3px 8px; margin: 8px 0 4px; }}
-        .date {{ text-align: center; font-size: 10px; color: #666; margin-bottom: 8px; }}
-        .sit-row {{ display: flex; gap: 4px; margin-bottom: 6px; }}
-        .sit-box {{ flex:1; text-align:center; padding: 4px; border: 1px solid #999; font-weight: bold; font-size: 10px; }}
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 6px; }}
-        th, td {{ border: 1px solid #999; padding: 3px 6px; text-align: left; font-size: 10px; }}
-        th {{ background: #eee; font-weight: bold; }}
-        .warn {{ color: #993333; font-weight: bold; }}
-        .cols2 {{ display: flex; gap: 8px; }}
-        .cols2 > div {{ flex: 1; }}
-        </style></head><body>
-        <h1>PROJECT N.O.M.A.D. - EMERGENCY CARD</h1>
-        <div class="date">Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")} | KEEP THIS CARD ACCESSIBLE</div>'''
-
-        # Situation Board
+        generated_at = datetime.now().strftime('%Y-%m-%d %H:%M')
+        sit_html = '<div class="doc-empty">Situation board is not configured yet.</div>'
         if sit:
-            html += '<h2>SITUATION STATUS</h2><div class="sit-row">'
-            for domain in ['security','water','food','medical','power','comms']:
+            sit_html = '<div class="doc-chip-list">'
+            for domain in ['security', 'water', 'food', 'medical', 'power', 'comms']:
                 lvl = sit.get(domain, 'green')
-                html += f'<div class="sit-box" style="background:{sit_colors.get(lvl,"#fff")}; color:#fff;">{domain.upper()}<br>{sit_labels.get(lvl,"?")}</div>'
-            html += '</div>'
+                color = sit_colors.get(lvl, '#4b5563')
+                sit_html += (
+                    f'<span class="doc-chip" style="background:{color};border-color:{color};color:#fff;">'
+                    f'{domain.upper()}: {sit_labels.get(lvl, "?")}'
+                    '</span>'
+                )
+            sit_html += '</div>'
 
-        # Contacts
+        contacts_html = '<div class="doc-empty">No emergency contacts are available yet.</div>'
         if contacts:
-            html += '<h2>EMERGENCY CONTACTS</h2><table><tr><th>Name</th><th>Role</th><th>Callsign</th><th>Phone</th><th>Freq</th><th>Blood</th><th>Rally Point</th></tr>'
+            contacts_html = '<div class="doc-table-shell"><table><thead><tr><th>Name</th><th>Role</th><th>Callsign</th><th>Phone</th><th>Freq</th><th>Blood</th><th>Rally Point</th></tr></thead><tbody>'
             for c in contacts:
-                html += f'<tr><td>{_esc(c["name"])}</td><td>{_esc(c["role"])}</td><td>{_esc(c["callsign"])}</td><td>{_esc(c["phone"])}</td><td>{_esc(c["freq"])}</td><td>{_esc(c["blood_type"])}</td><td>{_esc(c["rally_point"])}</td></tr>'
-            html += '</table>'
+                contacts_html += (
+                    f'<tr><td class="doc-strong">{_esc(c["name"])}</td><td>{_esc(c["role"])}</td>'
+                    f'<td>{_esc(c["callsign"]) or "-"}</td><td>{_esc(c["phone"]) or "-"}</td>'
+                    f'<td>{_esc(c["freq"]) or "-"}</td><td>{_esc(c["blood_type"]) or "-"}</td>'
+                    f'<td>{_esc(c["rally_point"]) or "-"}</td></tr>'
+                )
+            contacts_html += '</tbody></table></div>'
 
-        # Burn rate + alerts
-        html += '<div class="cols2"><div>'
+        supply_html = '<div class="doc-empty">No burn-rate tracked inventory is available.</div>'
         if burn:
-            html += '<h2>DAYS OF SUPPLY</h2><table><tr><th>Resource</th><th>Days Left</th></tr>'
+            supply_html = '<div class="doc-table-shell"><table><thead><tr><th>Resource</th><th>Days Left</th></tr></thead><tbody>'
             for cat, days in sorted(burn.items()):
-                cls = ' class="warn"' if days < 7 else ''
-                html += f'<tr{cls}><td>{cat.upper()}</td><td>{days}</td></tr>'
-            html += '</table>'
+                marker = ' class="doc-alert"' if days < 7 else ''
+                supply_html += f'<tr><td class="doc-strong">{_esc(cat.upper())}</td><td{marker}>{days}</td></tr>'
+            supply_html += '</tbody></table></div>'
 
+        low_html = '<div class="doc-empty">No low-stock alerts at the moment.</div>'
         if low:
-            html += '<h2>LOW STOCK ALERTS</h2><table><tr><th>Item</th><th>Qty</th><th>Cat</th></tr>'
+            low_html = '<div class="doc-table-shell"><table><thead><tr><th>Item</th><th>Qty</th><th>Category</th></tr></thead><tbody>'
             for r in low:
-                html += f'<tr class="warn"><td>{_esc(r["name"])}</td><td>{r["quantity"]} {_esc(r["unit"])}</td><td>{_esc(r["category"])}</td></tr>'
-            html += '</table>'
-        html += '</div><div>'
+                low_html += (
+                    f'<tr><td class="doc-alert">{_esc(r["name"])}</td><td>{r["quantity"]} {_esc(r["unit"])}</td>'
+                    f'<td>{_esc(r["category"])}</td></tr>'
+                )
+            low_html += '</tbody></table></div>'
 
+        expiring_html = '<div class="doc-empty">No items are expiring in the next 30 days.</div>'
         if expiring:
-            html += '<h2>EXPIRING SOON</h2><table><tr><th>Item</th><th>Expires</th><th>Cat</th></tr>'
+            expiring_html = '<div class="doc-table-shell"><table><thead><tr><th>Item</th><th>Expires</th><th>Category</th></tr></thead><tbody>'
             for r in expiring:
-                html += f'<tr><td>{_esc(r["name"])}</td><td>{_esc(r["expiration"])}</td><td>{_esc(r["category"])}</td></tr>'
-            html += '</table>'
+                expiring_html += f'<tr><td class="doc-strong">{_esc(r["name"])}</td><td>{_esc(r["expiration"])}</td><td>{_esc(r["category"])}</td></tr>'
+            expiring_html += '</tbody></table></div>'
 
-        # Key frequencies
-        html += '''<h2>KEY FREQUENCIES</h2><table>
-        <tr><th>Use</th><th>Freq/Ch</th></tr>
-        <tr><td>FRS Rally (Ch 1)</td><td>462.5625 MHz</td></tr>
-        <tr><td>FRS Emergency (Ch 3)</td><td>462.6125 MHz</td></tr>
-        <tr><td>GMRS Emergency (Ch 20)</td><td>462.6750 MHz</td></tr>
-        <tr><td>CB Emergency (Ch 9)</td><td>27.065 MHz</td></tr>
-        <tr><td>CB Highway (Ch 19)</td><td>27.185 MHz</td></tr>
-        <tr><td>2m HAM Calling</td><td>146.520 MHz</td></tr>
-        <tr><td>2m HAM Emergency</td><td>146.550 MHz</td></tr>
-        <tr><td>NOAA Weather</td><td>162.400-.550 MHz</td></tr>
-        </table>'''
-        html += '</div></div>'
-        html += '<div style="text-align:center;margin-top:8px;font-size:9px;color:#999;">Project N.O.M.A.D. - Offline Survival Command Center</div>'
-        html += '</body></html>'
+        body = f'''<section class="doc-section">
+  <h2 class="doc-section-title">Situation Status</h2>
+  {sit_html}
+</section>
+<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Supply Burn Snapshot</h2>
+      {supply_html}
+    </div>
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Expiring Soon</h2>
+      {expiring_html}
+    </div>
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Low Stock Alerts</h2>
+      {low_html}
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Key Frequencies</h2>
+      <div class="doc-table-shell"><table><thead><tr><th>Use</th><th>Freq / Ch</th></tr></thead><tbody>
+        <tr><td class="doc-strong">FRS Rally</td><td>Ch 1 / 462.5625 MHz</td></tr>
+        <tr><td class="doc-strong">FRS Emergency</td><td>Ch 3 / 462.6125 MHz</td></tr>
+        <tr><td class="doc-strong">GMRS Emergency</td><td>Ch 20 / 462.6750 MHz</td></tr>
+        <tr><td class="doc-strong">CB Emergency</td><td>Ch 9 / 27.065 MHz</td></tr>
+        <tr><td class="doc-strong">CB Highway</td><td>Ch 19 / 27.185 MHz</td></tr>
+        <tr><td class="doc-strong">2m Calling</td><td>146.520 MHz</td></tr>
+        <tr><td class="doc-strong">2m Emergency</td><td>146.550 MHz</td></tr>
+        <tr><td class="doc-strong">NOAA Weather</td><td>162.400 - 162.550 MHz</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+</section>
+<section class="doc-section">
+  <h2 class="doc-section-title">Emergency Contacts</h2>
+  {contacts_html}
+</section>
+<section class="doc-section">
+  <div class="doc-footer">
+    <span>Offline operations snapshot for rapid reference and print carry.</span>
+    <span>NOMAD Field Desk Ready Card</span>
+  </div>
+</section>'''
+        html = render_print_document(
+            'Emergency Card',
+            'Compact operational snapshot covering status, contacts, supply risk, and critical comms references.',
+            body,
+            eyebrow='NOMAD Field Desk Ready Card',
+            meta_items=[f'Generated {generated_at}', 'Keep accessible'],
+            stat_items=[
+                ('Contacts', len(contacts)),
+                ('Low Stock', len(low)),
+                ('Expiring', len(expiring)),
+                ('Supply Categories', len(burn)),
+            ],
+            accent_start='#14304a',
+            accent_end='#2f6480',
+            max_width='1000px',
+        )
         return Response(html, mimetype='text/html')
 
     # ─── Contacts API ─────────────────────────────────────────────────
@@ -1808,7 +1851,7 @@ def create_app():
     def api_waypoints_gpx():
         with db_session() as db:
             rows = db.execute('SELECT * FROM waypoints ORDER BY created_at').fetchall()
-        gpx = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="ProjectNOMAD">\n'
+        gpx = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="NOMADFieldDesk">\n'
         for w in rows:
             gpx += f'  <wpt lat="{w["lat"]}" lon="{w["lng"]}">\n'
             gpx += f'    <name>{_esc(w["name"])}</name>\n'
@@ -2319,21 +2362,34 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
 
     # ─── Scheduled Automatic Backups ──────────────────────────────────
 
-    def _run_auto_backup():
-        """Execute scheduled auto-backup and reschedule."""
-        import sqlite3 as _sqlite3
-        from datetime import datetime
+    def _load_auto_backup_config():
+        """Load backup settings, skipping quietly if the configured DB is unavailable."""
         try:
             db = get_db()
             try:
                 row = db.execute("SELECT value FROM settings WHERE key = 'auto_backup_config'").fetchone()
             finally:
                 db.close()
+        except Exception as e:
+            log.debug(f'Auto-backup config unavailable: {e}')
+            return None
 
-            if not row or not row['value']:
-                return
-            cfg = json.loads(row['value'])
-            if not cfg.get('enabled'):
+        if not row or not row['value']:
+            return None
+
+        try:
+            return json.loads(row['value'])
+        except (TypeError, ValueError) as e:
+            log.warning(f'Invalid auto-backup config — skipping schedule: {e}')
+            return None
+
+    def _run_auto_backup():
+        """Execute scheduled auto-backup and reschedule."""
+        import sqlite3 as _sqlite3
+        from datetime import datetime
+        try:
+            cfg = _load_auto_backup_config()
+            if not cfg or not cfg.get('enabled'):
                 return
 
             db_path = get_db_path()
@@ -2401,14 +2457,9 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             _auto_backup_timer['timer'].cancel()
             _auto_backup_timer['timer'] = None
         try:
-            db = get_db()
-            try:
-                row = db.execute("SELECT value FROM settings WHERE key = 'auto_backup_config'").fetchone()
-            finally:
-                db.close()
-            if not row or not row['value']:
+            cfg = _load_auto_backup_config()
+            if not cfg:
                 return
-            cfg = json.loads(row['value'])
             if not cfg.get('enabled'):
                 return
             interval = cfg.get('interval', 'daily')
@@ -2418,7 +2469,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             timer.start()
             _auto_backup_timer['timer'] = timer
         except Exception as e:
-            log.warning(f'Failed to schedule auto-backup: {e}')
+            log.debug(f'Failed to schedule auto-backup: {e}')
 
     try:
         _schedule_auto_backup()
@@ -2600,7 +2651,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
 
 
         # Generate text report
-        txt = f"===== N.O.M.A.D. STATUS REPORT =====\nGenerated: {report['generated']}\nVersion: {report['version']}\n\n"
+        txt = f"===== NOMAD FIELD DESK STATUS REPORT =====\nGenerated: {report['generated']}\nVersion: {report['version']}\n\n"
 
         if report['situation']:
             txt += "SITUATION BOARD:\n"
@@ -2650,39 +2701,98 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             contacts = db.execute("SELECT name, callsign, phone FROM contacts WHERE callsign != '' OR phone != '' ORDER BY name").fetchall()
         from datetime import datetime
         now = datetime.now().strftime('%Y-%m-%d %H:%M')
-        html = f'''<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Frequency Reference Card</title>
-<style>
-body {{ font-family: 'Courier New', monospace; margin: 0; padding: 8px; font-size: 9px; line-height: 1.3; color: #000; }}
-h1 {{ font-size: 12px; text-align: center; margin: 0 0 4px; border-bottom: 2px solid #000; }}
-h2 {{ font-size: 10px; background: #333; color: #fff; padding: 2px 6px; margin: 6px 0 2px; }}
-table {{ width: 100%; border-collapse: collapse; }}
-th, td {{ border: 1px solid #999; padding: 1px 4px; font-size: 8px; }}
-th {{ background: #ddd; font-weight: 700; }}
-.col2 {{ columns: 2; column-gap: 12px; }}
-@media print {{ body {{ margin: 0; }} @page {{ size: A5 landscape; margin: 6mm; }} }}
-</style></head><body>
-<h1>&#128225; FREQ CARD — Generated {now}</h1>
-<div class="col2">
-<h2>STANDARD FREQUENCIES</h2>
-<table><tr><th>Service</th><th>Freq</th><th>Notes</th></tr>
-<tr><td>FRS Ch 1</td><td>462.5625</td><td>Family Radio primary</td></tr>
-<tr><td>FRS Ch 3</td><td>462.6125</td><td>Neighborhood net</td></tr>
-<tr><td>GMRS Ch 1</td><td>462.5625</td><td>Higher power (5W)</td></tr>
-<tr><td>MURS Ch 1</td><td>151.820</td><td>No license required</td></tr>
-<tr><td>2m Call</td><td>146.520</td><td>National calling freq</td></tr>
-<tr><td>70cm Call</td><td>446.000</td><td>National calling freq</td></tr>
-<tr><td>HF 40m</td><td>7.260</td><td>Emergency net</td></tr>
-<tr><td>Marine 16</td><td>156.800</td><td>Distress/calling</td></tr>
-<tr><td>CB Ch 9</td><td>27.065</td><td>Emergency channel</td></tr>
-<tr><td>CB Ch 19</td><td>27.185</td><td>Highway/trucker</td></tr>
-<tr><td>NOAA WX</td><td>162.550</td><td>Weather broadcast</td></tr>
-</table>
-<h2>TEAM CONTACTS</h2>
-<table><tr><th>Name</th><th>Callsign</th><th>Phone</th></tr>'''
         from html import escape as esc
-        for c in contacts:
-            html += f'<tr><td>{esc(c["name"])}</td><td>{esc(c["callsign"] or "—")}</td><td>{esc(c["phone"] or "—")}</td></tr>'
-        html += '</table></div></body></html>'
+
+        standard_rows = [
+            ('FRS Ch 1', '462.5625 MHz', 'Family rally primary'),
+            ('FRS Ch 3', '462.6125 MHz', 'Neighborhood emergency net'),
+            ('GMRS Ch 20', '462.6750 MHz', 'High-power emergency channel'),
+            ('MURS Ch 1', '151.820 MHz', 'No-license local simplex'),
+            ('2m Calling', '146.520 MHz', 'National ham calling'),
+            ('70cm Calling', '446.000 MHz', 'National UHF calling'),
+            ('HF 40m', '7.260 MHz', 'Regional emergency traffic'),
+            ('Marine 16', '156.800 MHz', 'Distress and calling'),
+            ('CB Ch 9', '27.065 MHz', 'Emergency channel'),
+            ('CB Ch 19', '27.185 MHz', 'Road and highway traffic'),
+            ('NOAA WX', '162.550 MHz', 'Weather broadcast'),
+        ]
+
+        standard_html = '<div class="doc-table-shell"><table><thead><tr><th>Service</th><th>Frequency</th><th>Use</th></tr></thead><tbody>'
+        for service, freq, notes in standard_rows:
+            standard_html += f'<tr><td class="doc-strong">{service}</td><td>{freq}</td><td>{notes}</td></tr>'
+        standard_html += '</tbody></table></div>'
+
+        traffic_html = '<div class="doc-empty">No recent radio logs have been recorded yet.</div>'
+        if freqs:
+            traffic_html = '<div class="doc-table-shell"><table><thead><tr><th>Time</th><th>Callsign</th><th>Freq</th><th>Dir</th><th>Signal</th></tr></thead><tbody>'
+            for entry in freqs[:10]:
+                traffic_html += (
+                    f'<tr><td>{esc(str(entry["created_at"]))}</td><td class="doc-strong">{esc(entry["callsign"] or "-")}</td>'
+                    f'<td>{esc(entry["freq"] or "-")}</td><td>{esc(entry["direction"] or "-")}</td>'
+                    f'<td>{esc(str(entry["signal_quality"] or "-"))}</td></tr>'
+                )
+            traffic_html += '</tbody></table></div>'
+
+        contacts_html = '<div class="doc-empty">No radio contacts with a callsign or phone are on file.</div>'
+        if contacts:
+            contacts_html = '<div class="doc-table-shell"><table><thead><tr><th>Name</th><th>Callsign</th><th>Phone</th></tr></thead><tbody>'
+            for c in contacts:
+                contacts_html += f'<tr><td class="doc-strong">{esc(c["name"])}</td><td>{esc(c["callsign"] or "-")}</td><td>{esc(c["phone"] or "-")}</td></tr>'
+            contacts_html += '</tbody></table></div>'
+
+        body = f'''<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Standard Frequencies</h2>
+      {standard_html}
+    </div>
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Recent Traffic</h2>
+      {traffic_html}
+    </div>
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Team Contacts</h2>
+      {contacts_html}
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Radio Notes</h2>
+      <div class="doc-kv">
+        <div class="doc-kv-row"><div class="doc-kv-key">Call Format</div><div>&quot;This is [callsign], on [channel/freq], over.&quot;</div></div>
+        <div class="doc-kv-row"><div class="doc-kv-key">Priority</div><div>Emergency traffic first, logistics second, routine last.</div></div>
+        <div class="doc-kv-row"><div class="doc-kv-key">Fallback</div><div>If no answer on the primary channel, try the neighborhood emergency net, then 2m calling.</div></div>
+        <div class="doc-kv-row"><div class="doc-kv-key">Logging</div><div>Record time, callsign, direction, signal quality, and any action taken.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-footer">
+    <span>Field comms cheat sheet for print carry and quick app-frame reference.</span>
+    <span>Monitor before transmit when possible.</span>
+  </div>
+</section>'''
+        html = render_print_document(
+            'Frequency Reference Card',
+            'Pocket comms quick-reference covering standard channels, recent traffic, and team contact lookups.',
+            body,
+            eyebrow='NOMAD Field Desk Comms Reference',
+            meta_items=[f'Generated {now}', 'A5 landscape', 'Offline reference'],
+            stat_items=[
+                ('Recent Logs', len(freqs)),
+                ('Contacts', len(contacts)),
+                ('Primary Net', 'FRS 1'),
+                ('Calling', '146.520'),
+            ],
+            accent_start='#16324a',
+            accent_end='#2b657e',
+            max_width='1120px',
+            page_size='A5',
+            landscape=True,
+        )
         return Response(html, mimetype='text/html')
 
     @app.route('/api/print/medical-cards')
@@ -2692,34 +2802,77 @@ th {{ background: #ddd; font-weight: 700; }}
             patients = db.execute('SELECT * FROM patients ORDER BY name').fetchall()
         from datetime import datetime
         now = datetime.now().strftime('%Y-%m-%d')
-        html = '''<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Medical Cards</title>
-<style>
-body { font-family: 'Courier New', monospace; margin: 0; padding: 8px; color: #000; }
-.card { border: 2px solid #000; border-radius: 6px; padding: 8px 10px; width: 3.25in; height: 2in; display: inline-block; margin: 4px; font-size: 8px; line-height: 1.3; overflow: hidden; vertical-align: top; page-break-inside: avoid; }
-.card h3 { font-size: 11px; margin: 0 0 4px; border-bottom: 1px solid #000; padding-bottom: 2px; }
-.card .field { margin-bottom: 1px; }
-.card .label { font-weight: 700; }
-@media print { @page { margin: 10mm; } }
-</style></head><body>'''
         from html import escape as esc
+        card_grid = '<div class="doc-grid-3">'
+        allergy_count = 0
+        medication_count = 0
         for p in patients:
-            try: allergies = json.loads(p['allergies'] or '[]')
+            record = dict(p)
+            try: allergies = json.loads(record['allergies'] or '[]')
             except (json.JSONDecodeError, TypeError): allergies = []
-            try: conditions = json.loads(p['conditions'] or '[]')
+            try: conditions = json.loads(record['conditions'] or '[]')
             except (json.JSONDecodeError, TypeError): conditions = []
-            try: medications = json.loads(p['medications'] or '[]')
+            try: medications = json.loads(record['medications'] or '[]')
             except (json.JSONDecodeError, TypeError): medications = []
-            html += f'''<div class="card">
-<h3>&#9829; {esc(p["name"])} — MEDICAL CARD</h3>
-<div class="field"><span class="label">DOB:</span> {esc(str(p.get("dob","—")))} | <span class="label">Blood:</span> {esc(str(p.get("blood_type","—")))} | <span class="label">Weight:</span> {esc(str(p.get("weight_kg","?")))}kg</div>
-<div class="field"><span class="label">ALLERGIES:</span> {esc(", ".join(str(a) for a in allergies)) if allergies else "NKDA (None Known)"}</div>
-<div class="field"><span class="label">CONDITIONS:</span> {esc(", ".join(str(c) for c in conditions)) if conditions else "None"}</div>
-<div class="field"><span class="label">MEDICATIONS:</span> {esc(", ".join(str(m) for m in medications)) if medications else "None"}</div>
-<div style="margin-top:4px;font-size:7px;color:#666;">Generated {esc(now)} by N.O.M.A.D.</div>
+            if allergies:
+                allergy_count += 1
+            if medications:
+                medication_count += 1
+            allergy_html = ''.join(f'<span class="doc-chip doc-chip-alert">{esc(str(a))}</span>' for a in allergies) or '<span class="doc-chip doc-chip-muted">NKDA</span>'
+            conditions_html = ''.join(f'<span class="doc-chip">{esc(str(c))}</span>' for c in conditions) or '<span class="doc-chip doc-chip-muted">None recorded</span>'
+            meds_html = ''.join(f'<span class="doc-chip">{esc(str(m))}</span>' for m in medications) or '<span class="doc-chip doc-chip-muted">None recorded</span>'
+            card_grid += f'''<div class="doc-panel doc-panel-strong">
+  <h2 class="doc-section-title">Medical Card</h2>
+  <div class="doc-note-box" style="background:#fff;border-style:solid;">
+    <div class="doc-strong" style="font-size:18px;">{esc(record["name"])}</div>
+    <div style="margin-top:10px;" class="doc-chip-list">
+      <span class="doc-chip">DOB: {esc(str(record.get("dob","—")))}</span>
+      <span class="doc-chip">Blood: {esc(str(record.get("blood_type","—")))}</span>
+      <span class="doc-chip">Weight: {esc(str(record.get("weight_kg","?")))} kg</span>
+    </div>
+    <div style="margin-top:12px;">
+      <div class="doc-section-title" style="margin-bottom:8px;">Allergies</div>
+      <div class="doc-chip-list">{allergy_html}</div>
+    </div>
+    <div style="margin-top:12px;">
+      <div class="doc-section-title" style="margin-bottom:8px;">Conditions</div>
+      <div class="doc-chip-list">{conditions_html}</div>
+    </div>
+    <div style="margin-top:12px;">
+      <div class="doc-section-title" style="margin-bottom:8px;">Medications</div>
+      <div class="doc-chip-list">{meds_html}</div>
+    </div>
+  </div>
 </div>'''
+        card_grid += '</div>'
         if not patients:
-            html += '<div style="text-align:center;padding:40px;color:#999;">No patients registered. Add medical profiles in the Medical sub-tab.</div>'
-        html += '</body></html>'
+            card_grid = '<div class="doc-empty">No patients registered. Add medical profiles in the Medical workspace to generate cards.</div>'
+        body = f'''<section class="doc-section">
+  <h2 class="doc-section-title">Patient Medical Cards</h2>
+  {card_grid}
+</section>
+<section class="doc-section">
+  <div class="doc-footer">
+    <span>Bulk print view for grab-kit inserts, clipboard packets, and rapid patient reference.</span>
+    <span>Generated by NOMAD Field Desk.</span>
+  </div>
+</section>'''
+        html = render_print_document(
+            'Medical Cards',
+            'Bulk patient card sheet for fast print review before assembling wallet cards, binders, or transfer packets.',
+            body,
+            eyebrow='NOMAD Field Desk Medical Cards',
+            meta_items=[f'Generated {now}', 'Bulk print view'],
+            stat_items=[
+                ('Patients', len(patients)),
+                ('With Allergies', allergy_count),
+                ('With Medications', medication_count),
+                ('Updated', now),
+            ],
+            accent_start='#3b2030',
+            accent_end='#7a3346',
+            max_width='1160px',
+        )
         return Response(html, mimetype='text/html')
 
     @app.route('/api/print/bug-out-checklist')
@@ -2743,30 +2896,65 @@ body { font-family: 'Courier New', monospace; margin: 0; padding: 8px; color: #0
             ('HYGIENE','Toilet paper, soap, toothbrush, medications, feminine products, trash bags'),
             ('SPECIALTY','Glasses, hearing aids, pet supplies, infant needs, prescription meds'),
         ]
-        html = f'''<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Bug-Out Checklist</title>
-<style>
-body {{ font-family: 'Courier New', monospace; margin: 0; padding: 12px; font-size: 10px; color: #000; }}
-h1 {{ font-size: 14px; text-align: center; margin: 0 0 8px; border-bottom: 3px solid #000; padding-bottom: 4px; }}
-.item {{ display: flex; gap: 6px; padding: 4px 0; border-bottom: 1px solid #ccc; }}
-.check {{ width: 14px; height: 14px; border: 2px solid #000; flex-shrink: 0; margin-top: 1px; }}
-.cat {{ font-weight: 700; min-width: 80px; flex-shrink: 0; }}
-.desc {{ color: #333; }}
-@media print {{ @page {{ margin: 12mm; }} }}
-</style></head><body>
-<h1>&#9888; BUG-OUT CHECKLIST — {now}</h1>
-<div style="font-size:9px;text-align:center;margin-bottom:8px;color:#666;">Check each item as you load. Aim for 15 minutes or less.</div>'''
+        checklist_html = '<div class="doc-checklist">'
         for cat, desc in items:
-            html += f'<div class="item"><div class="check"></div><div class="cat">{cat}</div><div class="desc">{desc}</div></div>'
-        html += '''<div style="margin-top:12px;border-top:2px solid #000;padding-top:6px;">
-<div style="font-weight:700;">RALLY POINTS:</div>
-<div style="display:flex;gap:20px;margin-top:4px;">
-<div>PRIMARY: ________________</div><div>SECONDARY: ________________</div><div>TERTIARY: ________________</div>
-</div>
-<div style="margin-top:6px;font-weight:700;">ROUTES:</div>
-<div style="display:flex;gap:20px;margin-top:4px;">
-<div>PRIMARY: ________________</div><div>ALTERNATE: ________________</div>
-</div>
-</div></body></html>'''
+            checklist_html += (
+                '<div class="doc-check-item">'
+                '<div class="doc-check-box"></div>'
+                f'<div class="doc-check-label">{cat}</div>'
+                f'<div class="doc-check-copy">{desc}</div>'
+                '</div>'
+            )
+        checklist_html += '</div>'
+
+        body = f'''<section class="doc-section">
+  <div class="doc-panel doc-panel-strong">
+    <h2 class="doc-section-title">Load Checklist</h2>
+    {checklist_html}
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Movement Plan</h2>
+      <div class="doc-kv">
+        <div class="doc-kv-row"><div class="doc-kv-key">Primary Route</div><div>______________________________________</div></div>
+        <div class="doc-kv-row"><div class="doc-kv-key">Alternate Route</div><div>______________________________________</div></div>
+        <div class="doc-kv-row"><div class="doc-kv-key">Departure Trigger</div><div>______________________________________</div></div>
+      </div>
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Rally Points</h2>
+      <div class="doc-kv">
+        <div class="doc-kv-row"><div class="doc-kv-key">Primary</div><div>______________________________________</div></div>
+        <div class="doc-kv-row"><div class="doc-kv-key">Secondary</div><div>______________________________________</div></div>
+        <div class="doc-kv-row"><div class="doc-kv-key">Tertiary</div><div>______________________________________</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-footer">
+    <span>Check items as they are staged or loaded.</span>
+    <span>Target departure time: 15 minutes or less.</span>
+  </div>
+</section>'''
+        html = render_print_document(
+            'Bug-Out Checklist',
+            'Rapid departure packing sheet for go-bags, vehicles, and family movement planning.',
+            body,
+            eyebrow='NOMAD Field Desk Go-Bag Checklist',
+            meta_items=[f'Generated {now}', 'Review monthly'],
+            stat_items=[
+                ('Checklist Items', len(items)),
+                ('Goal', '15 min'),
+                ('Routes', 2),
+                ('Rally Points', 3),
+            ],
+            accent_start='#5c2b15',
+            accent_end='#9b4a1f',
+            max_width='980px',
+        )
         return Response(html, mimetype='text/html')
 
     # [EXTRACTED to blueprint]
@@ -2778,18 +2966,70 @@ h1 {{ font-size: 14px; text-align: center; margin: 0 0 8px; border-bottom: 3px s
         with db_session() as db:
             contacts = db.execute('SELECT * FROM contacts ORDER BY name').fetchall()
         now = time.strftime('%Y-%m-%d %H:%M')
-        html = f'''<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Contact Directory</title>
-<style>body{{font-family:'Segoe UI',sans-serif;padding:15px;font-size:11px;}}
-h1{{font-size:16px;border-bottom:2px solid #000;padding-bottom:4px;}}
-table{{width:100%;border-collapse:collapse;margin:8px 0;}}th,td{{border:1px solid #999;padding:3px 6px;text-align:left;font-size:10px;}}th{{background:#eee;}}
-@media print{{@page{{margin:0.3in;size:letter;}}}}
-</style></head><body>
-<h1>N.O.M.A.D. Contact Directory — {now}</h1>
-<table><thead><tr><th>Name</th><th>Role</th><th>Phone</th><th>Callsign</th><th>Radio Freq</th><th>Blood</th><th>Rally Point</th><th>Skills</th><th>Medical Notes</th></tr></thead><tbody>'''
-        for c in contacts:
-            d = dict(c)
-            html += f"<tr><td><strong>{_esc(d['name'])}</strong></td><td>{_esc(d.get('role',''))}</td><td>{_esc(d.get('phone',''))}</td><td>{_esc(d.get('callsign',''))}</td><td>{_esc(d.get('freq',''))}</td><td>{_esc(d.get('blood_type',''))}</td><td>{_esc(d.get('rally_point',''))}</td><td>{_esc(d.get('skills',''))}</td><td>{_esc(d.get('medical_notes',''))}</td></tr>"
-        html += f'</tbody></table><p style="font-size:9px;color:#666;">Generated by N.O.M.A.D. — {now}</p></body></html>'
+        rally_points = sorted({dict(c).get('rally_point', '').strip() for c in contacts if dict(c).get('rally_point', '').strip()})
+        callsign_count = sum(1 for c in contacts if dict(c).get('callsign'))
+        phone_count = sum(1 for c in contacts if dict(c).get('phone'))
+
+        directory_html = '<div class="doc-empty">No contacts have been entered yet.</div>'
+        if contacts:
+            directory_html = '<div class="doc-table-shell"><table><thead><tr><th>Name</th><th>Role</th><th>Phone</th><th>Callsign</th><th>Radio Freq</th><th>Blood</th><th>Rally Point</th><th>Skills</th><th>Medical Notes</th></tr></thead><tbody>'
+            for c in contacts:
+                d = dict(c)
+                directory_html += (
+                    f"<tr><td class=\"doc-strong\">{_esc(d['name'])}</td><td>{_esc(d.get('role','')) or '-'}</td>"
+                    f"<td>{_esc(d.get('phone','')) or '-'}</td><td>{_esc(d.get('callsign','')) or '-'}</td>"
+                    f"<td>{_esc(d.get('freq','')) or '-'}</td><td>{_esc(d.get('blood_type','')) or '-'}</td>"
+                    f"<td>{_esc(d.get('rally_point','')) or '-'}</td><td>{_esc(d.get('skills','')) or '-'}</td>"
+                    f"<td>{_esc(d.get('medical_notes','')) or '-'}</td></tr>"
+                )
+            directory_html += '</tbody></table></div>'
+
+        rally_html = '<div class="doc-empty">No rally points are assigned to contacts yet.</div>'
+        if rally_points:
+            rally_html = '<div class="doc-chip-list">' + ''.join(f'<span class="doc-chip">{_esc(point)}</span>' for point in rally_points) + '</div>'
+
+        body = f'''<section class="doc-section">
+  <h2 class="doc-section-title">Contact Directory</h2>
+  {directory_html}
+</section>
+<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Known Rally Points</h2>
+      {rally_html}
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Use Notes</h2>
+      <div class="doc-kv">
+        <div class="doc-kv-row"><div class="doc-kv-key">Carry Copy</div><div>Keep one printed copy in the go-bag and one near radios or the exit route.</div></div>
+        <div class="doc-kv-row"><div class="doc-kv-key">Priority Fields</div><div>Name, role, phone, callsign, rally point, and key medical notes should stay current.</div></div>
+        <div class="doc-kv-row"><div class="doc-kv-key">Review Cadence</div><div>Verify numbers, channels, and rally points after every plan change or quarterly at minimum.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-footer">
+    <span>Printable contact reference for quick retrieval during movement, comms checks, or handoff.</span>
+    <span>Generated by NOMAD Field Desk.</span>
+  </div>
+</section>'''
+        html = render_print_document(
+            'Contact Directory',
+            'Printable roster for emergency contacts, radio identifiers, rally points, and critical notes.',
+            body,
+            eyebrow='NOMAD Field Desk Contacts',
+            meta_items=[f'Generated {now}', 'Letter print layout'],
+            stat_items=[
+                ('Contacts', len(contacts)),
+                ('With Callsigns', callsign_count),
+                ('With Phones', phone_count),
+                ('Rally Points', len(rally_points)),
+            ],
+            accent_start='#163049',
+            accent_end='#43607a',
+            max_width='1120px',
+        )
         return html
 
     # ─── PDF Generation (ReportLab) ──────────────────────────────────
@@ -2835,7 +3075,7 @@ table{{width:100%;border-collapse:collapse;margin:8px 0;}}th,td{{border:1px soli
 
         # Cover page
         elements.append(Spacer(1, 2*inch))
-        elements.append(Paragraph('N.O.M.A.D.', title_style))
+        elements.append(Paragraph('NOMAD', title_style))
         elements.append(Paragraph('OPERATIONS BINDER', ParagraphStyle('Cover2', fontName='Courier-Bold', fontSize=14, alignment=1, spaceAfter=20)))
         elements.append(Paragraph(f'Node: {_esc(node_name)}', subtitle_style))
         elements.append(Paragraph(f'Generated: {now}', subtitle_style))
@@ -2972,7 +3212,7 @@ table{{width:100%;border-collapse:collapse;margin:8px 0;}}th,td{{border:1px soli
 
         # Footer
         elements.append(Spacer(1, 20))
-        elements.append(Paragraph(f'End of Operations Binder -- Generated {now} by N.O.M.A.D. ({_esc(node_name)})', subtitle_style))
+        elements.append(Paragraph(f'End of Operations Binder -- Generated {now} by NOMAD Field Desk ({_esc(node_name)})', subtitle_style))
 
         doc.build(elements)
         buf.seek(0)
@@ -3029,7 +3269,7 @@ table{{width:100%;border-collapse:collapse;margin:8px 0;}}th,td{{border:1px soli
                 [Paragraph(f'<b>Allergies:</b> {_esc(allergies) or "NKDA"}', card_body)],
                 [Paragraph(f'<b>Conditions:</b> {_esc(conditions_str) or "None"}', card_body)],
                 [Paragraph(f'<b>Medications:</b> {_esc(meds) or "None"}', card_body)],
-                [Paragraph(f'N.O.M.A.D. -- {now}', footer_style)],
+                [Paragraph(f'NOMAD -- {now}', footer_style)],
             ]
             cards.append(card_data)
 
@@ -3038,7 +3278,7 @@ table{{width:100%;border-collapse:collapse;margin:8px 0;}}th,td{{border:1px soli
             wp_lines = [[Paragraph('RALLY POINTS', card_title)]]
             for w in waypoints:
                 wp_lines.append([Paragraph(f'{_esc(w["name"])} ({w["category"]}): {w["lat"]:.5f}, {w["lng"]:.5f}', card_body)])
-            wp_lines.append([Paragraph(f'N.O.M.A.D. -- {now}', footer_style)])
+            wp_lines.append([Paragraph(f'NOMAD -- {now}', footer_style)])
             cards.append(wp_lines)
 
         # Frequency Quick-Ref card
@@ -3051,7 +3291,7 @@ table{{width:100%;border-collapse:collapse;margin:8px 0;}}th,td{{border:1px soli
             freq_lines.append([Paragraph('<b>-- Team Freqs --</b>', card_label)])
             for f in freqs[:4]:
                 freq_lines.append([Paragraph(f'{f.get("freq","?")} ({_esc(f.get("callsign",""))})', card_body)])
-        freq_lines.append([Paragraph(f'N.O.M.A.D. -- {now}', footer_style)])
+        freq_lines.append([Paragraph(f'NOMAD -- {now}', footer_style)])
         cards.append(freq_lines)
 
         # Emergency Contacts card
@@ -3060,7 +3300,7 @@ table{{width:100%;border-collapse:collapse;margin:8px 0;}}th,td{{border:1px soli
             for c in contacts:
                 phone_or_call = c.get('phone') or c.get('callsign') or c.get('freq') or ''
                 ec_lines.append([Paragraph(f'{_esc(c["name"])}: {_esc(phone_or_call)}', card_body)])
-            ec_lines.append([Paragraph(f'N.O.M.A.D. -- {now}', footer_style)])
+            ec_lines.append([Paragraph(f'NOMAD -- {now}', footer_style)])
             cards.append(ec_lines)
 
         # Build cards as tables with borders
@@ -3195,7 +3435,7 @@ table{{width:100%;border-collapse:collapse;margin:8px 0;}}th,td{{border:1px soli
             elements.append(Paragraph(proc, mono))
 
         elements.append(Spacer(1, 20))
-        elements.append(Paragraph(f'End of SOI -- {now} -- N.O.M.A.D. ({_esc(node_name)})', subtitle_style))
+        elements.append(Paragraph(f'End of SOI -- {now} -- NOMAD Field Desk ({_esc(node_name)})', subtitle_style))
 
         doc.build(elements)
         buf.seek(0)
@@ -3223,62 +3463,57 @@ table{{width:100%;border-collapse:collapse;margin:8px 0;}}th,td{{border:1px soli
         sit_colors = {'green': '#2e7d32', 'yellow': '#f9a825', 'orange': '#ef6c00', 'red': '#c62828'}
         now = datetime.now().strftime('%Y-%m-%d %H:%M')
 
-        html = f'''<!DOCTYPE html><html><head><meta charset="UTF-8"><title>N.O.M.A.D. Emergency Reference Sheet</title>
-<style>
-body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 12px; font-size: 10px; line-height: 1.4; color: #000; }}
-h1 {{ font-size: 16px; text-align: center; margin: 0 0 4px; border-bottom: 3px solid #000; padding-bottom: 4px; }}
-h2 {{ font-size: 12px; background: #333; color: #fff; padding: 3px 8px; margin: 8px 0 4px; border-radius: 3px; }}
-table {{ width: 100%; border-collapse: collapse; margin-bottom: 6px; }}
-th, td {{ border: 1px solid #999; padding: 2px 5px; text-align: left; font-size: 9px; }}
-th {{ background: #eee; font-weight: 700; }}
-.grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }}
-.sit-badge {{ display: inline-block; padding: 1px 6px; border-radius: 3px; color: #fff; font-weight: 700; font-size: 9px; }}
-.warn {{ color: #c62828; font-weight: 700; }}
-@media print {{ body {{ padding: 5px; }} @page {{ margin: 0.3in; size: letter; }} }}
-</style></head><body>
-<h1>PROJECT N.O.M.A.D. — EMERGENCY REFERENCE SHEET</h1>
-<div style="text-align:center;font-size:9px;margin-bottom:8px;">Generated: {now} | Keep in go-bag | Replace monthly</div>
-'''
-
-        # Situation Board
+        sit_html = '<div class="doc-empty">Situation board is not configured yet.</div>'
         if sit:
-            html += '<h2>SITUATION STATUS</h2><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">'
+            sit_html = '<div class="doc-chip-list">'
             for domain, level in sit.items():
-                html += f'<span class="sit-badge" style="background:{sit_colors.get(level,"#666")}">{domain.upper()}: {sit_labels.get(level, level.upper())}</span>'
-            html += '</div>'
+                color = sit_colors.get(level, '#64748b')
+                sit_html += (
+                    f'<span class="doc-chip" style="background:{color};border-color:{color};color:#fff;">'
+                    f'{_esc(domain.upper())}: {sit_labels.get(level, level.upper())}'
+                    '</span>'
+                )
+            sit_html += '</div>'
 
-        # Emergency Contacts
-        html += '<h2>EMERGENCY CONTACTS</h2>'
+        contacts_html = '<div class="doc-empty">No contacts registered.</div>'
         if contacts:
-            html += '<table><tr><th>Name</th><th>Role</th><th>Phone</th><th>Callsign</th><th>Radio Freq</th><th>Blood</th><th>Rally Point</th></tr>'
+            contacts_html = '<div class="doc-table-shell"><table><thead><tr><th>Name</th><th>Role</th><th>Phone</th><th>Callsign</th><th>Radio Freq</th><th>Blood</th><th>Rally Point</th></tr></thead><tbody>'
             for c in contacts:
-                html += f"<tr><td><strong>{_esc(c.get('name',''))}</strong></td><td>{_esc(c.get('role',''))}</td><td>{_esc(c.get('phone',''))}</td><td>{_esc(c.get('callsign',''))}</td><td>{_esc(c.get('freq',''))}</td><td>{_esc(c.get('blood_type',''))}</td><td>{_esc(c.get('rally_point',''))}</td></tr>"
-            html += '</table>'
-        else:
-            html += '<p>No contacts registered.</p>'
+                contacts_html += (
+                    f"<tr><td class=\"doc-strong\">{_esc(c.get('name',''))}</td><td>{_esc(c.get('role','')) or '-'}</td>"
+                    f"<td>{_esc(c.get('phone','')) or '-'}</td><td>{_esc(c.get('callsign','')) or '-'}</td>"
+                    f"<td>{_esc(c.get('freq','')) or '-'}</td><td>{_esc(c.get('blood_type','')) or '-'}</td>"
+                    f"<td>{_esc(c.get('rally_point','')) or '-'}</td></tr>"
+                )
+            contacts_html += '</tbody></table></div>'
 
-        # Medical — Patients with allergies
+        patients_html = '<div class="doc-empty">No patient profiles are recorded.</div>'
         if patients:
-            html += '<h2>MEDICAL — PATIENT PROFILES</h2><table><tr><th>Name</th><th>Age</th><th>Weight</th><th>Blood</th><th>ALLERGIES</th><th>Medications</th><th>Conditions</th></tr>'
+            patients_html = '<div class="doc-table-shell"><table><thead><tr><th>Name</th><th>Age</th><th>Weight</th><th>Blood</th><th>Allergies</th><th>Medications</th><th>Conditions</th></tr></thead><tbody>'
             for p in patients:
                 allergies = json.loads(p.get('allergies') or '[]')
                 meds = json.loads(p.get('medications') or '[]')
                 conds = json.loads(p.get('conditions') or '[]')
                 allergy_str = ', '.join(allergies) if allergies else 'NKDA'
-                html += f"<tr><td><strong>{_esc(p.get('name',''))}</strong></td><td>{p.get('age','')}</td><td>{p.get('weight_kg','') or ''} kg</td><td>{_esc(p.get('blood_type',''))}</td><td class='warn'>{_esc(allergy_str)}</td><td>{_esc(', '.join(meds))}</td><td>{_esc(', '.join(conds))}</td></tr>"
-            html += '</table>'
+                patients_html += (
+                    f"<tr><td class=\"doc-strong\">{_esc(p.get('name',''))}</td><td>{p.get('age','') or '-'}</td>"
+                    f"<td>{p.get('weight_kg','') or '-'}{' kg' if p.get('weight_kg') else ''}</td><td>{_esc(p.get('blood_type','')) or '-'}</td>"
+                    f"<td class=\"doc-alert\">{_esc(allergy_str)}</td><td>{_esc(', '.join(meds)) or '-'}</td><td>{_esc(', '.join(conds)) or '-'}</td></tr>"
+                )
+            patients_html += '</tbody></table></div>'
 
-        # Critical Supply Status
-        html += '<h2>SUPPLY STATUS</h2>'
+        supply_html = '<div class="doc-empty">No inventory burn-rate data is available.</div>'
         if burn_items:
-            html += '<table><tr><th>Item</th><th>Category</th><th>Quantity</th><th>Daily Use</th><th>Days Left</th></tr>'
+            supply_html = '<div class="doc-table-shell"><table><thead><tr><th>Item</th><th>Category</th><th>Quantity</th><th>Daily Use</th><th>Days Left</th></tr></thead><tbody>'
             for b in burn_items[:15]:
                 days = round(b['quantity'] / b['daily_usage'], 1) if b['daily_usage'] > 0 else 999
-                color = '#c62828' if days < 3 else '#ef6c00' if days < 7 else '#2e7d32' if days < 30 else ''
-                html += f"<tr><td><strong>{_esc(b['name'])}</strong></td><td>{_esc(b['category'])}</td><td>{b['quantity']} {_esc(b.get('unit',''))}</td><td>{b['daily_usage']}/day</td><td style='color:{color};font-weight:700;'>{days}d</td></tr>"
-            html += '</table>'
+                marker = ' class="doc-alert"' if days < 7 else ''
+                supply_html += (
+                    f"<tr><td class=\"doc-strong\">{_esc(b['name'])}</td><td>{_esc(b['category'])}</td>"
+                    f"<td>{b['quantity']} {_esc(b.get('unit',''))}</td><td>{b['daily_usage']}/day</td><td{marker}>{days}d</td></tr>"
+                )
+            supply_html += '</tbody></table></div>'
 
-        # Inventory by category
         cats = {}
         for item in inventory:
             cat = item.get('category', 'other')
@@ -3286,51 +3521,66 @@ th {{ background: #eee; font-weight: 700; }}
                 cats[cat] = {'count': 0, 'items': []}
             cats[cat]['count'] += 1
             cats[cat]['items'].append(item)
+        inventory_summary_html = '<div class="doc-empty">No categorized inventory summary available.</div>'
         if cats:
-            html += '<div style="font-size:9px;margin-bottom:4px;">'
-            for cat, info in sorted(cats.items()):
-                html += f'<strong>{cat}:</strong> {info["count"]} items | '
-            html += '</div>'
+            inventory_summary_html = '<div class="doc-chip-list">' + ''.join(
+                f'<span class="doc-chip">{_esc(cat)}: {info["count"]}</span>'
+                for cat, info in sorted(cats.items())
+            ) + '</div>'
 
-        # Waypoints / Rally Points
+        waypoints_html = '<div class="doc-empty">No waypoints or rally points have been saved.</div>'
         if waypoints:
-            html += '<h2>WAYPOINTS & RALLY POINTS</h2><table><tr><th>Name</th><th>Category</th><th>Lat</th><th>Lng</th><th>Notes</th></tr>'
+            waypoints_html = '<div class="doc-table-shell"><table><thead><tr><th>Name</th><th>Category</th><th>Lat</th><th>Lng</th><th>Notes</th></tr></thead><tbody>'
             for w in waypoints:
-                html += f"<tr><td><strong>{_esc(w.get('name',''))}</strong></td><td>{_esc(w.get('category',''))}</td><td>{w.get('lat','')}</td><td>{w.get('lng','')}</td><td>{_esc(w.get('notes',''))}</td></tr>"
-            html += '</table>'
+                waypoints_html += (
+                    f"<tr><td class=\"doc-strong\">{_esc(w.get('name',''))}</td><td>{_esc(w.get('category','')) or '-'}</td>"
+                    f"<td>{w.get('lat','') or '-'}</td><td>{w.get('lng','') or '-'}</td><td>{_esc(w.get('notes','')) or '-'}</td></tr>"
+                )
+            waypoints_html += '</tbody></table></div>'
 
-        # Checklist Progress
+        checklist_html = '<div class="doc-empty">No checklists are available.</div>'
         if checklists:
-            html += '<h2>CHECKLIST STATUS</h2><table><tr><th>Checklist</th><th>Progress</th></tr>'
+            checklist_html = '<div class="doc-table-shell"><table><thead><tr><th>Checklist</th><th>Progress</th></tr></thead><tbody>'
             for cl in checklists:
                 items = json.loads(cl.get('items') or '[]')
                 total = len(items)
                 checked = sum(1 for i in items if i.get('checked'))
                 pct = round(checked / total * 100) if total > 0 else 0
-                html += f"<tr><td>{_esc(cl['name'])}</td><td>{checked}/{total} ({pct}%)</td></tr>"
-            html += '</table>'
+                checklist_html += f"<tr><td class=\"doc-strong\">{_esc(cl['name'])}</td><td>{checked}/{total} ({pct}%)</td></tr>"
+            checklist_html += '</tbody></table></div>'
 
-        # Weather
+        weather_html = '<div class="doc-empty">No recent weather readings are on file.</div>'
         if wx:
-            html += '<h2>RECENT WEATHER</h2><table><tr><th>Time</th><th>Pressure (hPa)</th><th>Temp (F)</th><th>Wind</th><th>Clouds</th></tr>'
+            weather_html = '<div class="doc-table-shell"><table><thead><tr><th>Time</th><th>Pressure</th><th>Temp</th><th>Wind</th><th>Clouds</th></tr></thead><tbody>'
             for w in wx:
-                html += f"<tr><td>{w.get('created_at','')}</td><td>{w.get('pressure_hpa','') or '-'}</td><td>{w.get('temp_f','') or '-'}</td><td>{w.get('wind_dir','')} {w.get('wind_speed','')}</td><td>{w.get('clouds','') or '-'}</td></tr>"
-            html += '</table>'
+                wind_text = f"{w.get('wind_dir','') or '-'} {w.get('wind_speed','') or ''}".strip()
+                weather_html += (
+                    f"<tr><td>{_esc(w.get('created_at','')) or '-'}</td><td>{w.get('pressure_hpa','') or '-'}</td>"
+                    f"<td>{w.get('temp_f','') or '-'}</td><td>{_esc(wind_text) or '-'}</td><td>{_esc(w.get('clouds','')) or '-'}</td></tr>"
+                )
+            weather_html += '</tbody></table></div>'
 
-        # Scheduled Tasks (due/overdue)
+        tasks_html = ''
         try:
             db2 = get_db()
             tasks = [dict(r) for r in db2.execute("SELECT name, category, next_due, assigned_to FROM scheduled_tasks WHERE next_due IS NOT NULL ORDER BY next_due LIMIT 15").fetchall()]
             db2.close()
             if tasks:
-                html += '<h2>SCHEDULED TASKS</h2><table><tr><th>Task</th><th>Category</th><th>Due</th><th>Assigned</th></tr>'
+                task_table = '<div class="doc-table-shell"><table><thead><tr><th>Task</th><th>Category</th><th>Due</th><th>Assigned</th></tr></thead><tbody>'
                 for t in tasks:
-                    html += f"<tr><td><strong>{_esc(t.get('name',''))}</strong></td><td>{_esc(t.get('category',''))}</td><td>{_esc(t.get('next_due',''))}</td><td>{_esc(t.get('assigned_to','') or 'Unassigned')}</td></tr>"
-                html += '</table>'
+                    task_table += (
+                        f"<tr><td class=\"doc-strong\">{_esc(t.get('name',''))}</td><td>{_esc(t.get('category','')) or '-'}</td>"
+                        f"<td>{_esc(t.get('next_due','')) or '-'}</td><td>{_esc(t.get('assigned_to','') or 'Unassigned')}</td></tr>"
+                    )
+                task_table += '</tbody></table></div>'
+                tasks_html = f'''<section class="doc-section">
+  <h2 class="doc-section-title">Scheduled Tasks</h2>
+  {task_table}
+</section>'''
         except Exception:
             pass
 
-        # AI Memory / Operator Notes
+        notes_html = ''
         try:
             db3 = get_db()
             mem_row = db3.execute("SELECT value FROM settings WHERE key = 'ai_memory'").fetchone()
@@ -3338,24 +3588,94 @@ th {{ background: #eee; font-weight: 700; }}
             if mem_row and mem_row['value']:
                 memories = json.loads(mem_row['value'])
                 if memories:
-                    html += '<h2>OPERATOR NOTES (AI MEMORY)</h2><ul style="font-size:9px;margin:0;padding-left:16px;">'
-                    for m in memories:
-                        fact = m['fact'] if isinstance(m, dict) else m
-                        html += f'<li>{_esc(fact)}</li>'
-                    html += '</ul>'
+                    note_list = ''.join(
+                        f'<li>{_esc(m["fact"] if isinstance(m, dict) else m)}</li>'
+                        for m in memories
+                    )
+                    notes_html = f'''<section class="doc-section">
+  <h2 class="doc-section-title">Operator Notes</h2>
+  <div class="doc-note-box"><ul style="margin:0;padding-left:18px;">{note_list}</ul></div>
+</section>'''
         except Exception:
             pass
 
-        # Quick Reference Footer
-        html += '''<h2>QUICK REFERENCE</h2>
-<div class="grid">
-<div><strong>Water:</strong> 1 gal/person/day. Bleach: 8 drops/gal (clear), 16 drops/gal (cloudy). Wait 30 min.</div>
-<div><strong>Food:</strong> 2,000 cal/person/day. Eat perishable first, then frozen, then shelf-stable.</div>
-<div><strong>Radio:</strong> FRS Ch 1 (rally), Ch 3 (emergency). GMRS Ch 20 (emergency). HAM 146.520 MHz (calling).</div>
-<div><strong>Medical:</strong> Direct pressure for bleeding. Tourniquet if limb bleeding won\'t stop. Note time applied.</div>
-</div>
-<div style="text-align:center;margin-top:8px;font-size:8px;color:#666;">Generated by Project N.O.M.A.D. — projectnomad.us</div>
-</body></html>'''
+        body = f'''<section class="doc-section">
+  <h2 class="doc-section-title">Situation Status</h2>
+  {sit_html}
+</section>
+<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Emergency Contacts</h2>
+      {contacts_html}
+    </div>
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Medical Profiles</h2>
+      {patients_html}
+    </div>
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Supply Status</h2>
+      {supply_html}
+      <div style="margin-top:12px;">{inventory_summary_html}</div>
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Waypoints &amp; Rally Points</h2>
+      {waypoints_html}
+    </div>
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Checklist Status</h2>
+      {checklist_html}
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Recent Weather</h2>
+      {weather_html}
+    </div>
+  </div>
+</section>
+{tasks_html}
+{notes_html}
+<section class="doc-section">
+  <h2 class="doc-section-title">Quick Reference</h2>
+  <div class="doc-grid-2">
+    <div class="doc-panel"><span class="doc-strong">Water</span><div style="margin-top:8px;">1 gal/person/day. Bleach: 8 drops/gal for clear water, 16 drops/gal for cloudy water. Wait 30 minutes.</div></div>
+    <div class="doc-panel"><span class="doc-strong">Food</span><div style="margin-top:8px;">Target 2,000 cal/person/day. Eat perishables first, then frozen, then shelf-stable stores.</div></div>
+    <div class="doc-panel"><span class="doc-strong">Radio</span><div style="margin-top:8px;">FRS Ch 1 for rally, Ch 3 for emergency, GMRS Ch 20 for emergency, HAM 146.520 MHz for calling.</div></div>
+    <div class="doc-panel"><span class="doc-strong">Medical</span><div style="margin-top:8px;">Use direct pressure for bleeding. Apply a tourniquet for uncontrolled limb bleeding and note the application time.</div></div>
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-footer">
+    <span>Emergency binder sheet for fast cross-module reference in the field or at the command post.</span>
+    <span>NOMAD Field Desk Emergency Binder</span>
+  </div>
+</section>'''
+
+        html = render_print_document(
+            'Emergency Reference Sheet',
+            'Comprehensive single-document snapshot covering contacts, medical status, supply burn, rally points, tasks, and quick-reference guidance.',
+            body,
+            eyebrow='NOMAD Field Desk Emergency Binder',
+            meta_items=[f'Generated {now}', 'Keep in go-bag', 'Refresh monthly'],
+            stat_items=[
+                ('Contacts', len(contacts)),
+                ('Patients', len(patients)),
+                ('Inventory', len(inventory)),
+                ('Waypoints', len(waypoints)),
+                ('Checklists', len(checklists)),
+                ('Weather Logs', len(wx)),
+            ],
+            accent_start='#12324a',
+            accent_end='#3b6a57',
+            max_width='1160px',
+        )
 
         return html
 
@@ -4367,6 +4687,8 @@ th {{ background: #eee; font-weight: 700; }}
     def api_watch_schedule_print(sid):
         """Generate a printable HTML watch schedule."""
         import json as _json
+        from html import escape as _esc
+        from datetime import datetime
         db = get_db()
         try:
             row = db.execute('SELECT * FROM watch_schedules WHERE id = ?', (sid,)).fetchone()
@@ -4378,25 +4700,126 @@ th {{ background: #eee; font-weight: 700; }}
         finally:
             db.close()
 
-        def _esc(s):
-            return str(s).replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;')
+        generated_at = time.strftime('%Y-%m-%d %H:%M')
+        cadence = f'{sched["shift_duration_hours"]}h'
+        period_label = f'{sched["start_date"]} to {sched["end_date"] or "ongoing"}'
 
-        html = f'''<!DOCTYPE html><html><head><meta charset="utf-8"><title>Watch Schedule — {_esc(sched["name"])}</title>
-        <style>body{{font-family:Arial,sans-serif;max-width:900px;margin:auto;padding:24px}}
-        h1{{font-size:22px;border-bottom:2px solid #333;padding-bottom:8px}}
-        table{{width:100%;border-collapse:collapse;margin-top:16px}}th,td{{border:1px solid #ccc;padding:8px;text-align:left;font-size:13px}}
-        th{{background:#f0f0f0;font-weight:bold}}.meta{{font-size:12px;color:#666;margin:4px 0}}
-        @media print{{body{{padding:0}}}}
-        </style></head><body>
-        <h1>Watch Schedule: {_esc(sched["name"])}</h1>
-        <div class="meta">Period: {_esc(sched["start_date"])} to {_esc(sched["end_date"] or "ongoing")} | Shift Duration: {sched["shift_duration_hours"]}h | Personnel: {len(personnel)}</div>
-        <table><thead><tr><th>#</th><th>Person</th><th>Start</th><th>End</th></tr></thead><tbody>'''
+        roster_html = ''.join(
+            f'<span class="doc-chip">{_esc(str(person))}</span>'
+            for person in personnel
+            if str(person).strip()
+        ) or '<span class="doc-chip doc-chip-muted">No personnel listed</span>'
 
-        for i, shift in enumerate(schedule):
-            html += f'<tr><td>{i+1}</td><td>{_esc(shift["person"])}</td><td>{_esc(shift["start"])}</td><td>{_esc(shift["end"])}</td></tr>'
+        shift_rows = ''
+        daily_counts = {}
+        for idx, shift in enumerate(schedule, start=1):
+            person = str(shift.get('person') or 'Unassigned')
+            start_value = str(shift.get('start') or '')
+            end_value = str(shift.get('end') or '')
+            duration_label = cadence
+            start_day = ''
+            try:
+                start_dt = datetime.strptime(start_value, '%Y-%m-%d %H:%M')
+                end_dt = datetime.strptime(end_value, '%Y-%m-%d %H:%M')
+                duration_hours = max((end_dt - start_dt).total_seconds() / 3600, 0)
+                duration_label = f'{duration_hours:g}h'
+                start_day = start_dt.strftime('%Y-%m-%d')
+            except (TypeError, ValueError):
+                if start_value:
+                    start_day = start_value.split(' ')[0]
+            if start_day:
+                daily_counts[start_day] = daily_counts.get(start_day, 0) + 1
+            shift_rows += (
+                f'<tr><td class="doc-strong">{idx}</td><td>{_esc(person)}</td>'
+                f'<td>{_esc(start_value or "-")}</td><td>{_esc(end_value or "-")}</td>'
+                f'<td>{_esc(duration_label)}</td></tr>'
+            )
 
-        html += f'</tbody></table><p style="margin-top:24px;font-size:9px;color:#999;">Generated by Project N.O.M.A.D. — {__import__("time").strftime("%Y-%m-%d %H:%M")}</p></body></html>'
-        return html, 200, {'Content-Type': 'text/html'}
+        schedule_html = (
+            '<div class="doc-table-shell"><table><thead><tr><th>#</th><th>Person</th><th>Start</th><th>End</th><th>Length</th></tr></thead>'
+            f'<tbody>{shift_rows}</tbody></table></div>'
+            if shift_rows else
+            '<div class="doc-empty">No shifts were generated for this rotation window.</div>'
+        )
+
+        coverage_rows = ''.join(
+            f'<tr><td class="doc-strong">{_esc(day)}</td><td>{count}</td><td>{_esc(cadence)} cadence</td></tr>'
+            for day, count in sorted(daily_counts.items())
+        )
+        coverage_html = (
+            '<div class="doc-table-shell"><table><thead><tr><th>Date</th><th>Scheduled Shifts</th><th>Notes</th></tr></thead>'
+            f'<tbody>{coverage_rows}</tbody></table></div>'
+            if coverage_rows else
+            '<div class="doc-empty">Daily coverage will appear once shifts include valid start times.</div>'
+        )
+
+        notes_value = str(sched['notes'] or '').strip()
+        notes_html = (
+            f'<div class="doc-note-box">{_esc(notes_value)}</div>'
+            if notes_value else
+            '<div class="doc-empty">No operator notes were saved for this watch rotation.</div>'
+        )
+
+        body = f'''<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel doc-panel-strong">
+      <h2 class="doc-section-title">Rotation Overview</h2>
+      <div class="doc-note-box">Printable watch bill for checkpoint handoffs, command-post rosters, and overnight rotation boards. Keep the current copy posted where the next relief can verify assignment order quickly.</div>
+      <div class="doc-chip-list" style="margin-top:12px;">
+        <span class="doc-chip">Period { _esc(period_label) }</span>
+        <span class="doc-chip">Cadence { _esc(cadence) }</span>
+        <span class="doc-chip">Personnel {len(personnel)}</span>
+      </div>
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Watch Team</h2>
+      <div class="doc-chip-list">{roster_html}</div>
+      <div class="doc-note-box" style="margin-top:12px;">Relief handoff should include radio status, current incidents, perimeter notes, and any pending tasks before the next operator takes over.</div>
+    </div>
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-panel">
+    <h2 class="doc-section-title">Shift Assignments</h2>
+    {schedule_html}
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-grid-2">
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Daily Coverage</h2>
+      {coverage_html}
+    </div>
+    <div class="doc-panel">
+      <h2 class="doc-section-title">Operator Notes</h2>
+      {notes_html}
+    </div>
+  </div>
+</section>
+<section class="doc-section">
+  <div class="doc-footer">
+    <span>Watch Schedule - {_esc(str(sched["name"]))}</span>
+    <span>Generated {generated_at}</span>
+  </div>
+</section>'''
+
+        html = render_print_document(
+            f'Watch Schedule - {sched["name"]}',
+            'Structured roster for guard rotations, post coverage, and handoff planning.',
+            body,
+            eyebrow='NOMAD Field Desk Watch Rotation',
+            meta_items=[f'Generated {generated_at}', _esc(period_label)],
+            stat_items=[
+                ('Personnel', len(personnel)),
+                ('Shifts', len(schedule)),
+                ('Cadence', cadence),
+                ('Days', len(daily_counts) or 0),
+            ],
+            accent_start='#1a2e46',
+            accent_end='#395a73',
+            max_width='1100px',
+        )
+        return Response(html, mimetype='text/html')
 
     # ─── Sunrise/Sunset Engine (Phase 15) ─────────────────────────────
 
@@ -4956,6 +5379,7 @@ th {{ background: #eee; font-weight: 700; }}
     from web.blueprints.media import media_bp
     from web.blueprints.maps import maps_bp
     from web.blueprints.system import system_bp
+    from web.blueprints.situation_room import situation_room_bp
     app.register_blueprint(services_bp)
     app.register_blueprint(ai_bp)
     app.register_blueprint(inventory_bp)
@@ -4963,6 +5387,7 @@ th {{ background: #eee; font-weight: 700; }}
     app.register_blueprint(media_bp)
     app.register_blueprint(maps_bp)
     app.register_blueprint(system_bp)
+    app.register_blueprint(situation_room_bp)
 
     # ─── Advanced Routes (Phases 16, 18, 19, 20) ────────────────────
     from web.routes_advanced import register_advanced_routes
