@@ -2100,6 +2100,25 @@ def api_sitroom_diseases():
     return jsonify({'outbreaks': [dict(r) for r in rows], 'count': len(rows)})
 
 
+@situation_room_bp.route('/api/sitroom/category-feed/<category>')
+def api_sitroom_category_feed(category):
+    """Return news for a specific category."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_news WHERE category = ? ORDER BY cached_at DESC LIMIT 15",
+                          (category,)).fetchall()
+    return jsonify({'articles': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/security-advisories')
+def api_sitroom_security_advisories():
+    """Return security/travel advisories from news."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title, link, source_name FROM sitroom_news WHERE LOWER(title) LIKE '%advisory%' OR LOWER(title) LIKE '%travel warning%' OR LOWER(title) LIKE '%travel ban%' OR LOWER(title) LIKE '%evacuation%' OR LOWER(title) LIKE '%embassy%' ORDER BY cached_at DESC LIMIT 15"
+        ).fetchall()
+    return jsonify({'advisories': [dict(r) for r in rows], 'count': len(rows)})
+
+
 @situation_room_bp.route('/api/sitroom/central-banks')
 def api_sitroom_central_banks():
     """Return central bank news and policy."""
