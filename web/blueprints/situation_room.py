@@ -314,6 +314,25 @@ RSS_FEEDS = {
         {'name': 'Spaceflight Now', 'url': 'https://spaceflightnow.com/feed/', 'category': 'Space'},
         {'name': 'NASA Spaceflight', 'url': 'https://www.nasaspaceflight.com/feed/', 'category': 'Space'},
     ],
+    'good_news': [
+        {'name': 'Good News Network', 'url': 'https://www.goodnewsnetwork.org/feed/', 'category': 'Good News'},
+        {'name': 'Positive News', 'url': 'https://www.positive.news/feed/', 'category': 'Good News'},
+        {'name': 'Reasons to be Cheerful', 'url': 'https://reasonstobecheerful.world/feed/', 'category': 'Good News'},
+    ],
+    'conservation': [
+        {'name': 'Mongabay', 'url': 'https://news.mongabay.com/feed/', 'category': 'Conservation'},
+        {'name': 'Conservation Intl', 'url': 'https://www.conservation.org/blog/rss', 'category': 'Conservation'},
+    ],
+    'cloud_infra': [
+        {'name': 'The New Stack', 'url': 'https://thenewstack.io/feed/', 'category': 'Cloud'},
+        {'name': 'InfoQ', 'url': 'https://feed.infoq.com/', 'category': 'Cloud'},
+        {'name': 'DevOps.com', 'url': 'https://devops.com/feed/', 'category': 'Cloud'},
+    ],
+    'developer': [
+        {'name': 'Dev.to', 'url': 'https://dev.to/feed', 'category': 'Developer'},
+        {'name': 'Lobsters', 'url': 'https://lobste.rs/rss', 'category': 'Developer'},
+        {'name': 'GitHub Blog', 'url': 'https://github.blog/feed/', 'category': 'Developer'},
+    ],
     'supply_chain': [
         {'name': 'Supply Chain Dive', 'url': 'https://www.supplychaindive.com/feeds/news/', 'category': 'Supply Chain'},
         {'name': 'Freightwaves', 'url': 'https://www.freightwaves.com/feed', 'category': 'Supply Chain'},
@@ -2106,6 +2125,46 @@ def api_sitroom_category_feed(category):
     with db_session() as db:
         rows = db.execute("SELECT * FROM sitroom_news WHERE category = ? ORDER BY cached_at DESC LIMIT 15",
                           (category,)).fetchall()
+    return jsonify({'articles': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/rd-signal')
+def api_sitroom_rd_signal():
+    """Return defense R&D / patent signal news."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title, link, source_name FROM sitroom_news WHERE LOWER(title) LIKE '%patent%' OR LOWER(title) LIKE '%darpa%' OR LOWER(title) LIKE '%defense research%' OR LOWER(title) LIKE '%hypersonic%' OR LOWER(title) LIKE '%weapons system%' OR LOWER(title) LIKE '%defense contract%' ORDER BY cached_at DESC LIMIT 15"
+        ).fetchall()
+    return jsonify({'articles': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/chokepoints')
+def api_sitroom_chokepoints():
+    """Return strategic chokepoint / shipping lane news."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title, link, source_name FROM sitroom_news WHERE LOWER(title) LIKE '%hormuz%' OR LOWER(title) LIKE '%suez%' OR LOWER(title) LIKE '%malacca%' OR LOWER(title) LIKE '%bosphorus%' OR LOWER(title) LIKE '%panama canal%' OR LOWER(title) LIKE '%red sea%' OR LOWER(title) LIKE '%houthi%' OR LOWER(title) LIKE '%chokepoint%' ORDER BY cached_at DESC LIMIT 15"
+        ).fetchall()
+    return jsonify({'articles': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/ai-regulation')
+def api_sitroom_ai_regulation():
+    """Return AI policy and regulation news."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title, link, source_name FROM sitroom_news WHERE LOWER(title) LIKE '%ai regulation%' OR LOWER(title) LIKE '%ai policy%' OR LOWER(title) LIKE '%ai act%' OR LOWER(title) LIKE '%ai safety%' OR LOWER(title) LIKE '%ai governance%' OR LOWER(title) LIKE '%artificial intelligence law%' ORDER BY cached_at DESC LIMIT 15"
+        ).fetchall()
+    return jsonify({'articles': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/fin-regulation')
+def api_sitroom_fin_regulation():
+    """Return financial regulation news."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title, link, source_name FROM sitroom_news WHERE LOWER(title) LIKE '%sec %' OR LOWER(title) LIKE '%regulation%' OR LOWER(title) LIKE '%compliance%' OR LOWER(title) LIKE '%banking regulation%' OR LOWER(title) LIKE '%dodd-frank%' OR LOWER(title) LIKE '%financial regulation%' ORDER BY cached_at DESC LIMIT 15"
+        ).fetchall()
     return jsonify({'articles': [dict(r) for r in rows], 'count': len(rows)})
 
 
