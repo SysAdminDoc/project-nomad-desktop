@@ -4741,3 +4741,122 @@ def api_sitroom_events_geojson():
             }
         })
     return jsonify({'type': 'FeatureCollection', 'features': features})
+
+
+@situation_room_bp.route('/api/sitroom/nuclear-risk')
+def api_sitroom_nuclear_risk():
+    """Assess nuclear threat level from news + OREF + conflict data."""
+    with db_session() as db:
+        nuke_news = db.execute(
+            "SELECT COUNT(*) FROM sitroom_news WHERE LOWER(title) LIKE '%nuclear%' OR LOWER(title) LIKE '%atomic%' "
+            "OR LOWER(title) LIKE '%warhead%' OR LOWER(title) LIKE '%icbm%' OR LOWER(title) LIKE '%enrichment%'"
+        ).fetchone()[0]
+        missile_events = db.execute(
+            "SELECT COUNT(*) FROM sitroom_events WHERE LOWER(title) LIKE '%missile%' OR LOWER(title) LIKE '%ballistic%'"
+        ).fetchone()[0]
+        headlines = db.execute(
+            "SELECT title, source_name FROM sitroom_news WHERE LOWER(title) LIKE '%nuclear%' ORDER BY cached_at DESC LIMIT 5"
+        ).fetchall()
+    risk = min(5, nuke_news // 3 + missile_events)
+    labels = {0: 'NOMINAL', 1: 'LOW', 2: 'GUARDED', 3: 'ELEVATED', 4: 'HIGH', 5: 'CRITICAL'}
+    return jsonify({
+        'risk_level': risk, 'label': labels.get(risk, 'UNKNOWN'),
+        'nuclear_mentions': nuke_news, 'missile_events': missile_events,
+        'headlines': [dict(r) for r in headlines],
+    })
+
+
+@situation_room_bp.route('/api/sitroom/energy-security')
+def api_sitroom_energy_security():
+    """Energy security assessment — oil, gas, renewable mix."""
+    with db_session() as db:
+        oil = db.execute("SELECT price, change_24h FROM sitroom_markets WHERE LOWER(symbol) LIKE '%brent%' OR LOWER(symbol) LIKE '%oil%' LIMIT 2").fetchall()
+        energy_news = db.execute(
+            "SELECT title, source_name FROM sitroom_news WHERE LOWER(title) LIKE '%energy%' "
+            "OR LOWER(title) LIKE '%oil%price%' OR LOWER(title) LIKE '%opec%' "
+            "OR LOWER(title) LIKE '%natural gas%' OR LOWER(title) LIKE '%lng%' "
+            "ORDER BY cached_at DESC LIMIT 10"
+        ).fetchall()
+        renewable_news = db.execute(
+            "SELECT title FROM sitroom_news WHERE category = 'Renewable Energy' ORDER BY cached_at DESC LIMIT 5"
+        ).fetchall()
+    return jsonify({
+        'oil_prices': [dict(r) for r in oil],
+        'energy_news': [dict(r) for r in energy_news],
+        'renewable_news': [dict(r) for r in renewable_news],
+    })
+
+
+@situation_room_bp.route('/api/sitroom/pandemic-watch')
+def api_sitroom_pandemic_watch():
+    """Pandemic early warning — disease outbreaks + WHO data."""
+    with db_session() as db:
+        outbreaks = db.execute(
+            "SELECT title, lat, lng, detail_json FROM sitroom_events WHERE event_type = 'disease' ORDER BY cached_at DESC LIMIT 20"
+        ).fetchall()
+        health_news = db.execute(
+            "SELECT title, source_name FROM sitroom_news WHERE LOWER(title) LIKE '%pandemic%' "
+            "OR LOWER(title) LIKE '%outbreak%' OR LOWER(title) LIKE '%epidemic%' "
+            "OR LOWER(title) LIKE '%virus%' OR LOWER(title) LIKE '%who %' "
+            "ORDER BY cached_at DESC LIMIT 10"
+        ).fetchall()
+    # Count unique countries affected
+    countries = set()
+    for r in outbreaks:
+        title = dict(r)['title'].lower()
+        for country in _COUNTRY_COORDS:
+            if country in title:
+                countries.add(country)
+    return jsonify({
+        'outbreaks': [dict(r) for r in outbreaks],
+        'health_news': [dict(r) for r in health_news],
+        'countries_affected': len(countries),
+        'alert_level': 'elevated' if len(countries) > 5 else 'normal',
+    })
+
+
+@situation_room_bp.route('/api/sitroom/migration-flows')
+def api_sitroom_migration_flows():
+    """Migration and displacement flow analysis."""
+    with db_session() as db:
+        displacement = db.execute(
+            "SELECT title, magnitude, detail_json FROM sitroom_events WHERE event_type = 'displacement' ORDER BY magnitude DESC LIMIT 20"
+        ).fetchall()
+        refugee_news = db.execute(
+            "SELECT title, source_name FROM sitroom_news WHERE LOWER(title) LIKE '%refugee%' "
+            "OR LOWER(title) LIKE '%migrant%' OR LOWER(title) LIKE '%asylum%' "
+            "OR LOWER(title) LIKE '%displacement%' OR LOWER(title) LIKE '%border%crisis%' "
+            "ORDER BY cached_at DESC LIMIT 10"
+        ).fetchall()
+    total_displaced = sum(dict(r).get('magnitude', 0) or 0 for r in displacement)
+    return jsonify({
+        'displacement_data': [dict(r) for r in displacement],
+        'news': [dict(r) for r in refugee_news],
+        'total_displaced': total_displaced,
+    })
+
+
+@situation_room_bp.route('/api/sitroom/space-situational')
+def api_sitroom_space_situational():
+    """Space situational awareness — debris, launches, weather."""
+    with db_session() as db:
+        space_wx = db.execute("SELECT * FROM sitroom_space_weather").fetchall()
+        space_news = db.execute(
+            "SELECT title, source_name FROM sitroom_news WHERE category = 'Space' ORDER BY cached_at DESC LIMIT 10"
+        ).fetchall()
+        launches = db.execute(
+            "SELECT title FROM sitroom_news WHERE LOWER(title) LIKE '%launch%' AND "
+            "(LOWER(title) LIKE '%rocket%' OR LOWER(title) LIKE '%spacex%' OR LOWER(title) LIKE '%satellite%') "
+            "ORDER BY cached_at DESC LIMIT 5"
+        ).fetchall()
+    wx_data = {}
+    for r in space_wx:
+        try:
+            wx_data[dict(r)['data_type']] = json.loads(dict(r)['value_json'])
+        except Exception:
+            pass
+    return jsonify({
+        'space_weather': wx_data,
+        'space_news': [dict(r) for r in space_news],
+        'recent_launches': [dict(r)['title'] for r in launches],
+    })
