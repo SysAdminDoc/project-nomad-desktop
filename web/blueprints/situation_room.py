@@ -72,7 +72,7 @@ FETCH_COOLDOWN = {
     'service_status': 300, 'social_velocity': 600,
     'renewable': 3600, 'bigmac': 86400,
     'github_trending': 3600, 'fuel_prices': 7200,
-    'product_hunt': 3600,
+    'product_hunt': 3600, 'macro_stress': 3600,
 }
 
 # ─── Live YouTube Channels ────────────────────────────────────────────
@@ -1430,6 +1430,54 @@ def _fetch_bigmac_index():
     log.info(f"Situation Room: cached {len(latest)} Big Mac Index entries")
 
 
+def _fetch_macro_stress():
+    """Fetch macro stress indicators from FRED (St. Louis Fed)."""
+    if not _can_fetch('macro_stress'):
+        return
+    _set_last_fetch('macro_stress')
+
+    indicators = {}
+
+    # FRED series (all public, DEMO_KEY or no key needed for low volume)
+    fred_series = {
+        'STLFSI2': 'Financial Stress Index',
+        'T10Y2Y': '10Y-2Y Yield Spread',
+        'VIXCLS': 'VIX Volatility',
+        'BAMLH0A0HYM2': 'High Yield Spread',
+        'DCOILBRENTEU': 'Brent Crude Oil',
+        'UNRATE': 'Unemployment Rate',
+        'CPIAUCSL': 'CPI (All Urban)',
+    }
+    for series_id, label in fred_series.items():
+        try:
+            resp = requests.get(f'https://api.stlouisfed.org/fred/series/observations',
+                                params={'series_id': series_id, 'api_key': 'DEMO_KEY',
+                                        'sort_order': 'desc', 'limit': 1, 'file_type': 'json'},
+                                timeout=8, headers=_REQ_HEADERS)
+            if resp.ok:
+                obs = resp.json().get('observations', [])
+                if obs and obs[0].get('value', '.') != '.':
+                    indicators[series_id] = {'label': label, 'value': float(obs[0]['value']),
+                                              'date': obs[0].get('date', '')}
+        except Exception:
+            pass
+
+    if not indicators:
+        return
+
+    with db_session() as db:
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'macro_indicator'")
+        for sid, data in indicators.items():
+            eid = hashlib.sha256(f"macro:{sid}".encode()).hexdigest()[:16]
+            db.execute('''INSERT OR IGNORE INTO sitroom_events
+                (event_id, event_type, title, magnitude, lat, lng, event_time, detail_json)
+                VALUES (?, ?, ?, ?, 0, 0, 0, ?)''',
+                (eid, 'macro_indicator', data['label'], data['value'],
+                 json.dumps({'series': sid, 'value': data['value'], 'date': data['date']})))
+        db.commit()
+    log.info(f"Situation Room: cached {len(indicators)} macro stress indicators")
+
+
 def _fetch_product_hunt():
     """Fetch Product Hunt trending products via RSS."""
     if not _can_fetch('product_hunt'):
@@ -1684,6 +1732,7 @@ def refresh_all_feeds():
             _fetch_github_trending()
             _fetch_fuel_prices()
             _fetch_product_hunt()
+            _fetch_macro_stress()
             _compute_correlations()
         except Exception as e:
             log.exception(f"Situation Room refresh error: {e}")
@@ -1993,6 +2042,108 @@ def api_sitroom_diseases():
     with db_session() as db:
         rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'disease' ORDER BY cached_at DESC LIMIT 30").fetchall()
     return jsonify({'outbreaks': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/macro-stress')
+def api_sitroom_macro_stress():
+    """Return macro stress indicators from FRED."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'macro_indicator' ORDER BY title").fetchall()
+    return jsonify({'indicators': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/forex')
+def api_sitroom_forex():
+    """Return forex-specific market data."""
+    with db_session() as db:
+        rows = db.execute("SELECT * FROM sitroom_markets WHERE market_type = 'forex' ORDER BY symbol").fetchall()
+    return jsonify({'pairs': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/crypto-sectors')
+def api_sitroom_crypto_sectors():
+    """Return crypto data grouped by type."""
+    with db_session() as db:
+        crypto = db.execute("SELECT * FROM sitroom_markets WHERE market_type = 'crypto' ORDER BY price DESC").fetchall()
+        stables = db.execute("SELECT * FROM sitroom_markets WHERE market_type = 'stablecoin' ORDER BY symbol").fetchall()
+    return jsonify({'crypto': [dict(r) for r in crypto], 'stablecoins': [dict(r) for r in stables]})
+
+
+@situation_room_bp.route('/api/sitroom/layoffs')
+def api_sitroom_layoffs():
+    """Return layoff-related news."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title, link, source_name FROM sitroom_news WHERE category = 'Layoffs' OR LOWER(title) LIKE '%layoff%' OR LOWER(title) LIKE '%job cuts%' OR LOWER(title) LIKE '%workforce reduction%' ORDER BY cached_at DESC LIMIT 15"
+        ).fetchall()
+    return jsonify({'layoffs': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/airline-intel')
+def api_sitroom_airline_intel():
+    """Return aviation intelligence from news."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title, link, source_name FROM sitroom_news WHERE LOWER(title) LIKE '%airline%' OR LOWER(title) LIKE '%airport%' OR LOWER(title) LIKE '%flight%' OR LOWER(title) LIKE '%aviation%' OR LOWER(title) LIKE '%boeing%' OR LOWER(title) LIKE '%airbus%' ORDER BY cached_at DESC LIMIT 15"
+        ).fetchall()
+    return jsonify({'articles': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/supply-chain')
+def api_sitroom_supply_chain():
+    """Return supply chain intelligence."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title, link, source_name FROM sitroom_news WHERE category = 'Supply Chain' OR LOWER(title) LIKE '%supply chain%' OR LOWER(title) LIKE '%shipping%' OR LOWER(title) LIKE '%freight%' OR LOWER(title) LIKE '%port%' OR LOWER(title) LIKE '%logistics%' ORDER BY cached_at DESC LIMIT 15"
+        ).fetchall()
+    return jsonify({'articles': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/news-sentiment')
+def api_sitroom_news_sentiment():
+    """Compute simple sentiment distribution from news headlines."""
+    negative_words = {'war', 'attack', 'crisis', 'crash', 'death', 'killed', 'bomb', 'threat', 'sanctions', 'collapse', 'recession', 'disaster', 'emergency', 'conflict', 'strike', 'protest', 'violence', 'terror', 'fraud'}
+    positive_words = {'growth', 'recovery', 'peace', 'deal', 'agreement', 'breakthrough', 'record', 'surge', 'rally', 'boost', 'innovation', 'success', 'win', 'progress', 'advance'}
+    with db_session() as db:
+        rows = db.execute("SELECT title FROM sitroom_news ORDER BY cached_at DESC LIMIT 100").fetchall()
+    pos = neg = neu = 0
+    for r in rows:
+        words = set(dict(r)['title'].lower().split())
+        if words & negative_words:
+            neg += 1
+        elif words & positive_words:
+            pos += 1
+        else:
+            neu += 1
+    total = pos + neg + neu or 1
+    return jsonify({'positive': pos, 'negative': neg, 'neutral': neu, 'total': total,
+                    'sentiment_score': round((pos - neg) / total * 100, 1)})
+
+
+@situation_room_bp.route('/api/sitroom/cii-geo')
+def api_sitroom_cii_geo():
+    """Return CII scores per country for choropleth rendering."""
+    with db_session() as db:
+        events = db.execute("SELECT detail_json, event_type, magnitude FROM sitroom_events").fetchall()
+    scores = {}
+    for ev in events:
+        det = {}
+        try:
+            det = json.loads(dict(ev)['detail_json']) if dict(ev)['detail_json'] else {}
+        except (json.JSONDecodeError, TypeError):
+            pass
+        country = det.get('country', '')
+        if not country or country == 'Unknown':
+            continue
+        if country not in scores:
+            scores[country] = 0
+        scores[country] += 1
+        if dict(ev)['magnitude']:
+            scores[country] += float(dict(ev)['magnitude'])
+    # Normalize to 0-100
+    max_score = max(scores.values()) if scores else 1
+    result = {c: min(100, round(s / max_score * 100)) for c, s in scores.items()}
+    return jsonify({'scores': result})
 
 
 @situation_room_bp.route('/api/sitroom/product-hunt')
