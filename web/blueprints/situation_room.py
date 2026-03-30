@@ -4116,3 +4116,286 @@ def api_sitroom_search():
     results = [dict(r) for r in news] + [dict(r) for r in events]
     results.sort(key=lambda x: x.get('title', ''))
     return jsonify({'results': results[:30], 'count': len(results), 'query': query})
+
+
+# ─── Batch: Additional API Routes to close WM gap ─────────────────────
+
+@situation_room_bp.route('/api/sitroom/news-by-source')
+def api_sitroom_news_by_source():
+    """Return news grouped by source."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT source_name, COUNT(*) as count FROM sitroom_news "
+            "GROUP BY source_name ORDER BY count DESC LIMIT 30"
+        ).fetchall()
+    return jsonify({'sources': [dict(r) for r in rows]})
+
+
+@situation_room_bp.route('/api/sitroom/news-by-hour')
+def api_sitroom_news_by_hour():
+    """Return news volume by hour for last 24h."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT strftime('%H', cached_at) as hour, COUNT(*) as count FROM sitroom_news "
+            "WHERE cached_at > datetime('now', '-24 hours') GROUP BY hour ORDER BY hour"
+        ).fetchall()
+    return jsonify({'hours': [dict(r) for r in rows]})
+
+
+@situation_room_bp.route('/api/sitroom/top-entities')
+def api_sitroom_top_entities():
+    """Extract top mentioned entities (countries/orgs) from recent news."""
+    entity_counts = {}
+    with db_session() as db:
+        rows = db.execute("SELECT title FROM sitroom_news ORDER BY cached_at DESC LIMIT 300").fetchall()
+
+    for r in rows:
+        title = dict(r)['title']
+        for country, _ in _COUNTRY_COORDS.items():
+            if country in title.lower():
+                entity_counts[country.title()] = entity_counts.get(country.title(), 0) + 1
+
+    sorted_entities = sorted(entity_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+    return jsonify({'entities': [{'name': k, 'count': v} for k, v in sorted_entities]})
+
+
+@situation_room_bp.route('/api/sitroom/category-summary')
+def api_sitroom_category_summary():
+    """Return article count by category."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT category, COUNT(*) as count FROM sitroom_news GROUP BY category ORDER BY count DESC"
+        ).fetchall()
+    return jsonify({'categories': [dict(r) for r in rows]})
+
+
+@situation_room_bp.route('/api/sitroom/event-summary')
+def api_sitroom_event_summary():
+    """Return event counts by type."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT event_type, COUNT(*) as count FROM sitroom_events GROUP BY event_type ORDER BY count DESC"
+        ).fetchall()
+    return jsonify({'event_types': [dict(r) for r in rows]})
+
+
+@situation_room_bp.route('/api/sitroom/market-movers')
+def api_sitroom_market_movers():
+    """Return top market movers (biggest absolute changes)."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT symbol, price, change_24h, market_type FROM sitroom_markets "
+            "ORDER BY ABS(change_24h) DESC LIMIT 15"
+        ).fetchall()
+    return jsonify({'movers': [dict(r) for r in rows]})
+
+
+@situation_room_bp.route('/api/sitroom/crypto-overview')
+def api_sitroom_crypto_overview():
+    """Return crypto market overview with dominance and volume."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT * FROM sitroom_markets WHERE market_type = 'crypto' ORDER BY price DESC"
+        ).fetchall()
+    coins = [dict(r) for r in rows]
+    total_cap = sum(c.get('price', 0) for c in coins)  # simplified
+    return jsonify({'coins': coins, 'count': len(coins)})
+
+
+@situation_room_bp.route('/api/sitroom/forex-matrix')
+def api_sitroom_forex_matrix():
+    """Return forex currency pairs with changes."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT * FROM sitroom_markets WHERE market_type = 'forex' ORDER BY symbol"
+        ).fetchall()
+    return jsonify({'pairs': [dict(r) for r in rows]})
+
+
+@situation_room_bp.route('/api/sitroom/commodity-overview')
+def api_sitroom_commodity_overview():
+    """Return commodity prices overview."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT * FROM sitroom_markets WHERE market_type = 'commodity' ORDER BY symbol"
+        ).fetchall()
+    return jsonify({'commodities': [dict(r) for r in rows]})
+
+
+@situation_room_bp.route('/api/sitroom/sector-performance')
+def api_sitroom_sector_performance():
+    """Return sector ETF performance ranked."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT * FROM sitroom_markets WHERE market_type = 'sector' ORDER BY change_24h DESC"
+        ).fetchall()
+    return jsonify({'sectors': [dict(r) for r in rows]})
+
+
+@situation_room_bp.route('/api/sitroom/recent-earthquakes')
+def api_sitroom_recent_earthquakes():
+    """Return recent earthquakes with filtering."""
+    min_mag = request.args.get('min_mag', 0, type=float)
+    limit = min(request.args.get('limit', 50, type=int), 200)
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT * FROM sitroom_events WHERE event_type = 'earthquake' AND magnitude >= ? "
+            "ORDER BY magnitude DESC LIMIT ?", (min_mag, limit)
+        ).fetchall()
+    return jsonify({'earthquakes': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/weather-alerts')
+def api_sitroom_weather_alerts():
+    """Return active weather alerts."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT * FROM sitroom_events WHERE event_type = 'weather_alert' ORDER BY cached_at DESC LIMIT 30"
+        ).fetchall()
+    return jsonify({'alerts': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/conflict-map')
+def api_sitroom_conflict_map():
+    """Return all conflict events with coordinates for map overlay."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title, lat, lng, magnitude, event_type, detail_json FROM sitroom_events "
+            "WHERE event_type IN ('conflict', 'ucdp_conflict', 'oref_alert') AND lat != 0 "
+            "ORDER BY cached_at DESC LIMIT 100"
+        ).fetchall()
+    return jsonify({'conflicts': [dict(r) for r in rows], 'count': len(rows)})
+
+
+@situation_room_bp.route('/api/sitroom/export-csv')
+def api_sitroom_export_csv():
+    """Export cached news as CSV."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title, category, source_name, published, link FROM sitroom_news ORDER BY cached_at DESC LIMIT 500"
+        ).fetchall()
+    lines = ['title,category,source,published,link']
+    for r in rows:
+        d = dict(r)
+        line = ','.join(f'"{(d.get(k, "") or "").replace(chr(34), chr(34)+chr(34))}"'
+                        for k in ['title', 'category', 'source_name', 'published', 'link'])
+        lines.append(line)
+    from flask import Response
+    return Response('\n'.join(lines), mimetype='text/csv',
+                    headers={'Content-Disposition': 'attachment; filename=sitroom_news.csv'})
+
+
+@situation_room_bp.route('/api/sitroom/export-json')
+def api_sitroom_export_json():
+    """Export all cached data as JSON bundle."""
+    with db_session() as db:
+        news = db.execute("SELECT title, category, source_name, published, link FROM sitroom_news ORDER BY cached_at DESC LIMIT 200").fetchall()
+        events = db.execute("SELECT title, event_type, magnitude, lat, lng FROM sitroom_events ORDER BY cached_at DESC LIMIT 200").fetchall()
+        markets = db.execute("SELECT symbol, price, change_24h, market_type FROM sitroom_markets").fetchall()
+    return jsonify({
+        'exported_at': datetime.now().isoformat(),
+        'news': [dict(r) for r in news],
+        'events': [dict(r) for r in events],
+        'markets': [dict(r) for r in markets],
+    })
+
+
+@situation_room_bp.route('/api/sitroom/gps-jamming')
+def api_sitroom_gps_jamming():
+    """Return GPS jamming zone data with any related news."""
+    with db_session() as db:
+        news = db.execute(
+            "SELECT title, link, source_name FROM sitroom_news "
+            "WHERE LOWER(title) LIKE '%gps%' OR LOWER(title) LIKE '%jamming%' "
+            "OR LOWER(title) LIKE '%spoofing%' OR LOWER(title) LIKE '%navigation%interference%' "
+            "ORDER BY cached_at DESC LIMIT 10"
+        ).fetchall()
+    zones = [
+        {'region': 'Eastern Mediterranean', 'severity': 'high', 'lat': 34.7, 'lng': 33.0},
+        {'region': 'Moscow/Kremlin', 'severity': 'high', 'lat': 55.75, 'lng': 37.62},
+        {'region': 'Kaliningrad', 'severity': 'high', 'lat': 54.7, 'lng': 20.5},
+        {'region': 'Northern Israel/Golan', 'severity': 'high', 'lat': 32.9, 'lng': 35.3},
+        {'region': 'Persian Gulf', 'severity': 'medium', 'lat': 26.2, 'lng': 50.5},
+        {'region': 'Crimea/Black Sea', 'severity': 'high', 'lat': 44.6, 'lng': 33.5},
+        {'region': 'North Korea border', 'severity': 'medium', 'lat': 37.9, 'lng': 126.5},
+        {'region': 'South China Sea', 'severity': 'low', 'lat': 15.0, 'lng': 114.0},
+    ]
+    return jsonify({'zones': zones, 'news': [dict(r) for r in news]})
+
+
+@situation_room_bp.route('/api/sitroom/intel-digest')
+def api_sitroom_intel_digest():
+    """Compile a structured intelligence digest from all sources."""
+    with db_session() as db:
+        news_count = db.execute("SELECT COUNT(*) FROM sitroom_news").fetchone()[0]
+        event_count = db.execute("SELECT COUNT(*) FROM sitroom_events").fetchone()[0]
+        top_cats = db.execute(
+            "SELECT category, COUNT(*) as c FROM sitroom_news GROUP BY category ORDER BY c DESC LIMIT 5"
+        ).fetchall()
+        top_events = db.execute(
+            "SELECT event_type, COUNT(*) as c FROM sitroom_events GROUP BY event_type ORDER BY c DESC LIMIT 5"
+        ).fetchall()
+        breaking = db.execute(
+            "SELECT title FROM sitroom_news WHERE LOWER(title) LIKE '%breaking%' ORDER BY cached_at DESC LIMIT 3"
+        ).fetchall()
+
+    return jsonify({
+        'total_articles': news_count,
+        'total_events': event_count,
+        'top_categories': [dict(r) for r in top_cats],
+        'top_event_types': [dict(r) for r in top_events],
+        'breaking': [dict(r)['title'] for r in breaking],
+        'generated_at': datetime.now().isoformat(),
+    })
+
+
+@situation_room_bp.route('/api/sitroom/watchlist', methods=['GET', 'POST', 'DELETE'])
+def api_sitroom_watchlist():
+    """Manage a keyword watchlist for personalized alerts."""
+    with db_session() as db:
+        db.execute('''CREATE TABLE IF NOT EXISTS sitroom_watchlist
+            (id INTEGER PRIMARY KEY, keyword TEXT UNIQUE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+
+        if request.method == 'POST':
+            data = request.get_json(silent=True) or {}
+            kw = (data.get('keyword', '') or '')[:100].strip()
+            if kw:
+                db.execute('INSERT OR IGNORE INTO sitroom_watchlist (keyword) VALUES (?)', (kw,))
+                db.commit()
+            return jsonify({'added': kw})
+
+        if request.method == 'DELETE':
+            data = request.get_json(silent=True) or {}
+            kw = data.get('keyword', '')
+            if kw:
+                db.execute('DELETE FROM sitroom_watchlist WHERE keyword = ?', (kw,))
+                db.commit()
+            return jsonify({'deleted': kw})
+
+        # GET — return watchlist with match counts
+        rows = db.execute('SELECT keyword FROM sitroom_watchlist ORDER BY created_at DESC').fetchall()
+        watchlist = []
+        for r in rows:
+            kw = dict(r)['keyword']
+            count = db.execute(
+                "SELECT COUNT(*) FROM sitroom_news WHERE LOWER(title) LIKE ?",
+                (f'%{kw.lower()}%',)
+            ).fetchone()[0]
+            watchlist.append({'keyword': kw, 'matches': count})
+        return jsonify({'watchlist': watchlist})
+
+
+@situation_room_bp.route('/api/sitroom/heatmap-data')
+def api_sitroom_heatmap_data():
+    """Return event density data for heatmap visualization."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT lat, lng, event_type, magnitude FROM sitroom_events "
+            "WHERE lat != 0 AND lng != 0 ORDER BY cached_at DESC LIMIT 500"
+        ).fetchall()
+    points = []
+    for r in rows:
+        d = dict(r)
+        weight = max(1, (d.get('magnitude') or 1))
+        points.append({'lat': d['lat'], 'lng': d['lng'], 'weight': weight, 'type': d.get('event_type', '')})
+    return jsonify({'points': points, 'count': len(points)})
