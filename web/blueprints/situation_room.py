@@ -4566,7 +4566,8 @@ def api_sitroom_map_stats():
         'stock_exchanges': 51, 'commodity_hubs': 37, 'startup_hubs': 32,
         'gps_jamming': 26, 'trade_routes': 24, 'accelerators': 26,
         'refugee_camps': 20, 'un_missions': 16, 'internet_exchanges': 28,
-        'embassies': 14,
+        'embassies': 14, 'desalination': 18, 'weather_stations': 20,
+        'space_tracking': 16, 'rare_earths': 12,
     }
     return jsonify({
         'live_events': [dict(r) for r in event_counts],
@@ -4613,10 +4614,10 @@ def api_sitroom_risk_radar():
 def api_sitroom_version():
     """Return Situation Room version and capabilities."""
     return jsonify({
-        'version': '6.17',
-        'api_routes': 120,
-        'map_layers': 36,
-        'static_points': 1121,
+        'version': '6.18',
+        'api_routes': 126,
+        'map_layers': 40,
+        'static_points': 1187,
         'data_sources': 36,
         'fetch_workers': 34,
         'telegram_channels': 43,
@@ -4626,3 +4627,117 @@ def api_sitroom_version():
                       'country_briefs', 'watchlist', 'export_csv_json',
                       'full_text_search', 'anomaly_detection', 'circuit_breaker'],
     })
+
+
+@situation_room_bp.route('/api/sitroom/correlation-matrix')
+def api_sitroom_correlation_matrix():
+    """Return cross-signal correlation strength between domains."""
+    domains = ['geopolitical', 'economic', 'cyber', 'energy', 'climate', 'health']
+    matrix = {}
+    with db_session() as db:
+        corr = db.execute(
+            "SELECT title, detail_json FROM sitroom_events WHERE event_type = 'correlation' ORDER BY magnitude DESC LIMIT 30"
+        ).fetchall()
+    for r in corr:
+        d = dict(r)
+        try:
+            detail = json.loads(d.get('detail_json', '{}'))
+            st = detail.get('signal_type', '')
+            for dom in domains:
+                if dom in st.lower() or dom in d['title'].lower():
+                    matrix[dom] = matrix.get(dom, 0) + 1
+        except Exception:
+            pass
+    return jsonify({'matrix': matrix, 'domains': domains})
+
+
+@situation_room_bp.route('/api/sitroom/infrastructure-risk')
+def api_sitroom_infrastructure_risk():
+    """Assess critical infrastructure risk from events + news."""
+    risks = {}
+    with db_session() as db:
+        # Energy
+        energy_news = db.execute(
+            "SELECT COUNT(*) FROM sitroom_news WHERE LOWER(title) LIKE '%pipeline%' OR LOWER(title) LIKE '%power grid%' OR LOWER(title) LIKE '%blackout%' OR LOWER(title) LIKE '%refinery%'"
+        ).fetchone()[0]
+        risks['energy'] = {'news_count': energy_news, 'risk': 'elevated' if energy_news > 5 else 'normal'}
+        # Telecom
+        telecom = db.execute(
+            "SELECT COUNT(*) FROM sitroom_events WHERE event_type = 'internet_outage'"
+        ).fetchone()[0]
+        risks['telecom'] = {'outages': telecom, 'risk': 'elevated' if telecom > 3 else 'normal'}
+        # Transport
+        transport = db.execute(
+            "SELECT COUNT(*) FROM sitroom_news WHERE LOWER(title) LIKE '%port%closure%' OR LOWER(title) LIKE '%airport%shut%' OR LOWER(title) LIKE '%shipping%disrupt%'"
+        ).fetchone()[0]
+        risks['transport'] = {'disruptions': transport, 'risk': 'elevated' if transport > 2 else 'normal'}
+        # Water
+        water = db.execute(
+            "SELECT COUNT(*) FROM sitroom_news WHERE LOWER(title) LIKE '%water%crisis%' OR LOWER(title) LIKE '%drought%' OR LOWER(title) LIKE '%flood%'"
+        ).fetchone()[0]
+        risks['water'] = {'events': water, 'risk': 'elevated' if water > 3 else 'normal'}
+    return jsonify({'infrastructure': risks})
+
+
+@situation_room_bp.route('/api/sitroom/supply-chain-risk')
+def api_sitroom_supply_chain_risk():
+    """Assess global supply chain disruption risk."""
+    with db_session() as db:
+        chokepoint_news = db.execute(
+            "SELECT COUNT(*) FROM sitroom_news WHERE LOWER(title) LIKE '%suez%' OR LOWER(title) LIKE '%panama canal%' OR LOWER(title) LIKE '%hormuz%' OR LOWER(title) LIKE '%malacca%' OR LOWER(title) LIKE '%bab el%'"
+        ).fetchone()[0]
+        shipping_news = db.execute(
+            "SELECT COUNT(*) FROM sitroom_news WHERE LOWER(title) LIKE '%shipping%' OR LOWER(title) LIKE '%container%' OR LOWER(title) LIKE '%freight%' OR LOWER(title) LIKE '%supply chain%'"
+        ).fetchone()[0]
+        semiconductor_news = db.execute(
+            "SELECT COUNT(*) FROM sitroom_news WHERE LOWER(title) LIKE '%chip%shortage%' OR LOWER(title) LIKE '%semiconductor%' OR LOWER(title) LIKE '%tsmc%'"
+        ).fetchone()[0]
+    risk_score = min(10, chokepoint_news + shipping_news // 3 + semiconductor_news)
+    return jsonify({
+        'risk_score': risk_score,
+        'chokepoint_mentions': chokepoint_news,
+        'shipping_mentions': shipping_news,
+        'semiconductor_mentions': semiconductor_news,
+        'level': 'critical' if risk_score > 7 else 'elevated' if risk_score > 4 else 'normal',
+    })
+
+
+@situation_room_bp.route('/api/sitroom/ai-models')
+def api_sitroom_ai_models():
+    """Check which AI models are available for Situation Room features."""
+    models = []
+    try:
+        import ollama
+        available = ollama.list()
+        models = [m.get('name', m.get('model', '')) for m in available.get('models', [])]
+    except Exception:
+        pass
+    ai_features = {
+        'strategic_briefing': bool(models),
+        'country_brief': bool(models),
+        'deduction_panel': bool(models),
+        'market_brief': bool(models),
+    }
+    return jsonify({'models': models, 'features': ai_features})
+
+
+@situation_room_bp.route('/api/sitroom/events-geojson')
+def api_sitroom_events_geojson():
+    """Return all geocoded events as GeoJSON FeatureCollection."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT title, event_type, magnitude, lat, lng, cached_at FROM sitroom_events "
+            "WHERE lat != 0 AND lng != 0 ORDER BY cached_at DESC LIMIT 500"
+        ).fetchall()
+    features = []
+    for r in rows:
+        d = dict(r)
+        features.append({
+            'type': 'Feature',
+            'geometry': {'type': 'Point', 'coordinates': [d['lng'], d['lat']]},
+            'properties': {
+                'title': d['title'], 'event_type': d.get('event_type', ''),
+                'magnitude': d.get('magnitude'), 'time': d.get('cached_at', ''),
+            }
+        })
+    return jsonify({'type': 'FeatureCollection', 'features': features})
