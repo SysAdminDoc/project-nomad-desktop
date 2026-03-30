@@ -22,6 +22,7 @@ function initSituationRoom() {
   }
   _sitroomInitDone = true;
   _sitroomRefreshPanels();
+  _restoreLayerState();
   initSitroomMap();
   _initSitroomMapResize();
   _initSitroomClock();
@@ -453,25 +454,37 @@ async function loadSitroomSummary() {
   loadSitroomMapData();
 }
 
-/* ─── Markets ─── */
+/* ─── Markets (grouped by type) ─── */
 function renderSitroomMarkets(markets) {
   const c = document.getElementById('sitroom-market-ticker');
   if (!c) return;
   if (!markets.length) { c.innerHTML = '<div class="sitroom-empty">No market data — click Refresh</div>'; return; }
-  c.innerHTML = markets.map(m => {
-    const ch = m.change_24h || 0;
-    const up = ch >= 0;
-    const cls = up ? 'sitroom-market-up' : 'sitroom-market-down';
-    let price;
-    if (m.market_type === 'sentiment') price = m.price + '/100';
-    else if (m.price >= 1) price = '$' + Number(m.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    else price = '$' + Number(m.price).toFixed(6);
-    return `<div class="sitroom-market-card ${cls}">
-      <div class="sitroom-market-symbol">${escapeHtml(m.label || m.symbol)}</div>
-      <div class="sitroom-market-price">${price}</div>
-      <div class="sitroom-market-change">${up ? '&#9650;' : '&#9660;'} ${Math.abs(ch).toFixed(1)}%</div>
-    </div>`;
-  }).join('');
+  const groups = {index:'INDICES',forex:'FOREX',crypto:'CRYPTO',commodity:'COMMODITIES'};
+  const grouped = {};
+  markets.forEach(m => {
+    if (m.market_type === 'sector' || m.market_type === 'sentiment') return; // shown in other cards
+    const g = groups[m.market_type] || 'OTHER';
+    if (!grouped[g]) grouped[g] = [];
+    grouped[g].push(m);
+  });
+  let html = '';
+  for (const [label, items] of Object.entries(grouped)) {
+    html += `<div class="sr-market-group-label">${label}</div>`;
+    html += items.map(m => {
+      const ch = m.change_24h || 0;
+      const up = ch >= 0;
+      const cls = up ? 'sitroom-market-up' : 'sitroom-market-down';
+      let price;
+      if (m.price >= 1) price = '$' + Number(m.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      else price = '$' + Number(m.price).toFixed(4);
+      return `<div class="sitroom-market-card ${cls}">
+        <div class="sitroom-market-symbol">${escapeHtml(m.label || m.symbol)}</div>
+        <div class="sitroom-market-price">${price}</div>
+        <div class="sitroom-market-change">${up ? '&#9650;' : '&#9660;'} ${Math.abs(ch).toFixed(1)}%</div>
+      </div>`;
+    }).join('');
+  }
+  c.innerHTML = html;
 }
 
 /* ─── Space Weather ─── */
@@ -1508,13 +1521,44 @@ document.addEventListener('click', e => {
   if (a === 'toggle-map-fullscreen') _toggleMapFullscreen();
   if (a === 'toggle-globe') _toggleGlobe();
   if (a === 'export-report') _exportSitroomReport();
+  if (a === 'toggle-layers') {
+    const lp = document.getElementById('sr-layer-panel');
+    if (lp) lp.classList.toggle('open');
+  }
 });
 
 document.getElementById('sitroom-news-category')?.addEventListener('change', () => loadSitroomNews());
 document.getElementById('sitroom-quake-filter')?.addEventListener('change', () => renderSitroomQuakes());
 document.querySelectorAll('[data-sitroom-layer]').forEach(cb => cb.addEventListener('change', () => {
-  loadSitroomMapData(); _updateMapLegend(); _renderDayNight();
+  loadSitroomMapData(); _updateMapLegend(); _renderDayNight(); _updateActiveLayerCount(); _saveLayerState();
 }));
+
+function _updateActiveLayerCount() {
+  const badge = document.getElementById('sr-active-layer-count');
+  if (!badge) return;
+  let count = 0;
+  document.querySelectorAll('[data-sitroom-layer]').forEach(cb => { if (cb.checked) count++; });
+  badge.textContent = count;
+}
+
+function _saveLayerState() {
+  const state = {};
+  document.querySelectorAll('[data-sitroom-layer]').forEach(cb => {
+    state[cb.dataset.sitroomLayer] = cb.checked;
+  });
+  try { localStorage.setItem('sr-layer-state', JSON.stringify(state)); } catch(e) {}
+}
+
+function _restoreLayerState() {
+  try {
+    const state = JSON.parse(localStorage.getItem('sr-layer-state'));
+    if (!state) return;
+    document.querySelectorAll('[data-sitroom-layer]').forEach(cb => {
+      if (state[cb.dataset.sitroomLayer] !== undefined) cb.checked = state[cb.dataset.sitroomLayer];
+    });
+    _updateActiveLayerCount();
+  } catch(e) {}
+}
 
 // Search input handler
 document.getElementById('sr-search-input')?.addEventListener('input', e => {
