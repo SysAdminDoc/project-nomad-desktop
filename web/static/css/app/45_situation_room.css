@@ -1,3 +1,8 @@
+/* ─── Utility Panel Override ─── */
+/* Fix: .utility-panel-shell sets display:flex which overrides .is-hidden display:none
+   due to source order (premium CSS loads after app CSS). Force hidden to win. */
+.utility-panel-shell.is-hidden { display: none !important; }
+
 /* ─── Situation Room ─── */
 
 .sitroom-header {

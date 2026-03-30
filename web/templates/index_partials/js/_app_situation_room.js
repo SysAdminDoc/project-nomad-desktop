@@ -11,6 +11,9 @@ let _sitroomInitDone = false;
 function initSituationRoom() {
   // Close utility panels (LAN chat, Timers, Quick Actions) to declutter
   _closeSitroomOverlays();
+  // Re-close after a delay in case other init code opens them
+  setTimeout(_closeSitroomOverlays, 500);
+  setTimeout(_closeSitroomOverlays, 1500);
 
   if (_sitroomInitDone) {
     _sitroomLoadAll();
@@ -431,27 +434,39 @@ async function refreshSitroomFeeds() {
 
 /* ─── Close Overlays ─── */
 function _closeSitroomOverlays() {
-  // Hide LAN chat panel if open
-  const lanPanel = document.getElementById('lan-chat-panel');
-  if (lanPanel && !lanPanel.classList.contains('is-hidden')) {
-    setShellVisibility(lanPanel, false);
+  // Force-nuke all utility panels — set hidden class AND inline display:none
+  ['lan-chat-panel', 'timer-panel', 'quick-actions-menu'].forEach(id => {
+    const panel = document.getElementById(id);
+    if (panel) {
+      panel.classList.add('is-hidden');
+      panel.hidden = true;
+    }
+  });
+  // Reset button states
+  if (typeof setUtilityDockButtonExpanded === 'function') {
     setUtilityDockButtonExpanded('chat', false);
-    if (typeof _lanChatOpen !== 'undefined') _lanChatOpen = false;
-  }
-  // Hide timer panel if open
-  const timerPanel = document.getElementById('timer-panel');
-  if (timerPanel && !timerPanel.classList.contains('is-hidden')) {
-    setShellVisibility(timerPanel, false);
     setUtilityDockButtonExpanded('timer', false);
-    if (typeof _timerPanelOpen !== 'undefined') _timerPanelOpen = false;
-  }
-  // Hide quick actions if open
-  const qaMenu = document.getElementById('quick-actions-menu');
-  if (qaMenu && !qaMenu.classList.contains('is-hidden')) {
-    setShellVisibility(qaMenu, false);
     setUtilityDockButtonExpanded('actions', false);
-    if (typeof _qaOpen !== 'undefined') _qaOpen = false;
   }
+  // Reset JS state flags
+  if (typeof _lanChatOpen !== 'undefined') _lanChatOpen = false;
+  if (typeof _timerPanelOpen !== 'undefined') _timerPanelOpen = false;
+  if (typeof _qaOpen !== 'undefined') _qaOpen = false;
+
+  // Hide the copilot dock on Situation Room — it has its own AI briefing
+  const dock = document.getElementById('copilot-dock');
+  if (dock) dock.style.display = 'none';
+}
+
+// Restore copilot dock when leaving Situation Room
+function _restoreCopilotDock() {
+  const dock = document.getElementById('copilot-dock');
+  if (dock) dock.style.removeProperty('display');
+  // Un-hide panels so they work from other tabs
+  ['lan-chat-panel', 'timer-panel', 'quick-actions-menu'].forEach(id => {
+    const panel = document.getElementById(id);
+    if (panel) panel.hidden = false;
+  });
 }
 
 /* ─── Utility ─── */

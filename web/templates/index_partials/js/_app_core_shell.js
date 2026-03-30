@@ -267,6 +267,8 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (tab.dataset.tab === 'preparedness') { loadPrepTab(); }
     if (tab.dataset.tab === 'readiness') { loadReadinessScore(); loadReadinessNeeds(); }
     if (tab.dataset.tab === 'situation-room') { initSituationRoom(); }
+    // Restore copilot dock when leaving Situation Room
+    if (tab.dataset.tab !== 'situation-room' && typeof _restoreCopilotDock === 'function') { _restoreCopilotDock(); }
   });
 });
 
