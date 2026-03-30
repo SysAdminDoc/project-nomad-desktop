@@ -1,7 +1,7 @@
 /* ─── Situation Room v4 — World Monitor Intelligence Dashboard ─── */
 
 let _sitroomMap = null;
-let _sitroomMarkers = { earthquakes: [], weather: [], conflicts: [], aviation: [], volcanoes: [], fires: [], nuclear: [], bases: [], cables: [], datacenters: [], pipelines: [], waterways: [], spaceports: [], shipping: [], ucdp: [], airports: [], fincenters: [], mining: [], techHQs: [], diseases: [], radiation: [], protests: [], ships: [], cloudRegions: [], exchanges: [], commodityHubs: [], startupHubs: [], gpsJamming: [], tradeRoutes: [], accelerators: [], refugees: [], unMissions: [], ixps: [], embassies: [], desalination: [], weatherStations: [], spaceTracking: [], rareEarths: [] };
+let _sitroomMarkers = { earthquakes: [], weather: [], conflicts: [], aviation: [], volcanoes: [], fires: [], nuclear: [], bases: [], cables: [], datacenters: [], pipelines: [], waterways: [], spaceports: [], shipping: [], ucdp: [], airports: [], fincenters: [], mining: [], techHQs: [], diseases: [], radiation: [], protests: [], ships: [], cloudRegions: [], exchanges: [], commodityHubs: [], startupHubs: [], gpsJamming: [], tradeRoutes: [], accelerators: [], refugees: [], unMissions: [], ixps: [], embassies: [], desalination: [], weatherStations: [], spaceTracking: [], rareEarths: [], tsunamiStations: [], borderCrossings: [], listeningPosts: [], volcanicArcs: [], webcams: [] };
 let _sitroomRadarLayer = null; // RainViewer radar tile layer state
 let _sitroomNewsOffset = 0;
 const SITROOM_NEWS_PAGE = 50;
@@ -897,6 +897,66 @@ const _RARE_EARTH_MINES = [
   {lat:68.42,lng:18.18,name:'Kvanefjeld, Greenland'},{lat:-21.17,lng:48.33,name:'Ambatovy, Madagascar'},
 ];
 
+const _TSUNAMI_STATIONS = [
+  // NOAA DART buoys + international tsunami warning network
+  {lat:38.48,lng:-123.32,name:'DART 46407, NE Pacific'},{lat:46.14,lng:-128.97,name:'DART 46404, Juan de Fuca'},
+  {lat:19.64,lng:-156.43,name:'DART 51407, Hawaii'},{lat:-15.01,lng:-175.02,name:'DART 51425, Tonga'},
+  {lat:-32.39,lng:-72.50,name:'DART 32413, Chile'},{lat:8.89,lng:-89.56,name:'DART 43413, E. Pacific'},
+  {lat:39.33,lng:142.77,name:'DART 21418, Japan'},{lat:-5.04,lng:101.92,name:'DART 23401, Sumatra'},
+  {lat:-7.60,lng:107.50,name:'InaTEWS, Indonesia'},{lat:-38.45,lng:178.17,name:'GeoNet, New Zealand'},
+  {lat:33.17,lng:136.58,name:'JMA Tonankai, Japan'},{lat:36.88,lng:21.76,name:'NEAMTWS, Greece'},
+  {lat:61.05,lng:-147.79,name:'DART 46410, Alaska'},{lat:-8.88,lng:115.48,name:'Bali Warning Buoy'},
+  {lat:24.45,lng:122.12,name:'CWB Taiwan'},{lat:-43.53,lng:172.53,name:'Canterbury, NZ'},
+];
+const _BORDER_CROSSINGS = [
+  // World's busiest / most strategic border crossings
+  {lat:32.54,lng:-117.04,name:'San Ysidro, US-Mexico (busiest)'},{lat:25.96,lng:-97.50,name:'Brownsville-Matamoros, US-MX'},
+  {lat:31.76,lng:-106.45,name:'El Paso-Juarez, US-MX'},{lat:42.33,lng:-83.04,name:'Detroit-Windsor, US-CA'},
+  {lat:49.00,lng:-122.76,name:'Peace Arch, US-CA'},{lat:43.24,lng:-79.07,name:'Niagara Falls, US-CA'},
+  {lat:50.95,lng:1.85,name:'Calais-Dover, FR-UK (Channel)'},{lat:50.73,lng:7.10,name:'Bonn-Remagen, DE'},
+  {lat:48.97,lng:2.16,name:'CDG Airport Border, FR'},{lat:41.01,lng:28.98,name:'Istanbul Border Gates, TR'},
+  {lat:36.81,lng:-5.33,name:'Gibraltar, UK-ES'},{lat:35.16,lng:33.34,name:'Green Line, Cyprus'},
+  {lat:38.32,lng:126.63,name:'DMZ, Korea (most fortified)'},{lat:32.50,lng:35.47,name:'Allenby Bridge, IL-JO'},
+  {lat:31.24,lng:34.28,name:'Rafah, Gaza-Egypt'},{lat:30.02,lng:31.24,name:'Cairo Airport Border, EG'},
+  {lat:27.17,lng:78.02,name:'Wagah-Attari, India-PK'},{lat:22.53,lng:114.06,name:'Shenzhen Bay, CN-HK'},
+  {lat:1.35,lng:103.82,name:'Woodlands, SG-MY'},{lat:-25.74,lng:28.21,name:'Beit Bridge, ZA-ZW'},
+];
+const _LISTENING_POSTS = [
+  // Known SIGINT / signals intelligence stations
+  {lat:51.15,lng:-1.75,name:'GCHQ Bude, UK'},{lat:52.10,lng:-0.74,name:'GCHQ Cheltenham, UK'},
+  {lat:56.13,lng:-3.22,name:'RAF Menwith Hill, UK (NSA)'},{lat:39.11,lng:-76.77,name:'NSA Fort Meade, US'},
+  {lat:38.95,lng:-77.15,name:'NRO Chantilly, US'},{lat:-23.80,lng:133.74,name:'Pine Gap, Australia (Five Eyes)'},
+  {lat:-41.37,lng:174.83,name:'Waihopai, New Zealand'},{lat:44.63,lng:-63.57,name:'CSE Leitrim, Canada'},
+  {lat:48.33,lng:11.80,name:'Bad Aibling, Germany (BND)'},{lat:50.36,lng:7.88,name:'Dagger Complex, DE (NSA)'},
+  {lat:35.38,lng:24.47,name:'Souda Bay SIGINT, Greece'},{lat:36.12,lng:32.99,name:'Incirlik SIGINT, Turkey'},
+  {lat:25.38,lng:51.49,name:'Al Udeid SIGINT, Qatar'},{lat:-7.27,lng:72.37,name:'Diego Garcia SIGINT'},
+  {lat:26.56,lng:128.12,name:'Torii Station, Okinawa'},{lat:64.88,lng:-147.60,name:'Eielson AFB SIGINT, AK'},
+];
+const _LIVE_WEBCAMS = [
+  // Strategic live webcam locations (tourism/monitoring hotspots)
+  {lat:48.86,lng:2.29,name:'Eiffel Tower, Paris'},{lat:40.76,lng:-73.98,name:'Times Square, NYC'},
+  {lat:51.50,lng:-0.12,name:'Abbey Road, London'},{lat:35.66,lng:139.70,name:'Shibuya Crossing, Tokyo'},
+  {lat:41.90,lng:12.49,name:'Colosseum, Rome'},{lat:22.28,lng:114.17,name:'Victoria Harbour, HK'},
+  {lat:55.75,lng:37.62,name:'Red Square, Moscow'},{lat:-22.95,lng:-43.17,name:'Copacabana, Rio'},
+  {lat:64.13,lng:-21.90,name:'Reykjavik Harbour, Iceland'},{lat:25.20,lng:55.27,name:'Burj Khalifa, Dubai'},
+  {lat:37.82,lng:-122.48,name:'Golden Gate Bridge, SF'},{lat:-33.86,lng:151.21,name:'Sydney Opera House'},
+  {lat:13.41,lng:103.87,name:'Angkor Wat, Cambodia'},{lat:27.18,lng:78.04,name:'Taj Mahal, India'},
+  {lat:29.98,lng:31.13,name:'Pyramids of Giza, Egypt'},{lat:63.07,lng:-151.01,name:'Denali, Alaska'},
+];
+const _VOLCANIC_ARCS = [
+  // Major volcanic arc segments and monitoring points
+  {lat:60.49,lng:-152.74,name:'Ring of Fire: Alaska/Aleutians'},{lat:46.85,lng:-121.76,name:'Ring of Fire: Cascades'},
+  {lat:19.42,lng:-155.29,name:'Hawaii Hotspot'},{lat:14.50,lng:-90.88,name:'Central America Arc'},
+  {lat:-1.47,lng:-78.44,name:'Northern Andes Arc'},{lat:-33.40,lng:-70.00,name:'Southern Andes Arc'},
+  {lat:64.13,lng:-21.32,name:'Mid-Atlantic Ridge: Iceland'},{lat:37.75,lng:14.99,name:'Mediterranean Arc: Etna'},
+  {lat:40.82,lng:14.43,name:'Mediterranean: Vesuvius'},{lat:36.40,lng:25.40,name:'Aegean: Santorini'},
+  {lat:42.35,lng:42.10,name:'Caucasus: Elbrus'},{lat:-8.34,lng:116.47,name:'Sunda Arc: Rinjani'},
+  {lat:-7.54,lng:110.45,name:'Sunda Arc: Merapi'},{lat:35.36,lng:138.73,name:'Japan Arc: Fuji'},
+  {lat:31.06,lng:130.66,name:'Japan Arc: Sakurajima'},{lat:56.06,lng:160.64,name:'Kamchatka Arc'},
+  {lat:-38.69,lng:176.07,name:'Taupo Volcanic Zone, NZ'},{lat:14.14,lng:121.93,name:'Philippines Arc: Taal'},
+  {lat:5.98,lng:-75.32,name:'Northern Andes: Nevado del Ruiz'},{lat:-15.79,lng:-71.85,name:'Andes: Ubinas, Peru'},
+];
+
 function initSitroomMap() {
   const container = document.getElementById('sitroom-map');
   if (!container || _sitroomMap) return;
@@ -1234,6 +1294,36 @@ async function loadSitroomMapData() {
     _RARE_EARTH_MINES.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'rare_earth'}, 'rareEarths'));
   } else { clearSitroomMarkers('rareEarths'); }
 
+  // Live Webcams (static)
+  if (document.getElementById('sitroom-layer-webcams')?.checked) {
+    clearSitroomMarkers('webcams');
+    _LIVE_WEBCAMS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'webcam'}, 'webcams'));
+  } else { clearSitroomMarkers('webcams'); }
+
+  // Tsunami Warning Stations (static)
+  if (document.getElementById('sitroom-layer-tsunamiStations')?.checked) {
+    clearSitroomMarkers('tsunamiStations');
+    _TSUNAMI_STATIONS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'tsunami_station'}, 'tsunamiStations'));
+  } else { clearSitroomMarkers('tsunamiStations'); }
+
+  // Border Crossings (static)
+  if (document.getElementById('sitroom-layer-borderCrossings')?.checked) {
+    clearSitroomMarkers('borderCrossings');
+    _BORDER_CROSSINGS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'border_crossing'}, 'borderCrossings'));
+  } else { clearSitroomMarkers('borderCrossings'); }
+
+  // SIGINT / Listening Posts (static)
+  if (document.getElementById('sitroom-layer-listeningPosts')?.checked) {
+    clearSitroomMarkers('listeningPosts');
+    _LISTENING_POSTS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'listening_post'}, 'listeningPosts'));
+  } else { clearSitroomMarkers('listeningPosts'); }
+
+  // Volcanic Arcs (static)
+  if (document.getElementById('sitroom-layer-volcanicArcs')?.checked) {
+    clearSitroomMarkers('volcanicArcs');
+    _VOLCANIC_ARCS.forEach(s => addSitroomMarker({lat:s.lat,lng:s.lng,title:s.name,event_type:'volcanic_arc'}, 'volcanicArcs'));
+  } else { clearSitroomMarkers('volcanicArcs'); }
+
   // Weather radar overlay (RainViewer tile layer)
   _toggleWeatherRadar();
 }
@@ -1303,7 +1393,7 @@ function addSitroomMarker(ev, layerType) {
   if (!_sitroomMap) return;
   // Skip if would cluster with existing marker at this zoom
   if (_shouldCluster(ev.lat, ev.lng, layerType)) return;
-  const colors = { earthquakes: '#ff4444', weather: '#ffaa00', conflicts: '#ff6600', aviation: '#44aaff', volcanoes: '#ff3366', fires: '#ff8800', nuclear: '#ffff00', bases: '#44ff88', cables: '#3388ff', datacenters: '#aa66ff', pipelines: '#cc8844', waterways: '#00ddff', spaceports: '#ff66ff', shipping: '#88ccaa', ucdp: '#dd2222', airports: '#cccccc', fincenters: '#44dd88', mining: '#cc8844', techHQs: '#44aadd', diseases: '#ff44ff', radiation: '#66ff00', protests: '#ffcc00', ships: '#22bbdd', cloudRegions: '#6688ff', exchanges: '#ddaa22', commodityHubs: '#dd8866', startupHubs: '#ff88dd', gpsJamming: '#ff2200', tradeRoutes: '#66ccff', accelerators: '#cc66ff', refugees: '#ff8866', unMissions: '#4488ff', ixps: '#88ffcc', embassies: '#ddddaa', desalination: '#44cccc', weatherStations: '#aabb44', spaceTracking: '#bb88ff', rareEarths: '#ee6699' };
+  const colors = { earthquakes: '#ff4444', weather: '#ffaa00', conflicts: '#ff6600', aviation: '#44aaff', volcanoes: '#ff3366', fires: '#ff8800', nuclear: '#ffff00', bases: '#44ff88', cables: '#3388ff', datacenters: '#aa66ff', pipelines: '#cc8844', waterways: '#00ddff', spaceports: '#ff66ff', shipping: '#88ccaa', ucdp: '#dd2222', airports: '#cccccc', fincenters: '#44dd88', mining: '#cc8844', techHQs: '#44aadd', diseases: '#ff44ff', radiation: '#66ff00', protests: '#ffcc00', ships: '#22bbdd', cloudRegions: '#6688ff', exchanges: '#ddaa22', commodityHubs: '#dd8866', startupHubs: '#ff88dd', gpsJamming: '#ff2200', tradeRoutes: '#66ccff', accelerators: '#cc66ff', refugees: '#ff8866', unMissions: '#4488ff', ixps: '#88ffcc', embassies: '#ddddaa', desalination: '#44cccc', weatherStations: '#aabb44', spaceTracking: '#bb88ff', rareEarths: '#ee6699', tsunamiStations: '#ff6644', borderCrossings: '#ccaa66', listeningPosts: '#8844cc', volcanicArcs: '#ff3333', webcams: '#ffffff' };
   const color = colors[layerType] || '#ffffff';
   let size = layerType === 'aviation' ? 5 : 8;
   if (ev.magnitude) size = Math.max(6, Math.min(24, ev.magnitude * 3));
