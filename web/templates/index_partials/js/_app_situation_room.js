@@ -71,6 +71,11 @@ function _sitroomRefreshPanels() {
   loadSitroomEarnings();
   loadSitroomCentralBanks();
   loadSitroomArxiv();
+  loadSitroomSecAdvisories();
+  _loadCategoryCard('sitroom-semiconductors', 'Semiconductors');
+  _loadCategoryCard('sitroom-space-news', 'Space');
+  _loadCategoryCard('sitroom-maritime-news', 'Maritime');
+  _loadCategoryCard('sitroom-nuclear-news', 'Nuclear');
   loadSitroomLayoffs();
   loadSitroomAirline();
   loadSitroomSupplyChain();
@@ -1551,6 +1556,35 @@ async function loadSitroomSentiment() {
         <div class="sr-sentiment-neg" style="width:${negPct}%">${negPct}%</div>
       </div>
     </div>`;
+}
+
+/* ─── Generic Category Card Loader ─── */
+async function _loadCategoryCard(elId, category) {
+  const d = await safeFetch('/api/sitroom/category-feed/' + encodeURIComponent(category), {}, null);
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!d || !d.articles?.length) { el.innerHTML = '<div class="sr-empty">No ' + category + ' data</div>'; return; }
+  el.innerHTML = d.articles.map(a => `<div class="sitroom-news-item">
+    <span class="sitroom-news-cat" data-cat="${escapeAttr(category)}">${escapeHtml(a.source_name || category)}</span>
+    <div class="sitroom-news-body">
+      <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
+    </div>
+  </div>`).join('');
+}
+
+/* ─── Security Advisories ─── */
+async function loadSitroomSecAdvisories() {
+  const d = await safeFetch('/api/sitroom/security-advisories', {}, null);
+  const el = document.getElementById('sitroom-sec-advisories');
+  if (!el) return;
+  if (!d || !d.advisories?.length) { el.innerHTML = '<div class="sr-empty">No security advisories</div>'; return; }
+  el.innerHTML = d.advisories.map(a => `<div class="sitroom-event-item sitroom-sev-severe">
+    <div class="sitroom-event-info">
+      <div class="sitroom-event-title">${escapeHtml(a.title)}</div>
+      <div class="sitroom-event-meta">${escapeHtml(a.source_name || '')}</div>
+    </div>
+    ${a.link ? `<a href="${escapeAttr(a.link)}" target="_blank" rel="noopener" class="sitroom-event-link">&#8599;</a>` : ''}
+  </div>`).join('');
 }
 
 /* ─── Central Bank Watch ─── */
