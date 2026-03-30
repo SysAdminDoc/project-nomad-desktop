@@ -47,39 +47,53 @@ RSS_FEEDS = {
     'us_news': [
         {'name': 'Reuters US', 'url': 'https://feeds.reuters.com/Reuters/domesticNews', 'category': 'US'},
         {'name': 'NPR Headlines', 'url': 'https://feeds.npr.org/1001/rss.xml', 'category': 'US'},
+        {'name': 'PBS NewsHour', 'url': 'https://www.pbs.org/newshour/feeds/rss/headlines', 'category': 'US'},
     ],
     'technology': [
         {'name': 'Ars Technica', 'url': 'https://feeds.arstechnica.com/arstechnica/technology-lab', 'category': 'Tech'},
         {'name': 'Hacker News', 'url': 'https://hnrss.org/frontpage', 'category': 'Tech'},
         {'name': 'The Verge', 'url': 'https://www.theverge.com/rss/index.xml', 'category': 'Tech'},
+        {'name': 'TechCrunch', 'url': 'https://techcrunch.com/feed/', 'category': 'Tech'},
     ],
     'science': [
         {'name': 'Nature News', 'url': 'https://www.nature.com/nature.rss', 'category': 'Science'},
         {'name': 'NASA Breaking', 'url': 'https://www.nasa.gov/rss/dyn/breaking_news.rss', 'category': 'Science'},
+        {'name': 'Science Daily', 'url': 'https://www.sciencedaily.com/rss/all.xml', 'category': 'Science'},
     ],
     'security': [
         {'name': 'Krebs on Security', 'url': 'https://krebsonsecurity.com/feed/', 'category': 'Cyber'},
         {'name': 'The Hacker News', 'url': 'https://feeds.feedburner.com/TheHackersNews', 'category': 'Cyber'},
         {'name': 'BleepingComputer', 'url': 'https://www.bleepingcomputer.com/feed/', 'category': 'Cyber'},
+        {'name': 'Dark Reading', 'url': 'https://www.darkreading.com/rss_simple.asp', 'category': 'Cyber'},
     ],
     'military_defense': [
         {'name': 'Defense One', 'url': 'https://www.defenseone.com/rss/', 'category': 'Defense'},
         {'name': 'War on the Rocks', 'url': 'https://warontherocks.com/feed/', 'category': 'Defense'},
+        {'name': 'Breaking Defense', 'url': 'https://breakingdefense.com/feed/', 'category': 'Defense'},
+        {'name': 'The Drive - War Zone', 'url': 'https://www.thedrive.com/the-war-zone/feed', 'category': 'Defense'},
     ],
     'disasters': [
         {'name': 'GDACS Alerts', 'url': 'https://www.gdacs.org/xml/rss.xml', 'category': 'Disaster'},
         {'name': 'ReliefWeb Updates', 'url': 'https://reliefweb.int/updates/rss.xml', 'category': 'Disaster'},
+        {'name': 'FEMA', 'url': 'https://www.fema.gov/feeds/disasters-702-702all.xml', 'category': 'Disaster'},
     ],
     'finance': [
         {'name': 'MarketWatch Top', 'url': 'https://feeds.content.dowjones.io/public/rss/mw_topstories', 'category': 'Finance'},
         {'name': 'CNBC Top News', 'url': 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114', 'category': 'Finance'},
+        {'name': 'Bloomberg Markets', 'url': 'https://feeds.bloomberg.com/markets/news.rss', 'category': 'Finance'},
     ],
     'energy': [
         {'name': 'EIA Today in Energy', 'url': 'https://www.eia.gov/rss/todayinenergy.xml', 'category': 'Energy'},
+        {'name': 'OilPrice.com', 'url': 'https://oilprice.com/rss/main', 'category': 'Energy'},
     ],
     'health': [
         {'name': 'WHO Disease Outbreaks', 'url': 'https://www.who.int/feeds/entity/don/en/rss.xml', 'category': 'Health'},
         {'name': 'CDC MMWR', 'url': 'https://tools.cdc.gov/api/v2/resources/media/316422.rss', 'category': 'Health'},
+        {'name': 'CIDRAP News', 'url': 'https://www.cidrap.umn.edu/news/rss.xml', 'category': 'Health'},
+    ],
+    'geopolitics': [
+        {'name': 'Foreign Affairs', 'url': 'https://www.foreignaffairs.com/rss.xml', 'category': 'Geopolitics'},
+        {'name': 'The Diplomat', 'url': 'https://thediplomat.com/feed/', 'category': 'Geopolitics'},
     ],
 }
 
@@ -299,26 +313,71 @@ def _fetch_market_data():
         return
     _last_fetch['markets'] = datetime.now()
 
-    # Use a free crypto + fear/greed approach as baseline
     markets = []
 
-    # Crypto prices (CoinGecko free API)
+    # Crypto prices (CoinGecko free API — bitcoin, ethereum, solana)
     try:
         resp = requests.get(
-            'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,gold&vs_currencies=usd&include_24hr_change=true',
+            'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true',
             timeout=10, headers={'User-Agent': 'NOMAD-SitRoom/1.0'}
         )
         if resp.ok:
             data = resp.json()
+            display_names = {'bitcoin': 'BTC', 'ethereum': 'ETH', 'solana': 'SOL'}
             for coin, vals in data.items():
                 markets.append({
-                    'symbol': coin.upper(),
+                    'symbol': display_names.get(coin, coin.upper()),
                     'price': vals.get('usd', 0),
-                    'change_24h': vals.get('usd_24h_change', 0),
-                    'market_type': 'crypto' if coin != 'gold' else 'commodity',
+                    'change_24h': vals.get('usd_24h_change') or 0,
+                    'market_type': 'crypto',
                 })
     except Exception as e:
         log.debug(f"CoinGecko fetch failed: {e}")
+
+    # Gold & Oil via metals.dev free tier (no key needed for basic)
+    try:
+        resp = requests.get(
+            'https://api.metals.dev/v1/latest?api_key=demo&currency=USD&unit=toz',
+            timeout=10, headers={'User-Agent': 'NOMAD-SitRoom/1.0'}
+        )
+        if resp.ok:
+            data = resp.json()
+            metals = data.get('metals', {})
+            if 'gold' in metals:
+                markets.append({
+                    'symbol': 'GOLD',
+                    'price': metals['gold'],
+                    'change_24h': 0,
+                    'market_type': 'commodity',
+                })
+            if 'silver' in metals:
+                markets.append({
+                    'symbol': 'SILVER',
+                    'price': metals['silver'],
+                    'change_24h': 0,
+                    'market_type': 'commodity',
+                })
+    except Exception as e:
+        log.debug(f"Metals fetch failed: {e}")
+
+    # WTI Crude Oil price
+    try:
+        resp = requests.get(
+            'https://api.eia.gov/v2/petroleum/pri/spt/data/?api_key=DEMO_KEY&frequency=daily&data[0]=value&facets[product][]=EPCBRENT&sort[0][column]=period&sort[0][direction]=desc&length=1',
+            timeout=10, headers={'User-Agent': 'NOMAD-SitRoom/1.0'}
+        )
+        if resp.ok:
+            data = resp.json()
+            rows = data.get('response', {}).get('data', [])
+            if rows:
+                markets.append({
+                    'symbol': 'OIL (BRENT)',
+                    'price': float(rows[0].get('value', 0)),
+                    'change_24h': 0,
+                    'market_type': 'commodity',
+                })
+    except Exception as e:
+        log.debug(f"EIA oil fetch failed: {e}")
 
     # Fear & Greed Index
     try:

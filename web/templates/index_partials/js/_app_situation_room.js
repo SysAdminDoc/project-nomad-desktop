@@ -5,16 +5,39 @@ let _sitroomMarkers = { earthquakes: [], weather: [], conflicts: [] };
 let _sitroomNewsOffset = 0;
 const SITROOM_NEWS_PAGE = 50;
 let _sitroomAutoRefreshTimer = null;
+let _sitroomInitDone = false;
 
 /* ─── Initialization ─── */
 function initSituationRoom() {
-  loadSitroomSummary();
+  // Close utility panels (LAN chat, Timers, Quick Actions) to declutter
+  _closeSitroomOverlays();
+
+  if (_sitroomInitDone) {
+    _sitroomLoadAll();
+    return;
+  }
+  _sitroomInitDone = true;
+  _sitroomLoadAll();
   initSitroomMap();
+  // Auto-refresh on first visit if no data cached
+  _sitroomAutoRefreshIfEmpty();
+  // Auto-refresh every 60s
+  if (_sitroomAutoRefreshTimer) clearInterval(_sitroomAutoRefreshTimer);
+  _sitroomAutoRefreshTimer = setInterval(_sitroomLoadAll, 60000);
+}
+
+async function _sitroomAutoRefreshIfEmpty() {
+  const d = await safeFetch('/api/sitroom/status', {}, null);
+  if (d && d.feed_count > 0 && (!d.last_fetch || Object.keys(d.last_fetch).length === 0)) {
+    // No data fetched yet — auto-trigger first refresh
+    refreshSitroomFeeds();
+  }
+}
+
+function _sitroomLoadAll() {
+  loadSitroomSummary();
   loadSitroomNews();
   loadSitroomFeeds();
-  // Auto-refresh summary every 60s
-  if (_sitroomAutoRefreshTimer) clearInterval(_sitroomAutoRefreshTimer);
-  _sitroomAutoRefreshTimer = setInterval(loadSitroomSummary, 60000);
 }
 
 /* ─── Map ─── */
@@ -22,7 +45,6 @@ function initSitroomMap() {
   const container = document.getElementById('sitroom-map');
   if (!container || _sitroomMap) return;
 
-  // Dark-themed map tiles
   const darkStyle = {
     version: 8,
     sources: {
@@ -42,7 +64,6 @@ function initSitroomMap() {
     }]
   };
 
-  // Fallback to PMTiles if offline
   try {
     _sitroomMap = new maplibregl.Map({
       container: 'sitroom-map',
@@ -51,17 +72,12 @@ function initSitroomMap() {
       zoom: 1.8,
       attributionControl: false,
     });
-    _sitroomMap.on('load', () => {
-      loadSitroomMapData();
-    });
-    // If tiles fail to load (offline), try PMTiles
+    _sitroomMap.on('load', () => loadSitroomMapData());
     _sitroomMap.on('error', (e) => {
-      if (e.error && e.error.status === 0) {
-        _tryPMTilesFallback();
-      }
+      if (e.error && e.error.status === 0) _tryPMTilesFallback();
     });
   } catch (err) {
-    container.innerHTML = '<div class="sitroom-empty">Map unavailable — MapLibre failed to initialize</div>';
+    container.innerHTML = '<div class="sitroom-empty">Map unavailable</div>';
   }
 }
 
@@ -84,29 +100,25 @@ function _tryPMTilesFallback() {
         paint: { 'background-color': '#0a0a14' }
       }]
     });
-  } catch (e) {
-    // Silent — map just won't have tiles
-  }
+  } catch (e) {}
 }
 
-function loadSitroomMapData() {
+async function loadSitroomMapData() {
   if (!_sitroomMap) return;
-  // Fetch events and plot them
-  safeFetch('/api/sitroom/events')
-    .then(r => r.ok ? r.json() : null)
-    .then(data => {
-      if (!data) return;
-      clearSitroomMarkers();
-      (data.events || []).forEach(ev => {
-        if (!ev.lat && !ev.lng) return;
-        const layerType = ev.event_type === 'earthquake' ? 'earthquakes'
-          : ev.event_type === 'weather_alert' ? 'weather' : 'conflicts';
-        const checkbox = document.getElementById('sitroom-layer-' + (layerType === 'earthquakes' ? 'quakes' : layerType));
-        if (checkbox && !checkbox.checked) return;
-        addSitroomMarker(ev, layerType);
-      });
-    })
-    .catch(() => {});
+  try {
+    const data = await safeFetch('/api/sitroom/events', {}, null);
+    if (!data || !data.events) return;
+    clearSitroomMarkers();
+    data.events.forEach(ev => {
+      if (!ev.lat && !ev.lng) return;
+      const layerType = ev.event_type === 'earthquake' ? 'earthquakes'
+        : ev.event_type === 'weather_alert' ? 'weather' : 'conflicts';
+      const checkId = layerType === 'earthquakes' ? 'quakes' : layerType;
+      const checkbox = document.getElementById('sitroom-layer-' + checkId);
+      if (checkbox && !checkbox.checked) return;
+      addSitroomMarker(ev, layerType);
+    });
+  } catch (e) {}
 }
 
 function clearSitroomMarkers() {
@@ -122,9 +134,7 @@ function addSitroomMarker(ev, layerType) {
   const color = colors[layerType] || '#ffffff';
 
   let size = 8;
-  if (ev.magnitude) {
-    size = Math.max(6, Math.min(24, ev.magnitude * 3));
-  }
+  if (ev.magnitude) size = Math.max(6, Math.min(24, ev.magnitude * 3));
 
   const el = document.createElement('div');
   el.className = 'sitroom-marker sitroom-marker-' + layerType;
@@ -148,55 +158,37 @@ function addSitroomMarker(ev, layerType) {
 
 /* ─── Summary / Status ─── */
 async function loadSitroomSummary() {
-  try {
-    const resp = await safeFetch('/api/sitroom/summary');
-    if (!resp.ok) return;
-    const d = await resp.json();
+  const d = await safeFetch('/api/sitroom/summary', {}, null);
+  if (!d) return;
 
-    // Update stat counters
-    const el = (id, val) => {
-      const e = document.getElementById(id);
-      if (e) e.textContent = val;
-    };
-    el('sitroom-stat-news', d.news_count || 0);
-    el('sitroom-stat-quakes', d.earthquake_count || 0);
-    el('sitroom-stat-weather', d.weather_alert_count || 0);
-    el('sitroom-stat-conflicts', d.conflict_count || 0);
-    el('sitroom-stat-markets', d.market_count || 0);
+  // Update stat counters
+  const set = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+  set('sitroom-stat-news', d.news_count || 0);
+  set('sitroom-stat-quakes', d.earthquake_count || 0);
+  set('sitroom-stat-weather', d.weather_alert_count || 0);
+  set('sitroom-stat-conflicts', d.conflict_count || 0);
+  set('sitroom-stat-markets', d.market_count || 0);
 
-    // Online badge
-    const badge = document.getElementById('sitroom-online-badge');
-    if (badge) {
-      const hasData = (d.news_count || 0) > 0;
-      badge.textContent = hasData ? 'DATA CACHED' : 'OFFLINE';
-      badge.className = 'sitroom-badge ' + (hasData ? 'sitroom-badge-online' : 'sitroom-badge-offline');
-    }
-
-    // Last update
-    const ts = document.getElementById('sitroom-last-update');
-    if (ts && d.last_fetch) {
-      const latest = Object.values(d.last_fetch).filter(Boolean).sort().pop();
-      if (latest) {
-        const ago = _timeAgo(new Date(latest));
-        ts.textContent = `Updated ${ago}`;
-      }
-    }
-
-    // Render markets
-    renderSitroomMarkets(d.markets || []);
-
-    // Render top earthquakes inline
-    renderSitroomQuakes();
-
-    // Load weather alerts
-    loadSitroomWeather();
-
-    // Refresh map
-    loadSitroomMapData();
-
-  } catch (e) {
-    // Offline — show cached indicator
+  // Online badge
+  const badge = document.getElementById('sitroom-online-badge');
+  if (badge) {
+    const hasData = (d.news_count || 0) > 0;
+    badge.textContent = hasData ? 'DATA CACHED' : 'OFFLINE';
+    badge.className = 'sitroom-badge ' + (hasData ? 'sitroom-badge-online' : 'sitroom-badge-offline');
   }
+
+  // Last update
+  const ts = document.getElementById('sitroom-last-update');
+  if (ts && d.last_fetch) {
+    const latest = Object.values(d.last_fetch).filter(Boolean).sort().pop();
+    if (latest) ts.textContent = 'Updated ' + _timeAgo(new Date(latest));
+  }
+
+  // Render panels
+  renderSitroomMarkets(d.markets || []);
+  renderSitroomQuakes();
+  loadSitroomWeather();
+  loadSitroomMapData();
 }
 
 /* ─── Markets ─── */
@@ -204,21 +196,27 @@ function renderSitroomMarkets(markets) {
   const container = document.getElementById('sitroom-market-ticker');
   if (!container) return;
   if (!markets.length) {
-    container.innerHTML = '<div class="sitroom-empty">No market data — click Refresh</div>';
+    container.innerHTML = '<div class="sitroom-empty">No market data — click Refresh Feeds</div>';
     return;
   }
   container.innerHTML = markets.map(m => {
-    const isUp = m.change_24h >= 0;
+    const change = m.change_24h || 0;
+    const isUp = change >= 0;
     const arrow = isUp ? '&#9650;' : '&#9660;';
     const cls = isUp ? 'sitroom-market-up' : 'sitroom-market-down';
-    const priceStr = m.market_type === 'sentiment'
-      ? `${m.price}/100`
-      : `$${Number(m.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    let priceStr;
+    if (m.market_type === 'sentiment') {
+      priceStr = m.price + '/100';
+    } else if (m.price >= 1) {
+      priceStr = '$' + Number(m.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    } else {
+      priceStr = '$' + Number(m.price).toFixed(6);
+    }
     const label = m.label || m.symbol;
     return `<div class="sitroom-market-card ${cls}">
       <div class="sitroom-market-symbol">${escapeHtml(label)}</div>
       <div class="sitroom-market-price">${priceStr}</div>
-      <div class="sitroom-market-change">${arrow} ${Math.abs(m.change_24h).toFixed(1)}%</div>
+      <div class="sitroom-market-change">${arrow} ${Math.abs(change).toFixed(1)}%</div>
     </div>`;
   }).join('');
 }
@@ -226,132 +224,116 @@ function renderSitroomMarkets(markets) {
 /* ─── Earthquakes ─── */
 async function renderSitroomQuakes() {
   const minMag = parseFloat(document.getElementById('sitroom-quake-filter')?.value || '4');
-  try {
-    const resp = await safeFetch(`/api/sitroom/earthquakes?min_magnitude=${minMag}`);
-    if (!resp.ok) return;
-    const d = await resp.json();
-    const list = document.getElementById('sitroom-quake-list');
-    if (!list) return;
-    if (!d.earthquakes?.length) {
-      list.innerHTML = '<div class="sitroom-empty">No earthquakes above M' + minMag + '</div>';
-      return;
-    }
-    list.innerHTML = d.earthquakes.map(q => {
-      const magClass = q.magnitude >= 6 ? 'sitroom-mag-high' : q.magnitude >= 4.5 ? 'sitroom-mag-med' : 'sitroom-mag-low';
-      const detail = q.detail_json ? JSON.parse(q.detail_json) : {};
-      return `<div class="sitroom-event-item">
-        <span class="sitroom-mag ${magClass}">M${q.magnitude ? q.magnitude.toFixed(1) : '?'}</span>
-        <div class="sitroom-event-info">
-          <div class="sitroom-event-title">${escapeHtml(q.title || 'Unknown location')}</div>
-          <div class="sitroom-event-meta">Depth: ${q.depth_km ? q.depth_km.toFixed(0) + ' km' : 'N/A'}${detail.alert ? ' | Alert: ' + escapeHtml(detail.alert) : ''}${detail.felt ? ' | Felt: ' + detail.felt + ' reports' : ''}</div>
-        </div>
-        ${q.source_url ? `<a href="${escapeAttr(q.source_url)}" target="_blank" rel="noopener" class="sitroom-event-link" title="View details">&#8599;</a>` : ''}
-      </div>`;
-    }).join('');
-  } catch (e) {}
+  const d = await safeFetch('/api/sitroom/earthquakes?min_magnitude=' + minMag, {}, null);
+  const list = document.getElementById('sitroom-quake-list');
+  if (!list) return;
+  if (!d || !d.earthquakes?.length) {
+    list.innerHTML = '<div class="sitroom-empty">No earthquakes above M' + minMag + '</div>';
+    return;
+  }
+  list.innerHTML = d.earthquakes.map(q => {
+    const magClass = q.magnitude >= 6 ? 'sitroom-mag-high' : q.magnitude >= 4.5 ? 'sitroom-mag-med' : 'sitroom-mag-low';
+    let detail = {};
+    try { detail = q.detail_json ? JSON.parse(q.detail_json) : {}; } catch(e) {}
+    return `<div class="sitroom-event-item">
+      <span class="sitroom-mag ${magClass}">M${q.magnitude ? q.magnitude.toFixed(1) : '?'}</span>
+      <div class="sitroom-event-info">
+        <div class="sitroom-event-title">${escapeHtml(q.title || 'Unknown location')}</div>
+        <div class="sitroom-event-meta">Depth: ${q.depth_km ? q.depth_km.toFixed(0) + ' km' : 'N/A'}${detail.alert ? ' | Alert: ' + escapeHtml(detail.alert) : ''}${detail.felt ? ' | Felt: ' + detail.felt + ' reports' : ''}</div>
+      </div>
+      ${q.source_url ? `<a href="${escapeAttr(q.source_url)}" target="_blank" rel="noopener" class="sitroom-event-link" title="View details">&#8599;</a>` : ''}
+    </div>`;
+  }).join('');
 }
 
 /* ─── Weather Alerts ─── */
 async function loadSitroomWeather() {
-  try {
-    const resp = await safeFetch('/api/sitroom/weather-alerts');
-    if (!resp.ok) return;
-    const d = await resp.json();
-    const list = document.getElementById('sitroom-weather-list');
-    if (!list) return;
-    if (!d.alerts?.length) {
-      list.innerHTML = '<div class="sitroom-empty">No severe weather alerts</div>';
-      return;
-    }
-    list.innerHTML = d.alerts.slice(0, 30).map(a => {
-      const detail = a.detail_json ? JSON.parse(a.detail_json) : {};
-      const sevClass = detail.severity === 'Extreme' ? 'sitroom-sev-extreme' : 'sitroom-sev-severe';
-      return `<div class="sitroom-event-item ${sevClass}">
-        <div class="sitroom-event-info">
-          <div class="sitroom-event-title">${escapeHtml(a.title || 'Weather Alert')}</div>
-          <div class="sitroom-event-meta">${escapeHtml(detail.headline || '')}${detail.sender ? ' (' + escapeHtml(detail.sender) + ')' : ''}</div>
-        </div>
-      </div>`;
-    }).join('');
-  } catch (e) {}
+  const d = await safeFetch('/api/sitroom/weather-alerts', {}, null);
+  const list = document.getElementById('sitroom-weather-list');
+  if (!list) return;
+  if (!d || !d.alerts?.length) {
+    list.innerHTML = '<div class="sitroom-empty">No severe weather alerts</div>';
+    return;
+  }
+  list.innerHTML = d.alerts.slice(0, 30).map(a => {
+    let detail = {};
+    try { detail = a.detail_json ? JSON.parse(a.detail_json) : {}; } catch(e) {}
+    const sevClass = detail.severity === 'Extreme' ? 'sitroom-sev-extreme' : 'sitroom-sev-severe';
+    return `<div class="sitroom-event-item ${sevClass}">
+      <div class="sitroom-event-info">
+        <div class="sitroom-event-title">${escapeHtml(a.title || 'Weather Alert')}</div>
+        <div class="sitroom-event-meta">${escapeHtml(detail.headline || '')}${detail.sender ? ' (' + escapeHtml(detail.sender) + ')' : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 /* ─── News Feed ─── */
 async function loadSitroomNews(append) {
   if (!append) _sitroomNewsOffset = 0;
   const category = document.getElementById('sitroom-news-category')?.value || '';
-  try {
-    const resp = await safeFetch(`/api/sitroom/news?category=${encodeURIComponent(category)}&limit=${SITROOM_NEWS_PAGE}&offset=${_sitroomNewsOffset}`);
-    if (!resp.ok) return;
-    const d = await resp.json();
-    const list = document.getElementById('sitroom-news-list');
-    const moreBtn = document.getElementById('sitroom-news-more');
-    if (!list) return;
+  const d = await safeFetch('/api/sitroom/news?category=' + encodeURIComponent(category) + '&limit=' + SITROOM_NEWS_PAGE + '&offset=' + _sitroomNewsOffset, {}, null);
+  const list = document.getElementById('sitroom-news-list');
+  const moreBtn = document.getElementById('sitroom-news-more');
+  if (!list) return;
 
-    if (!d.articles?.length && !append) {
-      list.innerHTML = '<div class="sitroom-empty">No news cached — click Refresh Feeds</div>';
+  if (!d || !d.articles?.length) {
+    if (!append) {
+      list.innerHTML = '<div class="sitroom-empty">No news cached — click Refresh Feeds to pull from RSS sources</div>';
       if (moreBtn) moreBtn.style.display = 'none';
-      return;
     }
+    return;
+  }
 
-    const html = d.articles.map(a => `<div class="sitroom-news-item">
-      <span class="sitroom-news-cat">${escapeHtml(a.category || '')}</span>
-      <div class="sitroom-news-body">
-        <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
-        <div class="sitroom-news-meta">${escapeHtml(a.source_name || '')} ${a.published ? '| ' + escapeHtml(a.published) : ''}</div>
-      </div>
-    </div>`).join('');
+  const html = d.articles.map(a => `<div class="sitroom-news-item">
+    <span class="sitroom-news-cat">${escapeHtml(a.category || '')}</span>
+    <div class="sitroom-news-body">
+      <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
+      <div class="sitroom-news-meta">${escapeHtml(a.source_name || '')} ${a.published ? '| ' + escapeHtml(a.published) : ''}</div>
+    </div>
+  </div>`).join('');
 
-    if (append) {
-      list.insertAdjacentHTML('beforeend', html);
-    } else {
-      list.innerHTML = html;
-    }
-    _sitroomNewsOffset += d.articles.length;
-
-    if (moreBtn) {
-      moreBtn.style.display = _sitroomNewsOffset < d.total ? '' : 'none';
-    }
-  } catch (e) {}
+  if (append) {
+    list.insertAdjacentHTML('beforeend', html);
+  } else {
+    list.innerHTML = html;
+  }
+  _sitroomNewsOffset += d.articles.length;
+  if (moreBtn) moreBtn.style.display = _sitroomNewsOffset < (d.total || 0) ? '' : 'none';
 }
 
 /* ─── Populate Category Filter ─── */
 async function loadSitroomFeeds() {
-  try {
-    const resp = await safeFetch('/api/sitroom/feeds');
-    if (!resp.ok) return;
-    const d = await resp.json();
+  const d = await safeFetch('/api/sitroom/feeds', {}, null);
+  if (!d) return;
 
-    // Category dropdown
-    const sel = document.getElementById('sitroom-news-category');
-    if (sel) {
-      const cats = [...new Set([...(d.categories || []), ...d.custom.map(f => f.category)])].sort();
-      sel.innerHTML = '<option value="">All Categories</option>' + cats.map(c =>
-        `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`
-      ).join('');
+  const sel = document.getElementById('sitroom-news-category');
+  if (sel) {
+    const customCats = (d.custom || []).map(f => f.category);
+    const cats = [...new Set([...(d.categories || []), ...customCats])].sort();
+    sel.innerHTML = '<option value="">All Categories</option>' + cats.map(c =>
+      '<option value="' + escapeAttr(c) + '">' + escapeHtml(c) + '</option>'
+    ).join('');
+  }
+
+  const be = document.getElementById('sitroom-builtin-count');
+  const ce = document.getElementById('sitroom-custom-count');
+  if (be) be.textContent = (d.builtin || []).length;
+  if (ce) ce.textContent = (d.custom || []).length;
+
+  const customList = document.getElementById('sitroom-custom-feeds-list');
+  if (customList) {
+    if (!d.custom?.length) {
+      customList.innerHTML = '<div class="sitroom-empty">No custom feeds added</div>';
+    } else {
+      customList.innerHTML = d.custom.map(f => `<div class="sitroom-custom-feed-item">
+        <span class="sitroom-news-cat">${escapeHtml(f.category)}</span>
+        <span class="sitroom-custom-feed-name">${escapeHtml(f.name)}</span>
+        <span class="sitroom-custom-feed-url">${escapeHtml(f.url)}</span>
+        <button class="btn btn-sm btn-danger" data-sitroom-action="delete-feed" data-feed-id="${f.id}">Remove</button>
+      </div>`).join('');
     }
-
-    // Feed counts
-    const be = document.getElementById('sitroom-builtin-count');
-    const ce = document.getElementById('sitroom-custom-count');
-    if (be) be.textContent = (d.builtin || []).length;
-    if (ce) ce.textContent = (d.custom || []).length;
-
-    // Custom feeds list
-    const customList = document.getElementById('sitroom-custom-feeds-list');
-    if (customList) {
-      if (!d.custom?.length) {
-        customList.innerHTML = '<div class="sitroom-empty">No custom feeds added</div>';
-      } else {
-        customList.innerHTML = d.custom.map(f => `<div class="sitroom-custom-feed-item">
-          <span class="sitroom-news-cat">${escapeHtml(f.category)}</span>
-          <span class="sitroom-custom-feed-name">${escapeHtml(f.name)}</span>
-          <span class="sitroom-custom-feed-url">${escapeHtml(f.url)}</span>
-          <button class="btn btn-sm btn-danger" data-sitroom-action="delete-feed" data-feed-id="${f.id}">Remove</button>
-        </div>`).join('');
-      }
-    }
-  } catch (e) {}
+  }
 }
 
 /* ─── AI Briefing ─── */
@@ -363,18 +345,17 @@ async function generateSitroomBriefing() {
   container.innerHTML = '<div class="sitroom-loading">Generating intelligence briefing...</div>';
 
   try {
-    const resp = await safeFetch('/api/sitroom/ai-briefing', {
+    const resp = await fetch('/api/sitroom/ai-briefing', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
-      container.innerHTML = `<div class="sitroom-empty">${escapeHtml(err.error || 'Briefing generation failed — ensure AI service is running')}</div>`;
+      container.innerHTML = '<div class="sitroom-empty">' + escapeHtml(err.error || 'Briefing generation failed') + '</div>';
       return;
     }
     const d = await resp.json();
-    // Render markdown-ish content
-    container.innerHTML = `<div class="sitroom-briefing-text">${_renderBriefing(d.briefing || '')}</div>`;
+    container.innerHTML = '<div class="sitroom-briefing-text">' + _renderBriefing(d.briefing || '') + '</div>';
   } catch (e) {
     container.innerHTML = '<div class="sitroom-empty">Network error generating briefing</div>';
   } finally {
@@ -383,7 +364,6 @@ async function generateSitroomBriefing() {
 }
 
 function _renderBriefing(text) {
-  // Simple markdown-like rendering
   return escapeHtml(text)
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/^### (.*?)$/gm, '<h4>$1</h4>')
@@ -400,7 +380,7 @@ async function addSitroomFeed() {
   if (!name || !url) { toast('Name and URL required', 'warning'); return; }
 
   try {
-    const resp = await safeFetch('/api/sitroom/feeds', {
+    const resp = await fetch('/api/sitroom/feeds', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({name, url, category}),
@@ -421,11 +401,9 @@ async function addSitroomFeed() {
 
 async function deleteSitroomFeed(feedId) {
   try {
-    const resp = await safeFetch(`/api/sitroom/feeds/${feedId}`, {method: 'DELETE'});
-    if (resp.ok) {
-      toast('Feed removed', 'success');
-      loadSitroomFeeds();
-    }
+    await fetch('/api/sitroom/feeds/' + feedId, {method: 'DELETE'});
+    toast('Feed removed', 'success');
+    loadSitroomFeeds();
   } catch (e) {}
 }
 
@@ -435,24 +413,44 @@ async function refreshSitroomFeeds() {
   if (btn) { btn.disabled = true; btn.textContent = 'Refreshing...'; }
 
   try {
-    const resp = await safeFetch('/api/sitroom/refresh', {method: 'POST'});
+    const resp = await fetch('/api/sitroom/refresh', {method: 'POST'});
     if (resp.ok) {
       toast('Feed refresh started — data will appear shortly', 'info');
-      // Poll for completion
-      setTimeout(() => {
-        loadSitroomSummary();
-        loadSitroomNews();
-        loadSitroomFeeds();
-      }, 8000);
-      setTimeout(() => {
-        loadSitroomSummary();
-        loadSitroomNews();
-      }, 20000);
+      // Poll at intervals while background fetch runs
+      setTimeout(_sitroomLoadAll, 5000);
+      setTimeout(_sitroomLoadAll, 12000);
+      setTimeout(_sitroomLoadAll, 25000);
+      setTimeout(_sitroomLoadAll, 40000);
     }
   } catch (e) {
     toast('Refresh failed — check network connection', 'error');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Refresh Feeds'; }
+  }
+}
+
+/* ─── Close Overlays ─── */
+function _closeSitroomOverlays() {
+  // Hide LAN chat panel if open
+  const lanPanel = document.getElementById('lan-chat-panel');
+  if (lanPanel && !lanPanel.classList.contains('is-hidden')) {
+    setShellVisibility(lanPanel, false);
+    setUtilityDockButtonExpanded('chat', false);
+    if (typeof _lanChatOpen !== 'undefined') _lanChatOpen = false;
+  }
+  // Hide timer panel if open
+  const timerPanel = document.getElementById('timer-panel');
+  if (timerPanel && !timerPanel.classList.contains('is-hidden')) {
+    setShellVisibility(timerPanel, false);
+    setUtilityDockButtonExpanded('timer', false);
+    if (typeof _timerPanelOpen !== 'undefined') _timerPanelOpen = false;
+  }
+  // Hide quick actions if open
+  const qaMenu = document.getElementById('quick-actions-menu');
+  if (qaMenu && !qaMenu.classList.contains('is-hidden')) {
+    setShellVisibility(qaMenu, false);
+    setUtilityDockButtonExpanded('actions', false);
+    if (typeof _qaOpen !== 'undefined') _qaOpen = false;
   }
 }
 
@@ -475,15 +473,10 @@ document.addEventListener('click', e => {
   if (action === 'add-feed') addSitroomFeed();
   if (action === 'delete-feed') deleteSitroomFeed(ctrl.dataset.feedId);
   if (action === 'load-more-news') loadSitroomNews(true);
-  if (action === 'filter-news') loadSitroomNews();
-  if (action === 'filter-quakes') renderSitroomQuakes();
 });
 
-// Category filter change
 document.getElementById('sitroom-news-category')?.addEventListener('change', () => loadSitroomNews());
 document.getElementById('sitroom-quake-filter')?.addEventListener('change', () => renderSitroomQuakes());
-
-// Map layer toggles
 document.querySelectorAll('[data-sitroom-layer]').forEach(cb => {
   cb.addEventListener('change', () => loadSitroomMapData());
 });
