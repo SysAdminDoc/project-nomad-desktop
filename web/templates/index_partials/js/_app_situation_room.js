@@ -112,6 +112,10 @@ function _sitroomRefreshPanels() {
   loadSitroomSentiment();
   loadSitroomIntelGap();
   loadSitroomHumanitarian();
+  loadSitroomOrefAlerts();
+  loadSitroomGdeltFull();
+  loadSitroomCot();
+  loadSitroomBreakingDetection();
   _checkCriticalAlerts();
   loadSitroomLiveChannels();
 }
@@ -2874,6 +2878,13 @@ document.addEventListener('click', e => {
   if (card) card.classList.toggle('collapsed');
 });
 
+// Country brief select
+document.addEventListener('change', e => {
+  if (e.target.id === 'sitroom-country-select' && e.target.value) {
+    loadSitroomCountryBrief(e.target.value);
+  }
+});
+
 // CII country click -> deep dive
 document.addEventListener('click', e => {
   const row = e.target.closest('[data-cii-country]');
@@ -2889,3 +2900,148 @@ document.addEventListener('click', e => {
   const vid = btn.dataset.channelVid;
   if (vid) _sitroomPlayChannel(vid);
 });
+
+/* ─── P3: OREF Alerts Card ─── */
+async function loadSitroomOrefAlerts() {
+  const el = document.getElementById('sitroom-oref-alerts');
+  if (!el) return;
+  const d = await safeFetch('/api/sitroom/oref-alerts', {}, null);
+  if (!d || !d.alerts || !d.alerts.length) {
+    el.innerHTML = '<div class="sitroom-empty">No active OREF alerts</div>';
+    return;
+  }
+  let html = '';
+  d.alerts.forEach(a => {
+    const detail = JSON.parse(a.detail_json || '{}');
+    html += `<div class="sr-feed-item" style="border-left:3px solid #ff2222">
+      <span class="sr-feed-source" style="color:#ff4444">OREF</span>
+      <span class="sr-feed-title">${escapeHtml(a.title)}</span>
+      <span class="sr-feed-time">${escapeHtml(detail.date || '')}</span>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+/* ─── P3: GDELT Full Card ─── */
+async function loadSitroomGdeltFull() {
+  const el = document.getElementById('sitroom-gdelt-full');
+  if (!el) return;
+  const d = await safeFetch('/api/sitroom/gdelt-full', {}, null);
+  if (!d) { el.innerHTML = '<div class="sitroom-empty">No GDELT data</div>'; return; }
+  let html = '';
+  if (d.volume && d.volume.timeline) {
+    const series = d.volume.timeline;
+    if (Array.isArray(series) && series.length > 0) {
+      const points = series[0].data || [];
+      html += '<div class="sr-mini-label">24h Event Volume</div><div class="sr-sparkline-row">';
+      const vals = points.slice(-24).map(p => p.value || 0);
+      const max = Math.max(...vals, 1);
+      vals.forEach(v => {
+        const h = Math.max(2, (v / max) * 30);
+        html += `<div class="sr-spark-bar" style="height:${h}px" title="${v}"></div>`;
+      });
+      html += '</div>';
+    }
+  }
+  if (d.tone && d.tone.timeline) {
+    const series = d.tone.timeline;
+    if (Array.isArray(series) && series.length > 0) {
+      const points = series[0].data || [];
+      const recent = points.slice(-12);
+      const avg = recent.reduce((s, p) => s + (p.value || 0), 0) / (recent.length || 1);
+      const sentiment = avg > 0 ? 'Positive' : avg < -2 ? 'Negative' : 'Neutral';
+      const color = avg > 0 ? '#44dd88' : avg < -2 ? '#ff4444' : '#888';
+      html += `<div class="sr-mini-label">72h Tone: <span style="color:${color}">${sentiment} (${avg.toFixed(1)})</span></div>`;
+    }
+  }
+  if (d.hotspots) {
+    html += '<div class="sr-mini-label" style="margin-top:8px">Top Hotspots</div>';
+    const pts = (d.hotspots.features || d.hotspots || []).slice(0, 5);
+    pts.forEach(p => {
+      const name = (p.properties && p.properties.name) || p.name || 'Location';
+      const count = (p.properties && p.properties.count) || p.count || '';
+      html += `<div class="sr-feed-item"><span class="sr-feed-title">${escapeHtml(name)}</span>`;
+      if (count) html += `<span class="sr-feed-badge">${count}</span>`;
+      html += '</div>';
+    });
+  }
+  el.innerHTML = html || '<div class="sitroom-empty">No GDELT data</div>';
+}
+
+/* ─── P3: COT Positioning Card ─── */
+async function loadSitroomCot() {
+  const el = document.getElementById('sitroom-cot-positioning');
+  if (!el) return;
+  const d = await safeFetch('/api/sitroom/cot-positioning', {}, null);
+  if (!d || !d.positions || !d.positions.length) {
+    el.innerHTML = '<div class="sitroom-empty">No COT data</div>';
+    return;
+  }
+  // Group by market, show latest for each
+  const byMarket = {};
+  d.positions.forEach(p => {
+    const key = p.market.split(' -')[0].trim();
+    if (!byMarket[key]) byMarket[key] = p;
+  });
+  let html = '<table class="sr-table"><tr><th>Market</th><th>Net</th><th>Long</th><th>Short</th></tr>';
+  Object.entries(byMarket).slice(0, 10).forEach(([name, p]) => {
+    const net = p.net_positions || 0;
+    const color = net > 0 ? '#44dd88' : '#ff4444';
+    const shortName = name.length > 25 ? name.substring(0, 22) + '...' : name;
+    html += `<tr><td title="${escapeHtml(name)}">${escapeHtml(shortName)}</td>
+      <td style="color:${color}">${net > 0 ? '+' : ''}${Math.round(net).toLocaleString()}</td>
+      <td>${Math.round(p.long_positions).toLocaleString()}</td>
+      <td>${Math.round(p.short_positions).toLocaleString()}</td></tr>`;
+  });
+  html += '</table>';
+  el.innerHTML = html;
+}
+
+/* ─── P3: Breaking News Detection Card ─── */
+async function loadSitroomBreakingDetection() {
+  const el = document.getElementById('sitroom-breaking-detection');
+  if (!el) return;
+  const d = await safeFetch('/api/sitroom/breaking-news', {}, null);
+  if (!d || !d.breaking || !d.breaking.length) {
+    el.innerHTML = '<div class="sitroom-empty">No breaking news detected</div>';
+    return;
+  }
+  let html = '';
+  d.breaking.forEach(b => {
+    const urgency = b.urgency_score || 0;
+    const color = urgency >= 8 ? '#ff2222' : urgency >= 5 ? '#ff8800' : '#ffcc00';
+    const badge = urgency >= 8 ? 'CRITICAL' : urgency >= 5 ? 'HIGH' : 'MEDIUM';
+    html += `<div class="sr-feed-item" style="border-left:3px solid ${color}">
+      <span class="sr-feed-badge" style="background:${color};color:#000;font-size:9px;padding:1px 4px;border-radius:2px">${badge}</span>
+      <a href="${escapeHtml(b.link || '#')}" target="_blank" class="sr-feed-title">${escapeHtml(b.title)}</a>
+      <span class="sr-feed-source">${escapeHtml(b.source_name || '')}</span>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+/* ─── P3: Country Intelligence Brief ─── */
+async function loadSitroomCountryBrief(country) {
+  const el = document.getElementById('sitroom-country-brief-content');
+  if (!el) return;
+  el.innerHTML = '<div class="sitroom-empty">Loading intelligence brief...</div>';
+  const d = await safeFetch(`/api/sitroom/country-brief/${encodeURIComponent(country)}`, {}, null);
+  if (!d) { el.innerHTML = '<div class="sitroom-empty">Failed to load</div>'; return; }
+  let html = `<div class="sr-mini-label">${escapeHtml(d.country)} Intelligence Brief</div>`;
+  html += `<div style="display:flex;gap:12px;margin:8px 0">
+    <span class="sr-feed-badge">${d.news_count} articles</span>
+    <span class="sr-feed-badge">${d.event_count} events</span>
+    <span class="sr-feed-badge">${d.categories ? d.categories.length : 0} categories</span>
+  </div>`;
+  if (d.ai_summary) {
+    html += `<div class="sr-ai-brief">${escapeHtml(d.ai_summary).replace(/\n/g, '<br>')}</div>`;
+  }
+  if (d.recent_news && d.recent_news.length) {
+    html += '<div class="sr-mini-label" style="margin-top:8px">Recent Headlines</div>';
+    d.recent_news.slice(0, 5).forEach(n => {
+      html += `<div class="sr-feed-item"><span class="sr-feed-source">${escapeHtml(n.source_name || '')}</span>
+        <span class="sr-feed-title">${escapeHtml(n.title)}</span></div>`;
+    });
+  }
+  el.innerHTML = html;
+}
