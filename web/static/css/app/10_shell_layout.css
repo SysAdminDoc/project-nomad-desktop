@@ -554,6 +554,15 @@
   position: relative; z-index: 1; padding-bottom: 56px;
 }
 .container { max-width: none; width: 100%; margin: 0; padding: 24px 28px; }
+/* Embedded app iframes (NukeMap, VIPTrack) — fill the tab content area */
+.embedded-app-frame {
+  width: 100%;
+  height: calc(100vh - 40px);
+  border: none;
+  display: block;
+  background: #0a0a0c;
+}
+
 /* Workspace context bar + inspector hidden globally — declutter all pages */
 .workspace-context-bar,
 .workspace-inspector {
