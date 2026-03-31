@@ -74,6 +74,7 @@ a = Analysis(
         ('web/templates', 'web/templates'),
         ('web/static', 'web/static'),
         ('web/nukemap', 'web/nukemap'),
+        ('web/viptrack', 'web/viptrack'),
         ('web/__init__.py', 'web'),
         ('web/app.py', 'web'),
         ('web/catalog.py', 'web'),
