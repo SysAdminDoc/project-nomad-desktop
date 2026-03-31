@@ -2481,11 +2481,7 @@ a.sr-feed-title:hover { color: #7fe8cf; }
   display: none !important;
 }
 
-/* Hide global workspace chrome when Situation Room is active */
-body.situation-room-active #workspace-context-bar,
-body.situation-room-active #workspace-inspector {
-  display: none !important;
-}
+/* workspace-context-bar + workspace-inspector hidden globally in 10_shell_layout.css */
 
 /* Hide map overlays — command brief, gradient scrim, legend, playback */
 .sr-map-command-brief,
