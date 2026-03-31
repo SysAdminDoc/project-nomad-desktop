@@ -553,7 +553,7 @@
   margin-left: 268px; min-height: 100vh; overflow-x: hidden;
   position: relative; z-index: 1; padding-bottom: 56px;
 }
-.container { max-width: 1500px; margin: 0 auto; padding: 34px 42px; }
+.container { max-width: none; width: 100%; margin: 0; padding: 24px 28px; }
 /* Workspace context bar + inspector hidden globally — declutter all pages */
 .workspace-context-bar,
 .workspace-inspector {
