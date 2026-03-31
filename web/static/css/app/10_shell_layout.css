@@ -554,7 +554,12 @@
   position: relative; z-index: 1; padding-bottom: 56px;
 }
 .container { max-width: 1500px; margin: 0 auto; padding: 34px 42px; }
-.workspace-context-bar {
+/* Workspace context bar + inspector hidden globally — declutter all pages */
+.workspace-context-bar,
+.workspace-inspector {
+  display: none !important;
+}
+.workspace-context-bar--definition {
   margin: 16px 42px 0;
   padding: 16px 18px;
   border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
