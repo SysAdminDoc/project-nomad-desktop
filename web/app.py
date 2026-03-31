@@ -318,15 +318,154 @@ def create_app():
 
     # ─── Pages ─────────────────────────────────────────────────────────
 
-    @app.route('/')
-    def dashboard():
+    workspace_pages = {
+        'services': {
+            'route': '/',
+            'aliases': ['/home'],
+            'title': 'Home',
+            'partial': 'index_partials/_tab_services.html',
+        },
+        'situation-room': {
+            'route': '/situation-room',
+            'aliases': ['/briefing'],
+            'title': 'Situation Room',
+            'partial': 'index_partials/_tab_situation_room.html',
+        },
+        'readiness': {
+            'route': '/readiness',
+            'aliases': [],
+            'title': 'Readiness',
+            'partial': 'index_partials/_tab_readiness.html',
+        },
+        'preparedness': {
+            'route': '/preparedness',
+            'aliases': ['/operations'],
+            'title': 'Preparedness',
+            'partial': 'index_partials/_tab_preparedness.html',
+        },
+        'maps': {
+            'route': '/maps',
+            'aliases': [],
+            'title': 'Maps',
+            'partial': 'index_partials/_tab_maps.html',
+        },
+        'tools': {
+            'route': '/tools',
+            'aliases': [],
+            'title': 'Tools',
+            'partial': 'index_partials/_tab_tools.html',
+        },
+        'kiwix-library': {
+            'route': '/library',
+            'aliases': ['/knowledge'],
+            'title': 'Library',
+            'partial': 'index_partials/_tab_library.html',
+        },
+        'notes': {
+            'route': '/notes',
+            'aliases': [],
+            'title': 'Notes',
+            'partial': 'index_partials/_tab_notes.html',
+        },
+        'media': {
+            'route': '/media',
+            'aliases': [],
+            'title': 'Media',
+            'partial': 'index_partials/_tab_media.html',
+        },
+        'ai-chat': {
+            'route': '/copilot',
+            'aliases': ['/assistant'],
+            'title': 'Copilot',
+            'partial': 'index_partials/_tab_ai_chat.html',
+        },
+        'benchmark': {
+            'route': '/diagnostics',
+            'aliases': [],
+            'title': 'Diagnostics',
+            'partial': 'index_partials/_tab_benchmark.html',
+        },
+        'settings': {
+            'route': '/settings',
+            'aliases': ['/system'],
+            'title': 'Settings',
+            'partial': 'index_partials/_tab_settings.html',
+        },
+    }
+
+    workspace_routes = {tab: meta['route'] for tab, meta in workspace_pages.items()}
+
+    def _render_workspace_page(tab_id, allow_launch_restore=False):
+        meta = workspace_pages[tab_id]
         manifest = _load_bundle_manifest()
         return render_template(
-            'index.html',
+            'workspace_page.html',
             version=VERSION,
             bundle_js=manifest.get('nomad.bundle.js', ''),
             bundle_css=manifest.get('nomad.bundle.css', ''),
+            active_tab=tab_id,
+            page_title=meta['title'],
+            workspace_partial=meta['partial'],
+            workspace_routes=workspace_routes,
+            allow_launch_restore=allow_launch_restore,
         )
+
+    @app.route('/')
+    def dashboard():
+        return _render_workspace_page('services', allow_launch_restore=True)
+
+    @app.route('/home')
+    def home_page():
+        return _render_workspace_page('services')
+
+    @app.route('/situation-room')
+    @app.route('/briefing')
+    def situation_room_page():
+        return _render_workspace_page('situation-room')
+
+    @app.route('/readiness')
+    def readiness_page():
+        return _render_workspace_page('readiness')
+
+    @app.route('/preparedness')
+    @app.route('/operations')
+    def preparedness_page():
+        return _render_workspace_page('preparedness')
+
+    @app.route('/maps')
+    def maps_page():
+        return _render_workspace_page('maps')
+
+    @app.route('/tools')
+    def tools_page():
+        return _render_workspace_page('tools')
+
+    @app.route('/library')
+    @app.route('/knowledge')
+    def library_page():
+        return _render_workspace_page('kiwix-library')
+
+    @app.route('/notes')
+    def notes_page():
+        return _render_workspace_page('notes')
+
+    @app.route('/media')
+    def media_page():
+        return _render_workspace_page('media')
+
+    @app.route('/copilot')
+    @app.route('/assistant')
+    def copilot_page():
+        return _render_workspace_page('ai-chat')
+
+    @app.route('/diagnostics')
+    def diagnostics_page():
+        return _render_workspace_page('benchmark')
+
+    @app.route('/settings')
+    @app.route('/system')
+    def settings_page():
+        return _render_workspace_page('settings')
 
     # ─── Service API ───────────────────────────────────────────────────
 
@@ -795,19 +934,19 @@ def create_app():
         try:
             # Write test (32MB)
             data = os.urandom(32 * 1024 * 1024)
-            start = _time.time()
+            start = _time.perf_counter()
             with open(test_file, 'wb') as f:
                 f.write(data)
                 f.flush()
                 os.fsync(f.fileno())
-            write_time = _time.time() - start
+            write_time = max(_time.perf_counter() - start, 1e-9)
             write_mbps = round(32 / write_time, 1) if write_time > 0 else 0
 
             # Read test
-            start = _time.time()
+            start = _time.perf_counter()
             with open(test_file, 'rb') as f:
                 _ = f.read()
-            read_time = _time.time() - start
+            read_time = max(_time.perf_counter() - start, 1e-9)
             read_mbps = round(32 / read_time, 1) if read_time > 0 else 0
 
             os.remove(test_file)
@@ -1930,7 +2069,10 @@ def create_app():
                     (soon, today)
                 ).fetchall()
                 for item in expiring:
-                    exp_days = (datetime.strptime(item['expiration'], '%Y-%m-%d') - now).days
+                    try:
+                        exp_days = (datetime.strptime(item['expiration'], '%Y-%m-%d') - now).days
+                    except (ValueError, TypeError):
+                        continue
                     sev = 'critical' if exp_days <= 3 else 'warning'
                     alerts.append({
                         'type': 'expiration', 'severity': sev,
@@ -2471,6 +2613,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
         except Exception as e:
             log.debug(f'Failed to schedule auto-backup: {e}')
 
+    app.config['_schedule_auto_backup'] = _schedule_auto_backup
     try:
         _schedule_auto_backup()
     except Exception:
@@ -3181,7 +3324,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
                     cl_items = json.loads(cl.get('items') or '[]')
                     for it in cl_items:
                         label = it.get('text', it) if isinstance(it, dict) else str(it)
-                        checked = it.get('done', False) if isinstance(it, dict) else False
+                        checked = it.get('checked', False) if isinstance(it, dict) else False
                         mark = '[X]' if checked else '[ ]'
                         elements.append(Paragraph(f'    {mark} {_esc(str(label))}', mono))
                 except (json.JSONDecodeError, TypeError):
@@ -3951,7 +4094,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
     def nukemap_serve(filepath='index.html'):
         from flask import send_from_directory
         full_path = os.path.normpath(os.path.join(_nukemap_dir, filepath))
-        if not full_path.startswith(os.path.normpath(_nukemap_dir)):
+        if not os.path.normcase(full_path).startswith(os.path.normcase(os.path.normpath(_nukemap_dir))):
             return jsonify({'error': 'Forbidden'}), 403
         if not os.path.isfile(full_path):
             log.warning(f'NukeMap file not found: {full_path}')
@@ -3991,7 +4134,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
     def viptrack_serve(filepath='index.html'):
         from flask import send_from_directory
         full_path = os.path.normpath(os.path.join(_viptrack_dir, filepath))
-        if not full_path.startswith(os.path.normpath(_viptrack_dir)):
+        if not os.path.normcase(full_path).startswith(os.path.normcase(os.path.normpath(_viptrack_dir))):
             return jsonify({'error': 'Forbidden'}), 403
         if not os.path.isfile(full_path):
             return jsonify({'error': f'Not found: {filepath}'}), 404

@@ -14,6 +14,7 @@ let _mediaSelectMode = false;
 function switchMediaSub(sub) {
   _mediaSub = sub;
   _mediaFolder = '';
+  if (typeof syncWorkspaceUrlState === 'function') syncWorkspaceUrlState();
   document.querySelectorAll('.media-subtab').forEach(b => b.classList.toggle('active', b.dataset.msub === sub));
   const urlInput = document.getElementById('media-url-input');
   const fileInput = document.getElementById('media-file-upload');

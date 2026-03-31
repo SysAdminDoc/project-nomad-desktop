@@ -83,12 +83,84 @@ function updateSidebarSubs() {
 document.querySelectorAll('.sidebar-nav .tab').forEach(tab => {
   tab.addEventListener('click', () => setTimeout(updateSidebarSubs, 50));
 });
+updateSidebarSubs();
 
 function scrollToSection(id) {
   setTimeout(() => {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
   }, 200);
+}
+
+function getWorkspaceRouteMap() {
+  return window.NOMAD_WORKSPACE_ROUTES || {};
+}
+
+function getWorkspacePageTab() {
+  return window.NOMAD_ACTIVE_TAB || document.querySelector('.tab.active')?.dataset.tab || 'services';
+}
+
+function hasWorkspaceTabContent(tabId) {
+  return !!document.getElementById(`tab-${tabId}`);
+}
+
+function buildWorkspaceUrl(tabId, options = {}) {
+  const route = getWorkspaceRouteMap()[tabId] || window.location.pathname || '/';
+  const url = new URL(route, window.location.origin);
+  url.searchParams.set('tab', tabId);
+  if (options.prepSub) url.searchParams.set('prep', options.prepSub);
+  if (options.mediaSub) url.searchParams.set('media', options.mediaSub);
+  if (options.checklistFocus !== undefined && options.checklistFocus !== null) {
+    url.searchParams.set('checklist_focus', String(options.checklistFocus));
+  }
+  if (options.showInvForm) url.searchParams.set('show_inv_form', '1');
+  if (options.guideStart) url.searchParams.set('guide_start', options.guideStart);
+  if (options.scrollTarget) url.hash = options.scrollTarget;
+  return url.toString();
+}
+
+function navigateToWorkspace(tabId, options = {}) {
+  window.location.assign(buildWorkspaceUrl(tabId, options));
+}
+
+function activateWorkspaceTab(tab) {
+  const tabId = tab.dataset.tab;
+  const tabContent = document.getElementById('tab-' + tabId);
+  if (!tabContent) {
+    navigateToWorkspace(tabId);
+    return false;
+  }
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  tab.classList.add('active');
+  tabContent.classList.add('active');
+  window.NOMAD_ACTIVE_TAB = tabId;
+  updateSidebarSubs();
+  window.scrollTo(0, 0);
+  if (tabId === 'ai-chat') { loadModels(); loadConversations(); pollPullProgress(); }
+  if (tabId === 'notes') loadNotes();
+  if (tabId === 'settings') { loadSystemInfo(); loadModelManager(); loadSettings(); startLiveGauges(); loadLogViewer(); loadDiskMonitor(); loadStartupState(); loadOllamaHost(); updateLastBackup(); loadNodeIdentity(); loadSyncLog(); loadConflicts(); loadGroupExercises(); loadDataSummary(); loadTrainingDatasets(); loadTrainingJobs(); loadBackups(); loadBackupConfig(); }
+  if (tabId === 'kiwix-library') { loadZimList(); loadZimCatalog(); loadZimDownloads(); loadPDFList(); loadWikipediaTiers(); }
+  if (tabId === 'maps') { loadMaps(); loadWPDistances(); loadMapSources(); renderMapBookmarks(); loadSavedRoutes(); }
+  if (tabId === 'benchmark') { loadBenchHistory(); loadBuilderTag(); }
+  if (tabId === 'media') { loadMediaTab(); }
+  if (tabId === 'tools') { loadDrillHistory(); renderScenarioSelector(); }
+  if (tabId === 'preparedness') { loadPrepTab(); }
+  if (tabId === 'readiness') { loadReadinessScore(); loadReadinessNeeds(); }
+  if (tabId === 'situation-room') { initSituationRoom(); }
+  if (tabId !== 'situation-room' && typeof _restoreCopilotDock === 'function') { _restoreCopilotDock(); }
+  if (typeof syncWorkspaceUrlState === 'function') syncWorkspaceUrlState();
+  return true;
+}
+
+function openWorkspaceRouteAware(tabId, options = {}) {
+  const tab = document.querySelector(`.tab[data-tab="${tabId}"]`);
+  if (tab && hasWorkspaceTabContent(tabId)) {
+    activateWorkspaceTab(tab);
+    return true;
+  }
+  navigateToWorkspace(tabId, options);
+  return false;
 }
 
 function setTheme(theme) {
@@ -155,7 +227,7 @@ document.addEventListener('keydown', e => {
     b.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
   updateThemeIndicator(saved);
-  updateCustomizeTheme();
+  if (typeof updateCustomizeTheme === 'function') updateCustomizeTheme();
 })();
 // Init sidebar sub-menus
 setTimeout(updateSidebarSubs, 100);
@@ -249,26 +321,13 @@ let branchMsgIdx = null;
 
 /* ─── Tabs ─── */
 document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-    // Scroll to top when switching tabs
-    window.scrollTo(0, 0);
-    if (tab.dataset.tab === 'ai-chat') { loadModels(); loadConversations(); pollPullProgress(); }
-    if (tab.dataset.tab === 'notes') loadNotes();
-    if (tab.dataset.tab === 'settings') { loadSystemInfo(); loadModelManager(); loadSettings(); startLiveGauges(); loadLogViewer(); loadDiskMonitor(); loadStartupState(); loadOllamaHost(); updateLastBackup(); loadNodeIdentity(); loadSyncLog(); loadConflicts(); loadGroupExercises(); loadDataSummary(); loadTrainingDatasets(); loadTrainingJobs(); loadBackups(); loadBackupConfig(); }
-    if (tab.dataset.tab === 'kiwix-library') { loadZimList(); loadZimCatalog(); loadZimDownloads(); loadPDFList(); loadWikipediaTiers(); }
-    if (tab.dataset.tab === 'maps') { loadMaps(); loadWPDistances(); loadMapSources(); renderMapBookmarks(); loadSavedRoutes(); }
-    if (tab.dataset.tab === 'benchmark') { loadBenchHistory(); loadBuilderTag(); }
-    if (tab.dataset.tab === 'media') { loadMediaTab(); }
-    if (tab.dataset.tab === 'tools') { loadDrillHistory(); renderScenarioSelector(); }
-    if (tab.dataset.tab === 'preparedness') { loadPrepTab(); }
-    if (tab.dataset.tab === 'readiness') { loadReadinessScore(); loadReadinessNeeds(); }
-    if (tab.dataset.tab === 'situation-room') { initSituationRoom(); }
-    // Restore copilot dock when leaving Situation Room
-    if (tab.dataset.tab !== 'situation-room' && typeof _restoreCopilotDock === 'function') { _restoreCopilotDock(); }
+  tab.addEventListener('click', e => {
+    if (!hasWorkspaceTabContent(tab.dataset.tab)) {
+      e.preventDefault();
+      navigateToWorkspace(tab.dataset.tab);
+      return;
+    }
+    activateWorkspaceTab(tab);
   });
 });
 
@@ -687,4 +746,3 @@ function renderMarkdown(text) {
   codeBlocks.forEach((block, i) => { h = h.split('\x00CB' + i + '\x00').join(block); });
   return '<p>' + h + '</p>';
 }
-

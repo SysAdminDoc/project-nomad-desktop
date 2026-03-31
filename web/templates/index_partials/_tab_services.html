@@ -1,5 +1,5 @@
   <!-- Services Tab (Command Center) -->
-  <div id="tab-services" class="tab-content">
+  <div id="tab-services" class="tab-content{% if active_tab == 'services' %} active{% endif %}">
     <div class="lan-banner is-hidden" id="lan-banner"></div>
 
     <!-- Welcome Banner (first-run only) -->
@@ -41,54 +41,104 @@
     <!-- ════════════════════════════════════════════════════════════
          SEARCH BAR
          ════════════════════════════════════════════════════════════ -->
-    <div class="search-bar home-search-shell home-search-shell-wide">
-      <span class="search-icon">&#128269;</span>
-      <input id="unified-search" type="search" name="unified_search" autocomplete="off" aria-label="Search supplies, contacts, notes, and checklists" data-input-action="debounce-search" placeholder="Search supplies, contacts, notes, checklists…">
-      <div class="search-results" id="search-results"></div>
-    </div>
+    <div class="home-launch-deck">
+      <div class="home-launch-main">
+        <div class="home-launch-hero home-surface-panel">
+          <div class="home-launch-head">
+            <div class="home-launch-copy">
+              <span class="section-header-label home-launch-kicker">MISSION CONTROL</span>
+              <h2 class="home-launch-title">Start from the desk you actually need right now.</h2>
+              <p class="home-launch-text">Search across the entire workspace, jump into the right operating lane, or reopen live context without backing out and rebuilding your mental map.</p>
+            </div>
+            <div class="home-launch-actions">
+              <button class="btn btn-sm btn-primary compact-action-btn" data-shell-action="toggle-command-palette">Global Find</button>
+              <button class="btn btn-sm btn-ghost compact-action-btn" data-tab-target="situation-room">Open Situation Room</button>
+            </div>
+          </div>
+          <div class="search-bar home-search-shell home-search-shell-wide home-launch-search">
+            <span class="search-icon">&#128269;</span>
+            <input id="unified-search" type="search" name="unified_search" autocomplete="off" aria-label="Search supplies, contacts, notes, and checklists" data-input-action="debounce-search" placeholder="Search supplies, contacts, notes, checklists…">
+            <div class="search-results" id="search-results"></div>
+          </div>
+          <div class="home-launch-meta">
+            <span class="home-launch-chip">Ctrl+K opens global find from any workspace</span>
+            <span class="home-launch-chip">Pinned and recent desks stay synced with the sidebar</span>
+            <span class="home-launch-chip">Use Work Modes when you know the job, search when you only know the outcome</span>
+          </div>
+        </div>
 
-    <div class="home-mode-rail home-surface-panel">
-      <div class="section-header home-section-header home-toolbar">
-        <span class="section-header-label">WORK MODES</span>
-        <div class="section-divider section-divider-grow"></div>
-        <div class="home-mode-rail-copy">Jump into the lane that matches what you need to do next.</div>
+        <div class="home-mode-rail home-surface-panel">
+          <div class="section-header home-section-header home-toolbar">
+            <span class="section-header-label">WORK MODES</span>
+            <div class="section-divider section-divider-grow"></div>
+            <div class="home-mode-rail-copy">Jump into the lane that matches what you need to do next.</div>
+          </div>
+          <div class="home-mode-grid">
+            <button type="button" class="home-mode-card" data-tab-target="readiness">
+              <span class="home-mode-icon" aria-hidden="true">&#128202;</span>
+              <span class="home-mode-body">
+                <span class="home-mode-title">Briefing</span>
+                <span class="home-mode-copy">Check readiness, scan priorities, and see what changed.</span>
+              </span>
+            </button>
+            <button type="button" class="home-mode-card" data-tab-target="preparedness" data-prep-sub="checklists">
+              <span class="home-mode-icon" aria-hidden="true">&#9878;</span>
+              <span class="home-mode-body">
+                <span class="home-mode-title">Operations</span>
+                <span class="home-mode-copy">Work checklists, incident logs, and field workflows.</span>
+              </span>
+            </button>
+            <button type="button" class="home-mode-card" data-tab-target="kiwix-library">
+              <span class="home-mode-icon" aria-hidden="true">&#128214;</span>
+              <span class="home-mode-body">
+                <span class="home-mode-title">Knowledge</span>
+                <span class="home-mode-copy">Open offline reference, notes, and media resources.</span>
+              </span>
+            </button>
+            <button type="button" class="home-mode-card" data-tab-target="ai-chat">
+              <span class="home-mode-icon" aria-hidden="true">&#129302;</span>
+              <span class="home-mode-body">
+                <span class="home-mode-title">Copilot</span>
+                <span class="home-mode-copy">Ask for synthesis, drafting, or the next best action.</span>
+              </span>
+            </button>
+            <button type="button" class="home-mode-card" data-tab-target="settings">
+              <span class="home-mode-icon" aria-hidden="true">&#9881;</span>
+              <span class="home-mode-body">
+                <span class="home-mode-title">System</span>
+                <span class="home-mode-copy">Tune models, tasks, backups, and platform behavior.</span>
+              </span>
+            </button>
+          </div>
+        </div>
       </div>
-      <div class="home-mode-grid">
-        <button type="button" class="home-mode-card" data-tab-target="readiness">
-          <span class="home-mode-icon" aria-hidden="true">&#128202;</span>
-          <span class="home-mode-body">
-            <span class="home-mode-title">Briefing</span>
-            <span class="home-mode-copy">Check readiness, scan priorities, and see what changed.</span>
-          </span>
-        </button>
-        <button type="button" class="home-mode-card" data-tab-target="preparedness" data-prep-sub="checklists">
-          <span class="home-mode-icon" aria-hidden="true">&#9878;</span>
-          <span class="home-mode-body">
-            <span class="home-mode-title">Operations</span>
-            <span class="home-mode-copy">Work checklists, incident logs, and field workflows.</span>
-          </span>
-        </button>
-        <button type="button" class="home-mode-card" data-tab-target="kiwix-library">
-          <span class="home-mode-icon" aria-hidden="true">&#128214;</span>
-          <span class="home-mode-body">
-            <span class="home-mode-title">Knowledge</span>
-            <span class="home-mode-copy">Open offline reference, notes, and media resources.</span>
-          </span>
-        </button>
-        <button type="button" class="home-mode-card" data-tab-target="ai-chat">
-          <span class="home-mode-icon" aria-hidden="true">&#129302;</span>
-          <span class="home-mode-body">
-            <span class="home-mode-title">Copilot</span>
-            <span class="home-mode-copy">Ask for synthesis, drafting, or the next best action.</span>
-          </span>
-        </button>
-        <button type="button" class="home-mode-card" data-tab-target="settings">
-          <span class="home-mode-icon" aria-hidden="true">&#9881;</span>
-          <span class="home-mode-body">
-            <span class="home-mode-title">System</span>
-            <span class="home-mode-copy">Tune models, tasks, backups, and platform behavior.</span>
-          </span>
-        </button>
+
+      <div id="home-continue-panel" class="home-continue-panel home-surface-panel">
+        <div class="section-header home-section-header home-toolbar">
+          <span class="section-header-label">CONTINUE WORKING</span>
+          <div class="section-divider section-divider-grow"></div>
+          <button id="home-pin-current-context-btn" class="btn btn-sm btn-ghost section-header-action compact-action-btn" data-home-context-action="toggle-pin-current" aria-pressed="false">Pin Current Context</button>
+          <button class="btn btn-sm btn-ghost section-header-action compact-action-btn" data-shell-action="toggle-command-palette">Command Palette</button>
+        </div>
+        <div id="home-continue-summary" class="home-continue-summary">Pick up where you left off without rebuilding your mental map.</div>
+        <div class="home-context-section">
+          <div class="home-context-section-head">
+            <span class="home-context-section-title">Pinned Contexts</span>
+            <span class="home-context-section-copy">Keep the desks you return to most within immediate reach.</span>
+          </div>
+          <div id="home-pinned-grid" class="home-continue-grid home-continue-grid-pinned">
+            <div class="home-continue-empty">Pin your current context to build a personal shelf.</div>
+          </div>
+        </div>
+        <div class="home-context-section">
+          <div class="home-context-section-head">
+            <span class="home-context-section-title">Recent Context</span>
+            <span class="home-context-section-copy">Jump back to the last working views and sub-workspaces you were actually using.</span>
+          </div>
+          <div id="home-continue-grid" class="home-continue-grid">
+            <div class="home-continue-empty">Recent workspaces and saved context will appear here as you use the desk.</div>
+          </div>
+        </div>
       </div>
     </div>
 

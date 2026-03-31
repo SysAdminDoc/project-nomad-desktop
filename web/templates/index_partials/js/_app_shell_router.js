@@ -1,7 +1,11 @@
 /* ─── Tab Navigation Helper ─── */
 function switchToTab(tab) {
+  if (typeof openWorkspaceRouteAware === 'function') {
+    return openWorkspaceRouteAware(tab);
+  }
   const el = document.querySelector(`.tab[data-tab="${tab}"]`);
   if (el) el.click();
+  return !!el;
 }
 
 function handleShellNavigation(target) {
@@ -10,6 +14,18 @@ function handleShellNavigation(target) {
     closeNeedsDetail();
   }
   if (!tabTarget) return;
+  const navigationOptions = {
+    prepSub: target.dataset.prepSub,
+    mediaSub: target.dataset.mediaSub,
+    scrollTarget: target.dataset.scrollTarget,
+    checklistFocus: target.dataset.checklistFocus ? Number(target.dataset.checklistFocus) : undefined,
+    showInvForm: target.dataset.showInvForm !== undefined,
+    guideStart: target.dataset.guideStart,
+  };
+  if (!hasWorkspaceTabContent(tabTarget)) {
+    navigateToWorkspace(tabTarget, navigationOptions);
+    return;
+  }
   switchToTab(tabTarget);
   if (target.dataset.prepSub) {
     const prepDelay = Number(target.dataset.prepDelay || 150);
@@ -67,7 +83,8 @@ document.addEventListener('click', e => {
   const action = control.dataset.shellAction;
   if (action === 'print-app-frame') { printAppFrame(); return; }
   if (action === 'close-app-frame') { closeAppFrame(); return; }
-  if (action === 'toggle-shortcuts') { toggleShortcutsHelp(); return; }
+  if (action === 'toggle-command-palette') { toggleCommandPalette(); return; }
+  if (action === 'toggle-shortcuts') { toggleCommandPalette(false); toggleShortcutsHelp(); return; }
   if (action === 'toggle-alert-bar') { toggleAlertBar(); return; }
   if (action === 'toggle-customize-panel') { toggleCustomizePanel(); return; }
   if (action === 'open-widget-manager') { openWidgetManager(); return; }

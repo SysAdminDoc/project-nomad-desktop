@@ -1,5 +1,5 @@
   <!-- Situation Room Tab -->
-  <div id="tab-situation-room" class="tab-content active">
+  <div id="tab-situation-room" class="tab-content{% if active_tab == 'situation-room' %} active{% endif %}">
 
     <!-- Critical Alert Toasts -->
     <div class="sr-alert-stack" id="sr-alert-stack"></div>
@@ -28,9 +28,112 @@
         <span class="sr-status-dot" id="sr-status-dot" title="Data status"></span>
         <span id="sitroom-online-badge" class="sitroom-badge sitroom-badge-offline">OFFLINE</span>
         <button class="sr-btn" data-sitroom-action="export-report" title="Export intelligence report">Export</button>
-        <button class="sr-btn" data-sitroom-action="open-search" title="Search (Ctrl+K)">&#128269; Search</button>
+        <button class="sr-btn" data-sitroom-action="open-search" title="Search Desk (/)">&#128269; Search</button>
         <button class="sr-btn" data-sitroom-action="toggle-feeds" title="Manage feeds">&#9881;</button>
         <button class="sr-btn sr-btn-accent" id="sitroom-refresh-btn" data-sitroom-action="refresh">REFRESH</button>
+      </div>
+    </div>
+
+    <div class="sr-workspace-bar">
+      <div class="sr-view-nav" role="tablist" aria-label="Situation Room views">
+        <button class="sr-view-btn active" data-sitroom-action="set-view" data-sitroom-view="topline" aria-pressed="true">Topline</button>
+        <button class="sr-view-btn" data-sitroom-action="set-view" data-sitroom-view="news" aria-pressed="false">News Desk</button>
+        <button class="sr-view-btn" data-sitroom-action="set-view" data-sitroom-view="markets" aria-pressed="false">Markets</button>
+        <button class="sr-view-btn" data-sitroom-action="set-view" data-sitroom-view="security" aria-pressed="false">Security</button>
+        <button class="sr-view-btn" data-sitroom-action="set-view" data-sitroom-view="map" aria-pressed="false">Map</button>
+      </div>
+      <div class="sr-view-copy" id="sr-view-copy">Critical signals, narrative shifts, and decision support in one live surface.</div>
+      <div class="sr-view-tools">
+        <button class="sr-btn sr-btn-ghost" id="sr-layout-edit-btn" data-sitroom-action="toggle-layout-edit" aria-pressed="false">EDIT LAYOUT</button>
+      </div>
+    </div>
+
+    <div class="sr-desk-preset-bar" id="sr-desk-preset-bar">
+      <span class="sr-desk-preset-label">Desk Presets</span>
+      <button class="sr-desk-btn active" data-sitroom-action="set-desk-preset" data-sitroom-desk="executive" aria-pressed="true">Executive</button>
+      <button class="sr-desk-btn" data-sitroom-action="set-desk-preset" data-sitroom-desk="crisis" aria-pressed="false">Crisis</button>
+      <button class="sr-desk-btn" data-sitroom-action="set-desk-preset" data-sitroom-desk="markets" aria-pressed="false">Markets</button>
+      <button class="sr-desk-btn" data-sitroom-action="set-desk-preset" data-sitroom-desk="cyber" aria-pressed="false">Cyber</button>
+      <button class="sr-desk-btn" data-sitroom-action="set-desk-preset" data-sitroom-desk="middle-east" aria-pressed="false">Middle East</button>
+    </div>
+
+    <div class="sr-saved-desk-bar" id="sr-saved-desk-bar">
+      <div class="sr-saved-desk-meta">
+        <span class="sr-saved-desk-label">Saved Watchlists</span>
+        <span class="sr-saved-desk-copy">Pin key desks, reorder them, and choose one launch desk for the way you actually work.</span>
+      </div>
+      <div class="sr-saved-desk-form">
+        <input type="text" id="sr-saved-desk-name" name="sitroom_saved_desk_name" class="sr-input sr-saved-desk-input" maxlength="40" placeholder="Name current desk">
+        <button class="sr-btn sr-btn-ghost" data-sitroom-action="save-current-desk">Save Current Desk</button>
+      </div>
+      <div class="sr-saved-desk-list" id="sr-saved-desk-list">
+        <span class="sr-saved-desk-empty">No saved watchlists yet.</span>
+      </div>
+    </div>
+
+    <div class="sr-posture-bar" id="sr-posture-bar">
+      <div class="sr-posture-summary">
+        <div class="sr-posture-kicker">Current Posture</div>
+        <h3 class="sr-posture-title" id="sr-posture-title">Executive desk · Global</h3>
+        <p class="sr-posture-copy" id="sr-posture-copy">Topline view with crisis layers and a global watchfloor. Use a desk preset to move fast, or save a custom watchlist for repeat monitoring.</p>
+        <div class="sr-posture-template-row" role="toolbar" aria-label="Desk snapshot templates">
+          <span class="sr-posture-template-label">Snapshot Template</span>
+          <button class="sr-posture-template-btn active" data-sitroom-action="set-snapshot-template" data-sitroom-snapshot-template="morning" aria-pressed="true">AM Brief</button>
+          <button class="sr-posture-template-btn" data-sitroom-action="set-snapshot-template" data-sitroom-snapshot-template="handoff" aria-pressed="false">Crisis Handoff</button>
+          <button class="sr-posture-template-btn" data-sitroom-action="set-snapshot-template" data-sitroom-snapshot-template="market" aria-pressed="false">Market Note</button>
+        </div>
+      </div>
+      <div class="sr-posture-chip-row" id="sr-posture-chip-row" aria-live="polite"></div>
+      <div class="sr-posture-actions">
+        <button class="sr-btn sr-btn-ghost" id="sr-copy-desk-snapshot-btn" data-sitroom-action="copy-desk-snapshot">Copy Desk Snapshot</button>
+        <button class="sr-btn sr-btn-ghost" id="sr-save-desk-note-btn" data-sitroom-action="save-desk-note">Save to Notes</button>
+        <button class="sr-btn sr-btn-ghost" id="sr-send-desk-lan-btn" data-sitroom-action="send-desk-lan">Send to LAN</button>
+        <button class="sr-btn sr-btn-ghost" id="sr-update-saved-desk-btn" data-sitroom-action="update-saved-desk" hidden>Update Saved Watchlist</button>
+        <button class="sr-btn sr-btn-ghost" id="sr-reset-desk-btn" data-sitroom-action="reset-desk-posture">Reset to Executive</button>
+      </div>
+    </div>
+
+    <div class="sr-layout-note" id="sr-layout-note" hidden>Layout edit is on. Drag cards to reorder this workspace.</div>
+
+    <div class="sr-newsdesk-nav" id="sr-newsdesk-nav" hidden>
+      <span class="sr-newsdesk-label">News Desk</span>
+      <button class="sr-newsdesk-btn active" data-sitroom-action="set-news-group" data-sitroom-news-group="all" aria-pressed="true">All</button>
+      <button class="sr-newsdesk-btn" data-sitroom-action="set-news-group" data-sitroom-news-group="world" aria-pressed="false">World</button>
+      <button class="sr-newsdesk-btn" data-sitroom-action="set-news-group" data-sitroom-news-group="security" aria-pressed="false">Security</button>
+      <button class="sr-newsdesk-btn" data-sitroom-action="set-news-group" data-sitroom-news-group="markets" aria-pressed="false">Markets</button>
+      <button class="sr-newsdesk-btn" data-sitroom-action="set-news-group" data-sitroom-news-group="tech" aria-pressed="false">Tech</button>
+      <button class="sr-newsdesk-btn" data-sitroom-action="set-news-group" data-sitroom-news-group="positive" aria-pressed="false">Positive</button>
+    </div>
+
+    <div class="sr-newsdesk-brief" id="sr-newsdesk-brief" hidden>
+      <div class="sr-newsdesk-brief-card sr-newsdesk-summary">
+        <div class="sr-newsdesk-kicker">Pinned Briefing</div>
+        <h3 class="sr-newsdesk-title" id="sr-newsdesk-title">Global watchfloor</h3>
+        <p class="sr-newsdesk-copy" id="sr-newsdesk-copy">Use News Desk to separate what is urgent from what is merely loud, then open the analyst inspector for context before acting.</p>
+      </div>
+      <div class="sr-newsdesk-brief-card sr-newsdesk-presets">
+        <div class="sr-newsdesk-kicker">Regional Presets</div>
+        <div class="sr-region-preset-row" role="toolbar" aria-label="News Desk regional presets">
+          <button class="sr-region-btn active" data-sitroom-action="set-region-preset" data-sitroom-region="global" aria-pressed="true">Global</button>
+          <button class="sr-region-btn" data-sitroom-action="set-region-preset" data-sitroom-region="americas" aria-pressed="false">Americas</button>
+          <button class="sr-region-btn" data-sitroom-action="set-region-preset" data-sitroom-region="europe" aria-pressed="false">Europe</button>
+          <button class="sr-region-btn" data-sitroom-action="set-region-preset" data-sitroom-region="mena" aria-pressed="false">Middle East</button>
+          <button class="sr-region-btn" data-sitroom-action="set-region-preset" data-sitroom-region="indo-pacific" aria-pressed="false">Indo-Pacific</button>
+        </div>
+      </div>
+      <div class="sr-newsdesk-brief-card sr-newsdesk-focus-card">
+        <div class="sr-newsdesk-kicker">Focus</div>
+        <div class="sr-newsdesk-focus" id="sr-newsdesk-focus">No focused desk yet. Choose a region or open a story to anchor the briefing.</div>
+        <div class="sr-newsdesk-chip-row" id="sr-newsdesk-chip-row"></div>
+      </div>
+      <div class="sr-newsdesk-brief-card sr-newsdesk-mode-card">
+        <div class="sr-newsdesk-kicker">Briefing Mode</div>
+        <div class="sr-newsdesk-mode-copy" id="sr-newsdesk-mode-copy">Morning Brief keeps the desk broad and helps you establish the operating picture before you narrow down.</div>
+        <div class="sr-newsdesk-mode-row" role="toolbar" aria-label="News Desk briefing modes">
+          <button class="sr-newsdesk-mode-btn active" data-sitroom-action="set-brief-mode" data-sitroom-brief-mode="morning" aria-pressed="true">Morning Brief</button>
+          <button class="sr-newsdesk-mode-btn" data-sitroom-action="set-brief-mode" data-sitroom-brief-mode="crisis" aria-pressed="false">Crisis Brief</button>
+          <button class="sr-newsdesk-mode-btn" data-sitroom-action="set-brief-mode" data-sitroom-brief-mode="market-open" aria-pressed="false">Market Open</button>
+        </div>
       </div>
     </div>
 
@@ -56,78 +159,96 @@
       <!-- Layer Panel Toggle -->
       <button class="sr-layer-toggle-btn" id="sr-layer-toggle" data-sitroom-action="toggle-layers" title="Toggle layer panel">LAYERS <span id="sr-active-layer-count">3</span></button>
       <button class="sr-btn sr-btn-globe sr-globe-btn-float" id="sr-globe-toggle" data-sitroom-action="toggle-globe" title="Toggle 2D/3D Globe">3D</button>
+      <div class="sr-map-command-brief">
+        <div class="sr-map-command-kicker">GLOBAL OPERATING PICTURE</div>
+        <h2 class="sr-map-command-title" id="sr-map-command-title">Track live pressure points, infrastructure risk, and narrative shifts in one canvas.</h2>
+        <p class="sr-map-command-copy" id="sr-map-command-copy">Start with the map for orientation, then drop into the intelligence cards below for depth, analyst output, and follow-up action.</p>
+        <div class="sr-map-command-pills" aria-hidden="true">
+          <span class="sr-map-command-pill">Live layers</span>
+          <span class="sr-map-command-pill">Cross-source view</span>
+          <span class="sr-map-command-pill">Analyst briefing</span>
+        </div>
+      </div>
 
       <!-- Layer Panel (collapsible sidebar) -->
       <div class="sr-layer-panel" id="sr-layer-panel">
-        <div class="sr-layer-panel-head">
-          <span>DATA LAYERS</span>
-          <button class="sr-btn sr-btn-ghost" data-sitroom-action="toggle-layers" style="font-size:12px">&#10005;</button>
-        </div>
-        <div class="sr-layer-group">
+      <div class="sr-layer-panel-head">
+        <span>DATA LAYERS</span>
+        <button class="sr-btn sr-btn-ghost sr-layer-close" data-sitroom-action="toggle-layers" aria-label="Close layer panel">&#10005;</button>
+      </div>
+      <div class="sr-layer-preset-row" role="toolbar" aria-label="Map layer presets">
+        <span class="sr-layer-preset-label">Quick presets</span>
+        <button class="sr-layer-preset-btn active" data-sitroom-action="set-layer-preset" data-sitroom-layer-preset="crisis" aria-pressed="true">Crisis</button>
+        <button class="sr-layer-preset-btn" data-sitroom-action="set-layer-preset" data-sitroom-layer-preset="infrastructure" aria-pressed="false">Infrastructure</button>
+        <button class="sr-layer-preset-btn" data-sitroom-action="set-layer-preset" data-sitroom-layer-preset="markets" aria-pressed="false">Markets</button>
+        <button class="sr-layer-preset-btn" data-sitroom-action="set-layer-preset" data-sitroom-layer-preset="mobility" aria-pressed="false">Mobility</button>
+        <button class="sr-layer-preset-btn" data-sitroom-action="set-layer-preset" data-sitroom-layer-preset="comms" aria-pressed="false">Comms</button>
+      </div>
+      <div class="sr-layer-group">
           <div class="sr-layer-group-title">LIVE DATA</div>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-quakes" checked data-sitroom-layer="earthquakes"><span class="sr-layer-dot" style="background:#ff4444"></span> Earthquakes</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-weather" checked data-sitroom-layer="weather"><span class="sr-layer-dot" style="background:#ffaa00"></span> Weather Alerts</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-conflicts" checked data-sitroom-layer="conflicts"><span class="sr-layer-dot" style="background:#ff6600"></span> Crisis Events</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-aviation" data-sitroom-layer="aviation"><span class="sr-layer-dot" style="background:#44aaff"></span> Aircraft (ADS-B)</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-volcanoes" data-sitroom-layer="volcanoes"><span class="sr-layer-dot" style="background:#ff3366"></span> Volcanoes</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-fires" data-sitroom-layer="fires"><span class="sr-layer-dot" style="background:#ff8800"></span> Fires (VIIRS)</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-ucdp" data-sitroom-layer="ucdp"><span class="sr-layer-dot" style="background:#dd2222"></span> Armed Conflicts</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-diseases" data-sitroom-layer="diseases"><span class="sr-layer-dot" style="background:#ff44ff"></span> Disease Outbreaks</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-radiation" data-sitroom-layer="radiation"><span class="sr-layer-dot" style="background:#66ff00"></span> Radiation Monitors</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-protests" data-sitroom-layer="protests"><span class="sr-layer-dot" style="background:#ffcc00"></span> Protests &amp; Unrest</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-ships" data-sitroom-layer="ships"><span class="sr-layer-dot" style="background:#22bbdd"></span> Ship Traffic (AIS)</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-gpsJamming" data-sitroom-layer="gpsJamming"><span class="sr-layer-dot" style="background:#ff2200"></span> GPS Jamming Zones</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-tsunamiStations" data-sitroom-layer="tsunamiStations"><span class="sr-layer-dot" style="background:#ff6644"></span> Tsunami Stations</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-volcanicArcs" data-sitroom-layer="volcanicArcs"><span class="sr-layer-dot" style="background:#ff3333"></span> Volcanic Arcs</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-quakes" name="sitroom_layer_quakes" checked data-sitroom-layer="earthquakes"><span class="sr-layer-dot"></span> Earthquakes</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-weather" name="sitroom_layer_weather" checked data-sitroom-layer="weather"><span class="sr-layer-dot"></span> Weather Alerts</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-conflicts" name="sitroom_layer_conflicts" checked data-sitroom-layer="conflicts"><span class="sr-layer-dot"></span> Crisis Events</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-aviation" name="sitroom_layer_aviation" data-sitroom-layer="aviation"><span class="sr-layer-dot"></span> Aircraft (ADS-B)</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-volcanoes" name="sitroom_layer_volcanoes" data-sitroom-layer="volcanoes"><span class="sr-layer-dot"></span> Volcanoes</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-fires" name="sitroom_layer_fires" data-sitroom-layer="fires"><span class="sr-layer-dot"></span> Fires (VIIRS)</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-ucdp" name="sitroom_layer_ucdp" data-sitroom-layer="ucdp"><span class="sr-layer-dot"></span> Armed Conflicts</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-diseases" name="sitroom_layer_diseases" data-sitroom-layer="diseases"><span class="sr-layer-dot"></span> Disease Outbreaks</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-radiation" name="sitroom_layer_radiation" data-sitroom-layer="radiation"><span class="sr-layer-dot"></span> Radiation Monitors</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-protests" name="sitroom_layer_protests" data-sitroom-layer="protests"><span class="sr-layer-dot"></span> Protests &amp; Unrest</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-ships" name="sitroom_layer_ships" data-sitroom-layer="ships"><span class="sr-layer-dot"></span> Ship Traffic (AIS)</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-gpsJamming" name="sitroom_layer_gps_jamming" data-sitroom-layer="gpsJamming"><span class="sr-layer-dot"></span> GPS Jamming Zones</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-tsunamiStations" name="sitroom_layer_tsunami_stations" data-sitroom-layer="tsunamiStations"><span class="sr-layer-dot"></span> Tsunami Stations</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-volcanicArcs" name="sitroom_layer_volcanic_arcs" data-sitroom-layer="volcanicArcs"><span class="sr-layer-dot"></span> Volcanic Arcs</label>
         </div>
         <div class="sr-layer-group">
           <div class="sr-layer-group-title">INFRASTRUCTURE</div>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-nuclear" data-sitroom-layer="nuclear"><span class="sr-layer-dot" style="background:#ffff00"></span> Nuclear Sites</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-bases" data-sitroom-layer="bases"><span class="sr-layer-dot" style="background:#44ff88"></span> Military Bases</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-cables" data-sitroom-layer="cables"><span class="sr-layer-dot" style="background:#3388ff"></span> Undersea Cables</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-datacenters" data-sitroom-layer="datacenters"><span class="sr-layer-dot" style="background:#aa66ff"></span> Data Centers</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-pipelines" data-sitroom-layer="pipelines"><span class="sr-layer-dot" style="background:#cc8844"></span> Pipelines</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-spaceports" data-sitroom-layer="spaceports"><span class="sr-layer-dot" style="background:#ff66ff"></span> Spaceports</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-airports" data-sitroom-layer="airports"><span class="sr-layer-dot" style="background:#cccccc"></span> Major Airports</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-mining" data-sitroom-layer="mining"><span class="sr-layer-dot" style="background:#cc8844"></span> Mining Sites</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-rareEarths" data-sitroom-layer="rareEarths"><span class="sr-layer-dot" style="background:#ee6699"></span> Rare Earth Mines</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-desalination" data-sitroom-layer="desalination"><span class="sr-layer-dot" style="background:#44cccc"></span> Desalination Plants</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-techHQs" data-sitroom-layer="techHQs"><span class="sr-layer-dot" style="background:#44aadd"></span> Tech HQs</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-cloudRegions" data-sitroom-layer="cloudRegions"><span class="sr-layer-dot" style="background:#6688ff"></span> Cloud Regions</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-startupHubs" data-sitroom-layer="startupHubs"><span class="sr-layer-dot" style="background:#ff88dd"></span> Startup Hubs</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-accelerators" data-sitroom-layer="accelerators"><span class="sr-layer-dot" style="background:#cc66ff"></span> Accelerators</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-nuclear" name="sitroom_layer_nuclear" data-sitroom-layer="nuclear"><span class="sr-layer-dot"></span> Nuclear Sites</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-bases" name="sitroom_layer_bases" data-sitroom-layer="bases"><span class="sr-layer-dot"></span> Military Bases</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-cables" name="sitroom_layer_cables" data-sitroom-layer="cables"><span class="sr-layer-dot"></span> Undersea Cables</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-datacenters" name="sitroom_layer_datacenters" data-sitroom-layer="datacenters"><span class="sr-layer-dot"></span> Data Centers</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-pipelines" name="sitroom_layer_pipelines" data-sitroom-layer="pipelines"><span class="sr-layer-dot"></span> Pipelines</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-spaceports" name="sitroom_layer_spaceports" data-sitroom-layer="spaceports"><span class="sr-layer-dot"></span> Spaceports</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-airports" name="sitroom_layer_airports" data-sitroom-layer="airports"><span class="sr-layer-dot"></span> Major Airports</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-mining" name="sitroom_layer_mining" data-sitroom-layer="mining"><span class="sr-layer-dot"></span> Mining Sites</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-rareEarths" name="sitroom_layer_rare_earths" data-sitroom-layer="rareEarths"><span class="sr-layer-dot"></span> Rare Earth Mines</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-desalination" name="sitroom_layer_desalination" data-sitroom-layer="desalination"><span class="sr-layer-dot"></span> Desalination Plants</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-techHQs" name="sitroom_layer_tech_hqs" data-sitroom-layer="techHQs"><span class="sr-layer-dot"></span> Tech HQs</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-cloudRegions" name="sitroom_layer_cloud_regions" data-sitroom-layer="cloudRegions"><span class="sr-layer-dot"></span> Cloud Regions</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-startupHubs" name="sitroom_layer_startup_hubs" data-sitroom-layer="startupHubs"><span class="sr-layer-dot"></span> Startup Hubs</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-accelerators" name="sitroom_layer_accelerators" data-sitroom-layer="accelerators"><span class="sr-layer-dot"></span> Accelerators</label>
         </div>
         <div class="sr-layer-group">
           <div class="sr-layer-group-title">FINANCE</div>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-fincenters" data-sitroom-layer="fincenters"><span class="sr-layer-dot" style="background:#44dd88"></span> Financial Centers</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-exchanges" data-sitroom-layer="exchanges"><span class="sr-layer-dot" style="background:#ddaa22"></span> Stock Exchanges</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-commodityHubs" data-sitroom-layer="commodityHubs"><span class="sr-layer-dot" style="background:#dd8866"></span> Commodity Hubs</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-fincenters" name="sitroom_layer_fincenters" data-sitroom-layer="fincenters"><span class="sr-layer-dot"></span> Financial Centers</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-exchanges" name="sitroom_layer_exchanges" data-sitroom-layer="exchanges"><span class="sr-layer-dot"></span> Stock Exchanges</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-commodityHubs" name="sitroom_layer_commodity_hubs" data-sitroom-layer="commodityHubs"><span class="sr-layer-dot"></span> Commodity Hubs</label>
         </div>
         <div class="sr-layer-group">
           <div class="sr-layer-group-title">MARITIME</div>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-waterways" data-sitroom-layer="waterways"><span class="sr-layer-dot" style="background:#00ddff"></span> Strategic Waterways</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-shipping" data-sitroom-layer="shipping"><span class="sr-layer-dot" style="background:#88ccaa"></span> Shipping Hubs</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-tradeRoutes" data-sitroom-layer="tradeRoutes"><span class="sr-layer-dot" style="background:#66ccff"></span> Trade Routes</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-waterways" name="sitroom_layer_waterways" data-sitroom-layer="waterways"><span class="sr-layer-dot"></span> Strategic Waterways</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-shipping" name="sitroom_layer_shipping" data-sitroom-layer="shipping"><span class="sr-layer-dot"></span> Shipping Hubs</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-tradeRoutes" name="sitroom_layer_trade_routes" data-sitroom-layer="tradeRoutes"><span class="sr-layer-dot"></span> Trade Routes</label>
         </div>
         <div class="sr-layer-group">
           <div class="sr-layer-group-title">INTELLIGENCE</div>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-refugees" data-sitroom-layer="refugees"><span class="sr-layer-dot" style="background:#ff8866"></span> Refugee Camps</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-unMissions" data-sitroom-layer="unMissions"><span class="sr-layer-dot" style="background:#4488ff"></span> UN Missions</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-embassies" data-sitroom-layer="embassies"><span class="sr-layer-dot" style="background:#ddddaa"></span> Diplomatic Hubs</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-listeningPosts" data-sitroom-layer="listeningPosts"><span class="sr-layer-dot" style="background:#8844cc"></span> SIGINT Stations</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-borderCrossings" data-sitroom-layer="borderCrossings"><span class="sr-layer-dot" style="background:#ccaa66"></span> Border Crossings</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-refugees" name="sitroom_layer_refugees" data-sitroom-layer="refugees"><span class="sr-layer-dot"></span> Refugee Camps</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-unMissions" name="sitroom_layer_un_missions" data-sitroom-layer="unMissions"><span class="sr-layer-dot"></span> UN Missions</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-embassies" name="sitroom_layer_embassies" data-sitroom-layer="embassies"><span class="sr-layer-dot"></span> Diplomatic Hubs</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-listeningPosts" name="sitroom_layer_listening_posts" data-sitroom-layer="listeningPosts"><span class="sr-layer-dot"></span> SIGINT Stations</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-borderCrossings" name="sitroom_layer_border_crossings" data-sitroom-layer="borderCrossings"><span class="sr-layer-dot"></span> Border Crossings</label>
         </div>
         <div class="sr-layer-group">
           <div class="sr-layer-group-title">CONNECTIVITY</div>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-ixps" data-sitroom-layer="ixps"><span class="sr-layer-dot" style="background:#88ffcc"></span> Internet Exchanges</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-weatherStations" data-sitroom-layer="weatherStations"><span class="sr-layer-dot" style="background:#aabb44"></span> Weather Stations</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-spaceTracking" data-sitroom-layer="spaceTracking"><span class="sr-layer-dot" style="background:#bb88ff"></span> Space Tracking</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-webcams" data-sitroom-layer="webcams"><span class="sr-layer-dot" style="background:#ffffff"></span> Live Webcams</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-ixps" name="sitroom_layer_ixps" data-sitroom-layer="ixps"><span class="sr-layer-dot"></span> Internet Exchanges</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-weatherStations" name="sitroom_layer_weather_stations" data-sitroom-layer="weatherStations"><span class="sr-layer-dot"></span> Weather Stations</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-spaceTracking" name="sitroom_layer_space_tracking" data-sitroom-layer="spaceTracking"><span class="sr-layer-dot"></span> Space Tracking</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-webcams" name="sitroom_layer_webcams" data-sitroom-layer="webcams"><span class="sr-layer-dot"></span> Live Webcams</label>
         </div>
         <div class="sr-layer-group">
           <div class="sr-layer-group-title">OVERLAYS</div>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-radar" data-sitroom-layer="radar"><span class="sr-layer-dot" style="background:#00aaff"></span> Weather Radar</label>
-          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-daynight" data-sitroom-layer="daynight"><span class="sr-layer-dot" style="background:#4466aa"></span> Day/Night Terminator</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-radar" name="sitroom_layer_radar" data-sitroom-layer="radar"><span class="sr-layer-dot"></span> Weather Radar</label>
+          <label class="sr-layer"><input type="checkbox" id="sitroom-layer-daynight" name="sitroom_layer_daynight" data-sitroom-layer="daynight"><span class="sr-layer-dot"></span> Day/Night Terminator</label>
         </div>
       </div>
       <button class="sr-map-fullscreen-btn" id="sr-map-fullscreen" data-sitroom-action="toggle-map-fullscreen" title="Toggle fullscreen map (F)">&#x26F6;</button>
@@ -138,22 +259,23 @@
       <!-- Playback Control -->
       <div class="sr-playback" id="sr-playback">
         <button class="sr-playback-btn sr-playback-live active" id="sr-playback-live" data-sitroom-action="playback-live">LIVE</button>
-        <input type="range" class="sr-playback-slider" id="sr-playback-slider" min="0" max="24" value="24" step="1">
+        <input type="range" class="sr-playback-slider" id="sr-playback-slider" name="sitroom_playback_slider" min="0" max="24" value="24" step="1">
         <span class="sr-playback-time" id="sr-playback-time">NOW</span>
       </div>
     </div>
 
+    <div class="sr-content-shell">
     <!-- Card Grid -->
     <div class="sr-cards" id="sr-cards-anchor">
 
       <!-- Live News Feed -->
       <div class="sr-card sr-card-tall">
         <div class="sr-card-head">
-          LIVE NEWS
-          <select id="sitroom-news-category" class="sr-select" aria-label="Category"><option value="">All</option></select>
+          NEWS WIRE
+          <select id="sitroom-news-category" name="sitroom_news_category" class="sr-select" aria-label="Category"><option value="">All</option></select>
         </div>
         <div id="sitroom-news-list" class="sr-card-body sr-scroll sr-scroll-tall"><div class="sr-empty">Loading...</div></div>
-        <button class="sr-btn sr-btn-ghost sr-load-more" id="sitroom-news-more" data-sitroom-action="load-more-news" style="display:none">LOAD MORE</button>
+        <button class="sr-btn sr-btn-ghost sr-load-more" id="sitroom-news-more" data-sitroom-action="load-more-news" hidden>LOAD MORE</button>
       </div>
 
       <!-- Markets & Indices -->
@@ -178,7 +300,7 @@
       <div class="sr-card">
         <div class="sr-card-head">
           SEISMIC ACTIVITY
-          <select id="sitroom-quake-filter" class="sr-select" aria-label="Magnitude"><option value="0">All</option><option value="3">M3+</option><option value="4" selected>M4+</option><option value="5">M5+</option><option value="6">M6+</option></select>
+          <select id="sitroom-quake-filter" name="sitroom_quake_filter" class="sr-select" aria-label="Magnitude"><option value="0">All</option><option value="3">M3+</option><option value="4" selected>M4+</option><option value="5">M5+</option><option value="6">M6+</option></select>
         </div>
         <div id="sitroom-quake-list" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
@@ -204,7 +326,7 @@
       <!-- Live News Channels -->
       <div class="sr-card sr-card-wide">
         <div class="sr-card-head">
-          LIVE NEWS
+          LIVE BROADCASTS
           <div class="sr-channel-btns" id="sr-channel-btns"></div>
         </div>
         <div class="sr-card-body sr-live-player" id="sr-live-player">
@@ -351,9 +473,9 @@
       <div class="sr-card sr-card-tall">
         <div class="sr-card-head">
           AI STRATEGIC POSTURE
-          <button class="sr-btn sr-btn-accent" data-sitroom-action="generate-briefing">GENERATE</button>
+          <button class="sr-btn sr-btn-accent" id="sitroom-gen-briefing" data-sitroom-action="generate-briefing">GENERATE</button>
         </div>
-        <div id="sitroom-ai-briefing" class="sr-card-body sr-scroll"><div class="sr-empty">Click GENERATE for AI intelligence briefing</div></div>
+        <div id="sitroom-briefing-content" class="sr-card-body sr-scroll"><div class="sr-empty">Click GENERATE for AI intelligence briefing</div></div>
       </div>
 
       <!-- Keyword Monitors -->
@@ -481,13 +603,13 @@
 
       <!-- Good News -->
       <div class="sr-card">
-        <div class="sr-card-head" style="color:#44dd88">GOOD NEWS</div>
+        <div class="sr-card-head sr-card-head-positive">GOOD NEWS</div>
         <div id="sitroom-good-news" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
       <!-- Conservation Wins -->
       <div class="sr-card">
-        <div class="sr-card-head" style="color:#44dd88">CONSERVATION WINS</div>
+        <div class="sr-card-head sr-card-head-positive">CONSERVATION WINS</div>
         <div id="sitroom-conservation" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
@@ -547,13 +669,13 @@
 
       <!-- Human Progress -->
       <div class="sr-card">
-        <div class="sr-card-head" style="color:#44dd88">HUMAN PROGRESS</div>
+        <div class="sr-card-head sr-card-head-positive">HUMAN PROGRESS</div>
         <div id="sitroom-progress" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
       <!-- Breakthroughs -->
       <div class="sr-card">
-        <div class="sr-card-head" style="color:#44dd88">BREAKTHROUGHS</div>
+        <div class="sr-card-head sr-card-head-positive">BREAKTHROUGHS</div>
         <div id="sitroom-breakthroughs" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
@@ -658,13 +780,13 @@
 
       <!-- P3: Breaking News Detection -->
       <div class="sr-card">
-        <div class="sr-card-head" style="color:#ff4444">BREAKING NEWS DETECTION</div>
+        <div class="sr-card-head sr-card-head-alert">BREAKING NEWS DETECTION</div>
         <div id="sitroom-breaking-detection" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
       <!-- P3: Israel OREF Alerts -->
       <div class="sr-card">
-        <div class="sr-card-head" style="color:#ff2222">ISRAEL OREF ALERTS</div>
+        <div class="sr-card-head sr-card-head-alert">ISRAEL OREF ALERTS</div>
         <div id="sitroom-oref-alerts" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
@@ -689,7 +811,7 @@
       <!-- P3: AI Deduction Panel -->
       <div class="sr-card">
         <div class="sr-card-head">AI DEDUCTION PANEL
-          <button class="sr-btn sr-btn-sm" onclick="runSitroomDeduction()" style="float:right;font-size:9px">ANALYZE</button>
+          <button class="sr-btn sr-btn-sm sr-btn-inline" data-sitroom-action="run-deduction">ANALYZE</button>
         </div>
         <div id="sitroom-deduction" class="sr-card-body sr-scroll"><div class="sr-empty">Click ANALYZE for AI situation assessment</div></div>
       </div>
@@ -708,7 +830,7 @@
 
       <!-- P3: Temporal Anomalies -->
       <div class="sr-card">
-        <div class="sr-card-head" style="color:#ff8800">ANOMALY DETECTION</div>
+        <div class="sr-card-head sr-card-head-warning">ANOMALY DETECTION</div>
         <div id="sitroom-anomalies" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
@@ -731,9 +853,9 @@
       </div>
 
       <!-- P3: Country Intelligence Brief -->
-      <div class="sr-card" style="grid-column: span 2">
+      <div class="sr-card sr-card-country-brief">
         <div class="sr-card-head">COUNTRY INTELLIGENCE BRIEF
-          <select id="sitroom-country-select" style="float:right;background:#111;color:#aaa;border:1px solid #333;font-size:10px;padding:2px 4px">
+          <select id="sitroom-country-select" name="sitroom_country_select" class="sr-select sr-select-inline">
             <option value="">Select country...</option>
             <option value="Ukraine">Ukraine</option><option value="Russia">Russia</option>
             <option value="Israel">Israel</option><option value="Iran">Iran</option>
@@ -758,13 +880,13 @@
 
       <!-- P5: Live Counters (Happy) -->
       <div class="sr-card">
-        <div class="sr-card-head" style="color:#44dd88">POSITIVE COUNTERS</div>
+        <div class="sr-card-head sr-card-head-positive">POSITIVE COUNTERS</div>
         <div id="sitroom-live-counters" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
       <!-- P5: Species Comeback -->
       <div class="sr-card">
-        <div class="sr-card-head" style="color:#44dd88">SPECIES COMEBACK</div>
+        <div class="sr-card-head sr-card-head-positive">SPECIES COMEBACK</div>
         <div id="sitroom-species-tracker" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
@@ -776,13 +898,13 @@
 
       <!-- P5: Today's Hero -->
       <div class="sr-card">
-        <div class="sr-card-head" style="color:#44dd88">TODAY'S HERO</div>
+        <div class="sr-card-head sr-card-head-positive">TODAY'S HERO</div>
         <div id="sitroom-todays-hero" class="sr-card-body"><div class="sr-empty">Loading...</div></div>
       </div>
 
       <!-- P5: 5 Good Things -->
       <div class="sr-card">
-        <div class="sr-card-head" style="color:#44dd88">5 GOOD THINGS</div>
+        <div class="sr-card-head sr-card-head-positive">5 GOOD THINGS</div>
         <div id="sitroom-good-things" class="sr-card-body sr-scroll"><div class="sr-empty">Loading...</div></div>
       </div>
 
@@ -806,6 +928,24 @@
 
     </div>
 
+    <aside class="sr-analysis-panel" id="sr-analysis-panel" hidden aria-live="polite">
+      <div class="sr-analysis-head">
+        <div class="sr-analysis-heading">
+          <div class="sr-analysis-kicker" id="sr-analysis-kicker">Analyst Inspector</div>
+          <h3 class="sr-analysis-title" id="sr-analysis-title">Select a story, signal, or country</h3>
+          <div class="sr-analysis-meta" id="sr-analysis-meta">The inspector keeps context docked while you keep scanning the main workspace.</div>
+        </div>
+        <div class="sr-analysis-actions">
+          <a id="sr-analysis-link" href="#" target="_blank" rel="noopener" class="sr-btn sr-btn-accent" hidden>Open Source</a>
+          <button class="sr-btn sr-btn-ghost" data-sitroom-action="close-analysis" aria-label="Close analyst inspector">&#10005;</button>
+        </div>
+      </div>
+      <div class="sr-analysis-body" id="sr-analysis-body">
+        <div class="sr-empty">Select a story, signal, or country to load the analyst inspector.</div>
+      </div>
+    </aside>
+    </div>
+
     <!-- Feed Manager Panel (toggled from header gear) -->
     <div class="sr-feed-panel" id="sr-feed-panel" hidden>
       <div class="sr-feed-panel-head">
@@ -813,45 +953,19 @@
         <button class="sr-btn sr-btn-ghost" data-sitroom-action="toggle-feeds" aria-label="Close feed manager">&#10005;</button>
       </div>
       <div class="sr-feed-form">
-        <input type="text" id="sitroom-feed-name" placeholder="Name" class="sr-input" maxlength="200">
-        <input type="url" id="sitroom-feed-url" placeholder="RSS URL" class="sr-input sr-input-grow" maxlength="2000">
-        <input type="text" id="sitroom-feed-category" placeholder="Category" class="sr-input" maxlength="100" value="Custom">
+        <input type="text" id="sitroom-feed-name" name="sitroom_feed_name" placeholder="Name" class="sr-input" maxlength="200">
+        <input type="url" id="sitroom-feed-url" name="sitroom_feed_url" placeholder="RSS URL" class="sr-input sr-input-grow" maxlength="2000">
+        <input type="text" id="sitroom-feed-category" name="sitroom_feed_category" placeholder="Category" class="sr-input" maxlength="100" value="Custom">
         <button class="sr-btn sr-btn-accent" data-sitroom-action="add-feed">ADD</button>
       </div>
       <div id="sitroom-custom-feeds-list" class="sr-custom-feeds"></div>
       <div class="sr-feed-stats"><span id="sitroom-builtin-count">0</span> built-in | <span id="sitroom-custom-count">0</span> custom</div>
     </div>
 
-    <!-- Country Deep Dive Panel (slide-in from right) -->
-    <div class="sr-country-panel" id="sr-country-panel" hidden>
-      <div class="sr-country-panel-head">
-        <span id="sr-country-name">COUNTRY</span>
-        <button class="sr-btn sr-btn-ghost" data-sitroom-action="close-country" aria-label="Close">&#10005;</button>
-      </div>
-      <div class="sr-country-panel-body" id="sr-country-body">
-        <div class="sr-empty">Select a country from the CII panel</div>
-      </div>
-    </div>
-
-    <!-- Story Detail Modal -->
-    <div class="sr-story-modal" id="sr-story-modal" hidden>
-      <div class="sr-story-content">
-        <div class="sr-story-header">
-          <span id="sr-story-cat" class="sitroom-news-cat"></span>
-          <h3 id="sr-story-title"></h3>
-          <button class="sr-btn sr-btn-ghost" onclick="document.getElementById('sr-story-modal').hidden=true">&#10005;</button>
-        </div>
-        <div id="sr-story-body" class="sr-story-body"></div>
-        <div class="sr-story-footer">
-          <a id="sr-story-link" href="#" target="_blank" rel="noopener" class="sr-btn sr-btn-accent">Read Full Article</a>
-        </div>
-      </div>
-    </div>
-
     <!-- Search Modal -->
     <div class="sr-search-overlay" id="sr-search-overlay" hidden>
       <div class="sr-search-modal">
-        <input type="text" id="sr-search-input" class="sr-search-input" placeholder="Search news, events, countries..." autocomplete="off" spellcheck="false">
+        <input type="text" id="sr-search-input" name="sitroom_search_input" class="sr-search-input" placeholder="Search news, events, countries..." autocomplete="off" spellcheck="false">
         <div class="sr-search-results" id="sr-search-results"></div>
         <div class="sr-search-hint">ESC to close &bull; Type to search cached data</div>
       </div>
