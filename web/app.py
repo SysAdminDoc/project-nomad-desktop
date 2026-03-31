@@ -391,6 +391,18 @@ def create_app():
             'title': 'Settings',
             'partial': 'index_partials/_tab_settings.html',
         },
+        'nukemap': {
+            'route': '/nukemap-tab',
+            'aliases': [],
+            'title': 'NukeMap',
+            'partial': 'index_partials/_tab_nukemap.html',
+        },
+        'viptrack': {
+            'route': '/viptrack-tab',
+            'aliases': [],
+            'title': 'VIPTrack',
+            'partial': 'index_partials/_tab_viptrack.html',
+        },
     }
 
     workspace_routes = {tab: meta['route'] for tab, meta in workspace_pages.items()}
@@ -466,6 +478,14 @@ def create_app():
     @app.route('/system')
     def settings_page():
         return _render_workspace_page('settings')
+
+    @app.route('/nukemap-tab')
+    def nukemap_tab_page():
+        return _render_workspace_page('nukemap')
+
+    @app.route('/viptrack-tab')
+    def viptrack_tab_page():
+        return _render_workspace_page('viptrack')
 
     # ─── Service API ───────────────────────────────────────────────────
 
