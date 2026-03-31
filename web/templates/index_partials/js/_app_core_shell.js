@@ -148,6 +148,11 @@ function activateWorkspaceTab(tab) {
   if (tabId === 'preparedness') { loadPrepTab(); }
   if (tabId === 'readiness') { loadReadinessScore(); loadReadinessNeeds(); }
   if (tabId === 'situation-room') { initSituationRoom(); }
+  // Lazy-load embedded app iframes on first visit
+  const embeddedFrame = tabContent.querySelector('.embedded-app-frame[data-src]');
+  if (embeddedFrame && embeddedFrame.src === 'about:blank') {
+    embeddedFrame.src = embeddedFrame.dataset.src;
+  }
   if (tabId !== 'situation-room' && typeof _restoreCopilotDock === 'function') { _restoreCopilotDock(); }
   if (typeof syncWorkspaceUrlState === 'function') syncWorkspaceUrlState();
   return true;
