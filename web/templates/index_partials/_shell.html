@@ -18,23 +18,14 @@
     <!-- Situation Room -->
     <button class="tab{% if active_tab == 'situation-room' %} active{% endif %}" data-tab="situation-room">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
-      <span data-i18n="nav.sitroom">Situation Room</span>
+      <span>Situation Room</span>
     </button>
-    <div class="sidebar-sub" data-parent="situation-room">
-      <a class="sidebar-sub-item" href="#sitroom-map" data-tab-target="situation-room" data-scroll-target="sitroom-map">World Map</a>
-      <a class="sidebar-sub-item" href="#sr-cards-anchor" data-tab-target="situation-room" data-scroll-target="sr-cards-anchor">Intel Cards</a>
-    </div>
 
     <!-- Home -->
     <button class="tab{% if active_tab == 'services' %} active{% endif %}" data-tab="services">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
       <span data-i18n="nav.dashboard">Home</span>
     </button>
-    <div class="sidebar-sub" data-parent="services">
-      <a class="sidebar-sub-item" href="#live-dashboard" data-tab-target="services" data-scroll-target="live-dashboard">Snapshot</a>
-      <a class="sidebar-sub-item" href="#home-quick-nav" data-tab-target="services" data-scroll-target="home-quick-nav">Documents</a>
-      <a class="sidebar-sub-item" href="#home-activity" data-tab-target="services" data-scroll-target="home-activity">Activity</a>
-    </div>
 
     <!-- Readiness -->
     <button class="tab{% if active_tab == 'readiness' %} active{% endif %}" data-tab="readiness">
@@ -53,13 +44,6 @@
       <span data-i18n="nav.inventory">Preparedness</span>
       <span id="badge-preparedness" class="tab-badge is-hidden"></span>
     </button>
-    <div class="sidebar-sub" data-parent="preparedness">
-      <a class="sidebar-sub-item" href="#tab-preparedness" data-tab-target="preparedness" data-prep-sub="checklists">Coordinate</a>
-      <a class="sidebar-sub-item" href="#tab-preparedness" data-tab-target="preparedness" data-prep-sub="inventory">Sustain</a>
-      <a class="sidebar-sub-item" href="#tab-preparedness" data-tab-target="preparedness" data-prep-sub="medical">Care &amp; People</a>
-      <a class="sidebar-sub-item" href="#tab-preparedness" data-tab-target="preparedness" data-prep-sub="security">Protect &amp; Secure</a>
-      <a class="sidebar-sub-item" href="#tab-preparedness" data-tab-target="preparedness" data-prep-sub="guides">Reference &amp; Planning</a>
-    </div>
     <!-- Maps -->
     <button class="tab{% if active_tab == 'maps' %} active{% endif %}" data-tab="maps">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg></span>
@@ -82,11 +66,6 @@
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
       <span data-i18n="nav.skills">Library</span>
     </button>
-    <div class="sidebar-sub" data-parent="kiwix-library">
-      <a class="sidebar-sub-item" href="#wiki-tier-selector" data-tab-target="kiwix-library" data-scroll-target="wiki-tier-selector">Wikipedia</a>
-      <a class="sidebar-sub-item" href="#zim-catalog" data-tab-target="kiwix-library" data-scroll-target="zim-catalog">Content Catalog</a>
-      <a class="sidebar-sub-item" href="#doc-library" data-tab-target="kiwix-library" data-scroll-target="doc-library">Documents</a>
-    </div>
 
     <!-- Notes -->
     <button class="tab{% if active_tab == 'notes' %} active{% endif %}" data-tab="notes">
@@ -100,13 +79,6 @@
       <span data-i18n="nav.incidents">Media</span>
       <span id="badge-media" class="tab-badge green is-hidden"></span>
     </button>
-    <div class="sidebar-sub" data-parent="media">
-      <a class="sidebar-sub-item" href="#tab-media" data-tab-target="media" data-media-sub="channels">Channels</a>
-      <a class="sidebar-sub-item" href="#tab-media" data-tab-target="media" data-media-sub="videos">Videos</a>
-      <a class="sidebar-sub-item" href="#tab-media" data-tab-target="media" data-media-sub="audio">Audio</a>
-      <a class="sidebar-sub-item" href="#tab-media" data-tab-target="media" data-media-sub="books">Books</a>
-      <a class="sidebar-sub-item" href="#tab-media" data-tab-target="media" data-media-sub="torrents">Torrents</a>
-    </div>
 
     <div class="sidebar-group-label">
       <span class="sidebar-group-title">Assistant</span>
@@ -133,34 +105,6 @@
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
       <span data-i18n="nav.settings">Settings</span>
     </button>
-    <div class="sidebar-sub" data-parent="settings">
-      <a class="sidebar-sub-item" href="#model-manager" data-tab-target="settings" data-scroll-target="model-manager">AI Models</a>
-      <a class="sidebar-sub-item" href="#task-scheduler-panel" data-tab-target="settings" data-scroll-target="task-scheduler-panel">Tasks</a>
-      <a class="sidebar-sub-item" href="#watch-schedule-panel" data-tab-target="settings" data-scroll-target="watch-schedule-panel">Watch Rotation</a>
-      <a class="sidebar-sub-item" href="#system-health-panel" data-tab-target="settings" data-scroll-target="system-health-panel">System Health</a>
-      <a class="sidebar-sub-item" href="#backup-restore-panel" data-tab-target="settings" data-scroll-target="backup-restore-panel">Backups</a>
-    </div>
-  </div>
-  <div class="sidebar-context-hub" id="sidebar-context-hub" aria-label="Quick return contexts">
-    <div class="sidebar-context-head">
-      <div class="sidebar-context-copy">
-        <span class="sidebar-context-kicker">Quick Return</span>
-        <span class="sidebar-context-text">Keep your active desk and pinned contexts within reach from any workspace.</span>
-      </div>
-      <button class="btn btn-sm btn-ghost sidebar-context-home-btn" type="button" data-tab-target="services" data-scroll-target="home-continue-panel">Home Shelf</button>
-    </div>
-    <div class="sidebar-context-section">
-      <span class="sidebar-context-label">Current</span>
-      <div id="sidebar-context-current" class="sidebar-context-current">
-        <div class="sidebar-empty-state">Your current desk will appear here once you start moving through the workspace.</div>
-      </div>
-    </div>
-    <div class="sidebar-context-section">
-      <span class="sidebar-context-label">Pinned</span>
-      <div id="sidebar-context-pinned" class="sidebar-context-list">
-        <div class="sidebar-empty-state">Pin contexts from Home to keep them parked here.</div>
-      </div>
-    </div>
   </div>
   <div class="sidebar-footer" role="contentinfo">
     <div class="sidebar-footer-meta">
