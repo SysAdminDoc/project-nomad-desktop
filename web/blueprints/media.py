@@ -18,6 +18,7 @@ from services.manager import format_size, get_services_dir
 from config import get_data_dir
 from web.state import _ytdlp_downloads, _ytdlp_dl_lock, _ytdlp_install_state
 from web.validation import validate_json
+from web.sql_safety import safe_table, safe_columns, build_update
 import web.state as _state
 
 try:

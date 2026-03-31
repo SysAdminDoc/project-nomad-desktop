@@ -25,9 +25,11 @@ os.environ['NOMAD_HEADLESS'] = '1'
 data_dir = os.environ.get('NOMAD_DATA_DIR', '')
 if data_dir:
     os.makedirs(data_dir, exist_ok=True)
-    # Write config to point to the data directory
-    from config import save_config
-    save_config({'data_dir': data_dir})
+    # Merge data_dir into existing config (don't overwrite other settings)
+    from config import load_config, save_config
+    cfg = load_config()
+    cfg['data_dir'] = data_dir
+    save_config(cfg)
 
 def _check_deps():
     """Verify required dependencies are installed. Log errors for missing ones."""

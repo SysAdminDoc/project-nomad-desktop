@@ -47,6 +47,14 @@ _REQ_HEADERS = {'User-Agent': 'NOMAD-SitRoom/2.0'}
 _REQ_TIMEOUT = 12
 
 
+def _safe_float(val, default=0):
+    """Convert value to float, returning default on failure."""
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
+
 def _get_state(key=None):
     with _state_lock:
         if key:
@@ -1111,8 +1119,11 @@ def _fetch_predictions():
                     prices = json.loads(prices)
                 except (json.JSONDecodeError, TypeError):
                     prices = []
-            yes_price = float(prices[0]) if prices else 0
-            no_price = float(prices[1]) if len(prices) > 1 else 0
+            try:
+                yes_price = float(prices[0]) if prices else 0
+                no_price = float(prices[1]) if len(prices) > 1 else 0
+            except (ValueError, TypeError):
+                yes_price, no_price = 0, 0
             db.execute('''INSERT OR IGNORE INTO sitroom_predictions
                 (market_id, question, category, outcome_yes, outcome_no, volume, end_date, active)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
@@ -1576,7 +1587,7 @@ def _fetch_yield_curve():
                 (event_id, event_type, title, magnitude, lat, lng, event_time, detail_json)
                 VALUES (?, ?, ?, ?, 0, 0, 0, ?)''',
                 (eid, 'yield_curve', item.get('security_desc', ''),
-                 float(item.get('avg_interest_rate_amt', 0)),
+                 _safe_float(item.get('avg_interest_rate_amt', 0)),
                  json.dumps({'rate': item.get('avg_interest_rate_amt', ''),
                              'security': item.get('security_desc', ''),
                              'type': item.get('security_type_desc', ''),
@@ -1673,7 +1684,7 @@ def _compute_correlations():
         if oil and me_news > 5:
             signals.append({'type': 'energy_geopolitical', 'severity': 'normal',
                             'title': 'Energy-Geopolitical Signal',
-                            'detail': f'Oil at ${dict(oil)["price"]:.2f} with {me_news} Middle East headlines'})
+                            'detail': f'Oil at ${dict(oil).get("price") or 0:.2f} with {me_news} Middle East headlines'})
 
         # Space Weather: high Kp index
         if counts.get('radiation', 0) > 10:
@@ -1964,7 +1975,7 @@ def _fetch_fuel_prices():
                             (event_id, event_type, title, magnitude, lat, lng, event_time, detail_json)
                             VALUES (?, ?, ?, ?, 0, 0, 0, ?)''',
                             (eid, 'fuel_price', f"US Gasoline ({r.get('area-name', 'National')})",
-                             float(r.get('value', 0)),
+                             _safe_float(r.get('value', 0)),
                              json.dumps({'price': r.get('value', ''), 'period': r.get('period', ''),
                                          'product': r.get('product-name', ''), 'area': r.get('area-name', '')})))
                     db.commit()
@@ -2023,8 +2034,8 @@ def _fetch_social_velocity():
     with db_session() as db:
         # Find keywords that appear in many articles (high velocity)
         rows = db.execute('''
-            SELECT LOWER(SUBSTR(title, 1, 60)) as headline, COUNT(*) as cnt, GROUP_CONCAT(DISTINCT source_name) as sources
-            FROM sitroom_news GROUP BY LOWER(SUBSTR(title, 1, 40))
+            SELECT LOWER(SUBSTR(title, 1, 50)) as headline, COUNT(*) as cnt, GROUP_CONCAT(DISTINCT source_name) as sources
+            FROM sitroom_news GROUP BY LOWER(SUBSTR(title, 1, 50))
             HAVING cnt >= 3 ORDER BY cnt DESC LIMIT 15
         ''').fetchall()
 
@@ -2376,13 +2387,6 @@ def api_sitroom_earthquakes():
             "SELECT * FROM sitroom_events WHERE event_type = 'earthquake' AND (magnitude IS NULL OR magnitude >= ?) ORDER BY event_time DESC LIMIT 100",
             (min_mag,)).fetchall()
     return jsonify({'earthquakes': [dict(r) for r in rows]})
-
-
-@situation_room_bp.route('/api/sitroom/weather-alerts')
-def api_sitroom_weather_alerts():
-    with db_session() as db:
-        rows = db.execute("SELECT * FROM sitroom_events WHERE event_type = 'weather_alert' ORDER BY cached_at DESC LIMIT 100").fetchall()
-    return jsonify({'alerts': [dict(r) for r in rows]})
 
 
 @situation_room_bp.route('/api/sitroom/markets')
@@ -3074,7 +3078,7 @@ def api_sitroom_export():
     lines = []
     lines.append('=' * 60)
     lines.append('SITUATION ROOM — INTELLIGENCE REPORT')
-    lines.append(f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")}')
+    lines.append(f'Generated: {datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}')
     lines.append('=' * 60)
     lines.append('')
 
@@ -3256,80 +3260,7 @@ def api_sitroom_delete_monitor(mid):
 
 # ─── AI Intelligence Briefing (uses Ollama if available) ─────────────
 
-@situation_room_bp.route('/api/sitroom/ai-briefing', methods=['POST'])
-def api_sitroom_generate_ai_briefing():
-    """Generate AI-powered strategic intelligence briefing from cached data."""
-    with db_session() as db:
-        news = db.execute("SELECT title, category FROM sitroom_news ORDER BY cached_at DESC LIMIT 20").fetchall()
-        quakes = db.execute("SELECT title, magnitude FROM sitroom_events WHERE event_type = 'earthquake' AND magnitude >= 4 ORDER BY magnitude DESC LIMIT 5").fetchall()
-        conflicts = db.execute("SELECT title FROM sitroom_events WHERE event_type IN ('conflict', 'ucdp_conflict') LIMIT 10").fetchall()
-        markets = db.execute("SELECT symbol, price, change_24h FROM sitroom_markets WHERE market_type = 'index' LIMIT 5").fetchall()
-        cyber = db.execute("SELECT title FROM sitroom_events WHERE event_type = 'cyber_threat' LIMIT 5").fetchall()
-
-    # Build context for LLM
-    context_parts = []
-    if news:
-        context_parts.append("TOP HEADLINES:\n" + "\n".join(f"- [{dict(n)['category']}] {dict(n)['title']}" for n in news[:15]))
-    if quakes:
-        context_parts.append("SEISMIC ACTIVITY:\n" + "\n".join(f"- M{dict(q)['magnitude']:.1f} {dict(q)['title']}" for q in quakes))
-    if conflicts:
-        context_parts.append("ACTIVE CONFLICTS:\n" + "\n".join(f"- {dict(c)['title']}" for c in conflicts))
-    if markets:
-        context_parts.append("MARKET INDICES:\n" + "\n".join(f"- {dict(m)['symbol']}: ${dict(m)['price']:.0f} ({dict(m)['change_24h']:+.1f}%)" for m in markets))
-    if cyber:
-        context_parts.append("CYBER THREATS:\n" + "\n".join(f"- {dict(c)['title']}" for c in cyber))
-
-    context = "\n\n".join(context_parts)
-    prompt = f"""You are an intelligence analyst. Based on the following situation data, produce a concise strategic intelligence briefing. Cover: key threats, geopolitical developments, market implications, and recommended watch items. Be specific, not generic.
-
-{context}
-
-Produce a briefing with sections: STRATEGIC OVERVIEW, KEY THREATS, MARKET OUTLOOK, WATCH ITEMS."""
-
-    # Try Ollama first
-    briefing = None
-    try:
-        resp = requests.post('http://localhost:11434/api/generate',
-                             json={'model': 'llama3.2', 'prompt': prompt, 'stream': False},
-                             timeout=60)
-        if resp.ok:
-            briefing = resp.json().get('response', '')
-    except Exception:
-        pass
-
-    if not briefing:
-        # Fallback: generate a structured summary without LLM
-        briefing = "## STRATEGIC OVERVIEW\n"
-        briefing += f"Monitoring {len(news)} news sources across multiple categories.\n\n"
-        if quakes:
-            briefing += "## SEISMIC ALERT\n"
-            for q in quakes[:3]:
-                briefing += f"- M{dict(q)['magnitude']:.1f} — {dict(q)['title']}\n"
-            briefing += "\n"
-        if conflicts:
-            briefing += "## ACTIVE CONFLICTS\n"
-            for c in conflicts[:5]:
-                briefing += f"- {dict(c)['title']}\n"
-            briefing += "\n"
-        if markets:
-            briefing += "## MARKET STATUS\n"
-            for m in markets:
-                ch = dict(m)['change_24h']
-                briefing += f"- {dict(m)['symbol']}: {'UP' if ch >= 0 else 'DOWN'} {abs(ch):.1f}%\n"
-            briefing += "\n"
-        if cyber:
-            briefing += "## CYBER THREATS\n"
-            for c in cyber[:3]:
-                briefing += f"- {dict(c)['title']}\n"
-
-    # Cache the briefing
-    with db_session() as db:
-        db.execute('''CREATE TABLE IF NOT EXISTS sitroom_briefings
-            (id INTEGER PRIMARY KEY, content TEXT, generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        db.execute('INSERT INTO sitroom_briefings (content) VALUES (?)', (briefing,))
-        db.commit()
-
-    return jsonify({'briefing': briefing})
+# Duplicate route removed — api_sitroom_ai_briefing above handles POST /api/sitroom/ai-briefing
 
 
 # ─── Economic Data (FRED-style) ──────────────────────────────────────
@@ -3482,7 +3413,7 @@ def api_sitroom_country_brief(country):
 
     # Try AI-generated summary if Ollama available
     try:
-        import ollama
+        from services import ollama as _ollama_svc
         context = f"Country: {country}\n\nRecent headlines:\n"
         for n in news_items[:10]:
             context += f"- [{n.get('category', '')}] {n['title']} ({n.get('source_name', '')})\n"
@@ -3497,9 +3428,11 @@ def api_sitroom_country_brief(country):
                   f"(1) Current situation overview, (2) Key risks and developments, "
                   f"(3) Outlook and watch items.\n\n{context}")
 
-        response = ollama.chat(model='llama3.2', messages=[{'role': 'user', 'content': prompt}],
-                               options={'temperature': 0.3, 'num_predict': 500})
-        brief['ai_summary'] = response.get('message', {}).get('content', '')
+        result = _ollama_svc.chat(prompt, model=None, stream=False)
+        if isinstance(result, dict):
+            brief['ai_summary'] = result.get('message', {}).get('content', '') or result.get('response', '')
+        else:
+            brief['ai_summary'] = str(result)
     except Exception:
         brief['ai_summary'] = None
 
@@ -3595,7 +3528,7 @@ def api_sitroom_deduction():
         context += f"- {d['symbol']}: ${d.get('price', '?')} ({'+' if chg > 0 else ''}{chg:.1f}%)\n"
 
     try:
-        import ollama
+        from services import ollama as _ollama_svc
         prompt = (f"You are a senior intelligence analyst. Based on the following current data, "
                   f"provide a structured deduction covering:\n"
                   f"1. SITUATION ASSESSMENT — What is happening right now?\n"
@@ -3604,9 +3537,11 @@ def api_sitroom_deduction():
                   f"4. WATCH ITEMS — What should we monitor closely?\n"
                   f"5. CONFIDENCE LEVEL — How reliable is this assessment (Low/Medium/High)?\n\n"
                   f"{context}")
-        response = ollama.chat(model='llama3.2', messages=[{'role': 'user', 'content': prompt}],
-                               options={'temperature': 0.3, 'num_predict': 800})
-        deduction = response.get('message', {}).get('content', '')
+        result = _ollama_svc.chat(prompt, model=None, stream=False)
+        if isinstance(result, dict):
+            deduction = result.get('message', {}).get('content', '') or result.get('response', '')
+        else:
+            deduction = str(result)
     except Exception:
         # Fallback: structured summary without AI
         deduction = None
@@ -3845,10 +3780,11 @@ def api_sitroom_gulf_economies():
     gcc_countries = ['saudi', 'uae', 'qatar', 'kuwait', 'bahrain', 'oman']
 
     with db_session() as db:
+        placeholders = ' OR '.join(['LOWER(title) LIKE ?' for _ in gcc_countries])
+        params = [f'%{c}%' for c in gcc_countries]
         news = db.execute(
-            "SELECT title, link, source_name, category FROM sitroom_news WHERE " +
-            " OR ".join(f"LOWER(title) LIKE '%{c}%'" for c in gcc_countries) +
-            " ORDER BY cached_at DESC LIMIT 30"
+            f"SELECT title, link, source_name, category FROM sitroom_news WHERE {placeholders} ORDER BY cached_at DESC LIMIT 30",
+            params
         ).fetchall()
         # Oil-related market data
         oil = db.execute(
@@ -3979,7 +3915,7 @@ def api_sitroom_market_regime():
         if vix:
             signals['vix'] = dict(vix)['price']
         # Fear & Greed
-        fg = db.execute("SELECT price FROM sitroom_markets WHERE symbol = 'Fear & Greed' LIMIT 1").fetchone()
+        fg = db.execute("SELECT price FROM sitroom_markets WHERE symbol = 'FEAR_GREED' LIMIT 1").fetchone()
         if fg:
             signals['fear_greed'] = dict(fg)['price']
         # Yield spread (from FRED cache)
@@ -4486,10 +4422,11 @@ def api_sitroom_region_overview(region):
     if not countries:
         return jsonify({'error': 'Unknown region', 'valid': list(region_countries.keys())}), 400
 
-    conditions = ' OR '.join([f"LOWER(title) LIKE '%{c}%'" for c in countries])
+    placeholders = ' OR '.join(['LOWER(title) LIKE ?' for _ in countries])
+    params = [f'%{c}%' for c in countries]
     with db_session() as db:
-        news = db.execute(f"SELECT title, category, source_name FROM sitroom_news WHERE {conditions} ORDER BY cached_at DESC LIMIT 30").fetchall()
-        events = db.execute(f"SELECT title, event_type, magnitude FROM sitroom_events WHERE {conditions} ORDER BY cached_at DESC LIMIT 20").fetchall()
+        news = db.execute(f"SELECT title, category, source_name FROM sitroom_news WHERE {placeholders} ORDER BY cached_at DESC LIMIT 30", params).fetchall()
+        events = db.execute(f"SELECT title, event_type, magnitude FROM sitroom_events WHERE {placeholders} ORDER BY cached_at DESC LIMIT 20", params).fetchall()
     return jsonify({
         'region': region, 'countries': countries,
         'news': [dict(r) for r in news], 'events': [dict(r) for r in events],
@@ -4732,9 +4669,9 @@ def api_sitroom_ai_models():
     """Check which AI models are available for Situation Room features."""
     models = []
     try:
-        import ollama
-        available = ollama.list()
-        models = [m.get('name', m.get('model', '')) for m in available.get('models', [])]
+        from services import ollama as _ollama_svc
+        model_list = _ollama_svc.list_models()
+        models = [m.get('name', m.get('model', '')) for m in (model_list if isinstance(model_list, list) else [])]
     except Exception:
         pass
     ai_features = {
@@ -4927,7 +4864,7 @@ def api_sitroom_apt_groups():
     # Enrich with recent cyber threat news
     with db_session() as db:
         cyber = db.execute(
-            "SELECT title, source_name FROM sitroom_events WHERE event_type = 'cyber_threat' ORDER BY cached_at DESC LIMIT 10"
+            "SELECT title FROM sitroom_events WHERE event_type = 'cyber_threat' ORDER BY cached_at DESC LIMIT 10"
         ).fetchall()
     return jsonify({
         'groups': apt_groups,
@@ -4945,11 +4882,21 @@ def api_sitroom_webhook_test():
         return jsonify({'error': 'Valid URL required'}), 400
     # Validate URL is not internal
     import ipaddress
+    import socket
     from urllib.parse import urlparse
     try:
         parsed = urlparse(url)
-        if parsed.hostname in ('localhost', '127.0.0.1', '0.0.0.0', '::1'):
-            return jsonify({'error': 'Internal URLs not allowed'}), 400
+        hostname = parsed.hostname
+        if not hostname:
+            return jsonify({'error': 'Invalid URL'}), 400
+        try:
+            resolved = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+            for _, _, _, _, addr in resolved:
+                ip = ipaddress.ip_address(addr[0])
+                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                    return jsonify({'error': 'Internal/private URLs not allowed'}), 400
+        except socket.gaierror:
+            return jsonify({'error': 'Cannot resolve hostname'}), 400
     except Exception:
         return jsonify({'error': 'Invalid URL'}), 400
     # Send test payload
@@ -4977,12 +4924,28 @@ def api_sitroom_webhook_config():
             data = request.get_json(silent=True) or {}
             url = (data.get('url', '') or '')[:500]
             events = data.get('event_types', 'all')
-            if url and url.startswith('http'):
-                db.execute('INSERT INTO sitroom_webhooks (url, event_types) VALUES (?, ?)',
-                           (url, events))
-                db.commit()
-                return jsonify({'added': True})
-            return jsonify({'error': 'Valid URL required'}), 400
+            if not url or not url.startswith('http'):
+                return jsonify({'error': 'Valid URL required'}), 400
+            # SSRF protection — reject private/loopback URLs
+            import ipaddress as _ipa
+            import socket as _sock
+            from urllib.parse import urlparse as _urlparse
+            try:
+                parsed = _urlparse(url)
+                hostname = parsed.hostname
+                if not hostname:
+                    return jsonify({'error': 'Invalid URL'}), 400
+                resolved = _sock.getaddrinfo(hostname, None, _sock.AF_UNSPEC, _sock.SOCK_STREAM)
+                for _, _, _, _, addr in resolved:
+                    ip = _ipa.ip_address(addr[0])
+                    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                        return jsonify({'error': 'Internal/private URLs not allowed'}), 400
+            except _sock.gaierror:
+                return jsonify({'error': 'Cannot resolve hostname'}), 400
+            db.execute('INSERT INTO sitroom_webhooks (url, event_types) VALUES (?, ?)',
+                       (url, events))
+            db.commit()
+            return jsonify({'added': True})
         rows = db.execute('SELECT * FROM sitroom_webhooks ORDER BY created_at DESC').fetchall()
         return jsonify({'webhooks': [dict(r) for r in rows]})
 
@@ -5101,11 +5064,13 @@ def api_sitroom_five_good_things():
                    'recovered', 'donated', 'clean energy', 'cure', 'growth',
                    'progress', 'achievement', 'conservation', 'restored', 'renewable',
                    'vaccine', 'rescued', 'volunteered', 'invented', 'discovery']
-    conditions = ' OR '.join([f"LOWER(title) LIKE '%{w}%'" for w in positive_kw])
+    placeholders = ' OR '.join(['LOWER(title) LIKE ?' for _ in positive_kw])
+    params = [f'%{w}%' for w in positive_kw]
     with db_session() as db:
         rows = db.execute(
-            f"SELECT title, link, source_name, category FROM sitroom_news WHERE {conditions} "
-            f"ORDER BY cached_at DESC LIMIT 20"
+            f"SELECT title, link, source_name, category FROM sitroom_news WHERE {placeholders} "
+            f"ORDER BY cached_at DESC LIMIT 20",
+            params
         ).fetchall()
     # Score and pick top 5
     results = []

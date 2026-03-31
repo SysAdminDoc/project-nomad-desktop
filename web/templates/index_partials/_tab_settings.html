@@ -1,4 +1,4 @@
-  <div id="tab-settings" class="tab-content settings-workspace">
+  <div id="tab-settings" class="tab-content settings-workspace{% if active_tab == 'settings' %} active{% endif %}">
     <div class="settings-command-deck workspace-panel">
       <div class="settings-command-deck-head">
         <div class="settings-command-copy">
@@ -45,7 +45,80 @@
             <div class="settings-mode-copy">Streamlined basics only. Core survival modules: inventory, contacts, medical, and checklists. 4 live widgets. Minimal interface.</div>
           </div>
         </div>
-        <div class="settings-panel-copy settings-mini-note">Current: <strong id="settings-mode-label" class="settings-summary-accent">Command Center</strong> &middot; Keyboard: 1-9 switches tabs &middot; Ctrl+K search &middot; Ctrl+/ copilot</div>
+        <div class="settings-panel-copy settings-mini-note">Current: <strong id="settings-mode-label" class="settings-summary-accent">Command Center</strong> &middot; Keyboard: 1-9 switches tabs &middot; Ctrl+K command palette &middot; Ctrl+/ copilot</div>
+      </div>
+      <div class="settings-card settings-memory-card settings-span-full">
+        <div class="settings-memory-head">
+          <div class="settings-memory-copy">
+            <div class="workspace-kicker">DESK MEMORY</div>
+            <h3 class="settings-hero-title settings-memory-title">Keep your working contexts stable and easy to return to.</h3>
+            <p class="settings-panel-copy settings-memory-text">Pinned contexts, recent desks, and quick-return paths are part of the product now, not hidden browser memory. Shape them here, then jump back in from Home, the sidebar, or the command palette.</p>
+          </div>
+          <div class="settings-memory-actions">
+            <button type="button" class="btn btn-sm btn-primary" id="settings-pin-current-context-btn" data-workspace-memory-action="toggle-current-pin">Pin Current Context</button>
+            <button type="button" class="btn btn-sm" id="settings-launch-current-context-btn" data-workspace-memory-action="set-launch-current">Set Launch Context</button>
+            <button type="button" class="btn btn-sm" id="settings-open-launch-context-btn" data-workspace-memory-action="open-launch">Open Launch Context</button>
+            <button type="button" class="btn btn-sm btn-ghost" id="settings-clear-launch-context-btn" data-workspace-memory-action="clear-launch">Clear Launch</button>
+            <button type="button" class="btn btn-sm" data-tab-target="services" data-scroll-target="home-continue-panel">Open Home Shelf</button>
+            <button type="button" class="btn btn-sm" data-shell-action="toggle-command-palette">Command Palette</button>
+          </div>
+        </div>
+        <div class="settings-memory-summary-grid">
+          <div class="settings-memory-stat">
+            <span class="settings-memory-stat-label">Launch context</span>
+            <strong class="settings-memory-stat-value" id="settings-memory-launch-label">No launch context</strong>
+          </div>
+          <div class="settings-memory-stat">
+            <span class="settings-memory-stat-label">Current desk</span>
+            <strong class="settings-memory-stat-value" id="settings-memory-current-label">No active context yet</strong>
+          </div>
+          <div class="settings-memory-stat">
+            <span class="settings-memory-stat-label">Pinned contexts</span>
+            <strong class="settings-memory-stat-value" id="settings-memory-pinned-count">0</strong>
+          </div>
+          <div class="settings-memory-stat">
+            <span class="settings-memory-stat-label">Recent contexts</span>
+            <strong class="settings-memory-stat-value" id="settings-memory-recent-count">0</strong>
+          </div>
+        </div>
+        <div class="settings-memory-grid">
+          <div class="settings-memory-section">
+            <div class="settings-heading-row settings-toolbar-spacing">
+              <span class="settings-subsection-title">Launch Context</span>
+              <span class="settings-inline-label">What the app should reopen when no URL overrides it</span>
+            </div>
+            <div id="settings-memory-launch" class="settings-memory-list">
+              <div class="settings-empty-state">Set a launch context to reopen directly into the desk you use most.</div>
+            </div>
+          </div>
+          <div class="settings-memory-section">
+            <div class="settings-heading-row settings-toolbar-spacing">
+              <span class="settings-subsection-title">Current Desk</span>
+              <span class="settings-inline-label">What the desk will reopen right now</span>
+            </div>
+            <div id="settings-memory-current" class="settings-memory-list">
+              <div class="settings-empty-state">Your active context will appear here as soon as you move beyond Home.</div>
+            </div>
+          </div>
+          <div class="settings-memory-section">
+            <div class="settings-heading-row settings-toolbar-spacing">
+              <span class="settings-subsection-title">Pinned Contexts</span>
+              <button type="button" class="btn btn-sm btn-ghost" data-workspace-memory-action="clear-pinned">Clear Pinned</button>
+            </div>
+            <div id="settings-memory-pinned" class="settings-memory-list">
+              <div class="settings-empty-state">Pinned contexts from Home will show up here.</div>
+            </div>
+          </div>
+          <div class="settings-memory-section">
+            <div class="settings-heading-row settings-toolbar-spacing">
+              <span class="settings-subsection-title">Recent Contexts</span>
+              <button type="button" class="btn btn-sm btn-ghost" data-workspace-memory-action="clear-recent">Clear Recent</button>
+            </div>
+            <div id="settings-memory-recent" class="settings-memory-list">
+              <div class="settings-empty-state">Recent contexts will appear here as you work across tabs and sub-workspaces.</div>
+            </div>
+          </div>
+        </div>
       </div>
       <!-- Language Selector -->
       <div class="settings-card settings-info-card" id="language-settings-card">
@@ -605,7 +678,7 @@
           </div>
           <div class="settings-shortcuts-copy">
             <strong class="settings-summary-accent">Keyboard Shortcuts:</strong>
-            Alt+1-9 primary workspaces | Alt+T timers | Alt+C chat | Alt+N new note | Ctrl+K search
+              Alt+1-9 primary workspaces | Alt+T timers | Alt+C chat | Alt+N new note | Ctrl+K command palette
           </div>
         </div>
       </div>

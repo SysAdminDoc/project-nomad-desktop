@@ -1,4 +1,4 @@
-  <div id="tab-preparedness" class="tab-content preparedness-workspace">
+  <div id="tab-preparedness" class="tab-content preparedness-workspace{% if active_tab == 'preparedness' %} active{% endif %}">
   {% include "index_partials/preparedness/_overview.html" %}
   {% include "index_partials/preparedness/_inventory.html" %}
   {% include "index_partials/preparedness/_contacts.html" %}

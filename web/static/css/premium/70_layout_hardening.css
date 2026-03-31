@@ -169,7 +169,6 @@
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 6px;
-  outline: none;
 }
 
 .activity-filter-select {
@@ -792,7 +791,6 @@
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 6px;
-  outline: none;
   font-size: 12px;
 }
 
@@ -937,7 +935,6 @@
   padding: 4px 8px;
   border-radius: 6px;
   font-size: 10px;
-  outline: none;
 }
 
 .notes-backlinks-strip {
@@ -1155,7 +1152,6 @@
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  outline: none;
 }
 
 .media-input:focus {
@@ -2091,7 +2087,6 @@
   border-radius: var(--radius-sm);
   font-size: 11px;
   cursor: pointer;
-  outline: none;
 }
 
 #map-coords {
@@ -2354,7 +2349,8 @@ body {
 }
 
 .copilot-utility-btn:focus-visible {
-  outline: none;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--surface-solid) 78%, transparent),
     0 0 0 6px var(--accent-glow),
@@ -2660,7 +2656,8 @@ body {
 
 .wizard-drive-card:focus-visible,
 .wizard-tier-card:focus-visible {
-  outline: none;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
   box-shadow: 0 0 0 3px var(--accent-dim);
 }
 
@@ -2706,7 +2703,6 @@ body {
   background: var(--surface2);
   color: var(--text);
   font-size: 13px;
-  outline: none;
 }
 
 .wizard-input:focus {

@@ -190,7 +190,6 @@
   color: var(--text);
   padding: 8px 12px;
   font-size: 12px;
-  outline: none;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.65);
 }
 
@@ -198,8 +197,8 @@
   width: 160px;
 }
 
-.benchmark-tag-input:focus,
-.mesh-compose-input:focus {
+.benchmark-tag-input:focus-visible,
+.mesh-compose-input:focus-visible {
   border-color: rgba(201,116,32,0.4);
   box-shadow:
     0 0 0 3px rgba(201,116,32,0.12),

@@ -254,12 +254,13 @@ function showHelp(section) {
   <p>If the AI is running, it generates realistic complications between phases based on your actual inventory and contacts data. Each run is scored 0-100 with an after-event review that identifies what you did well and what to improve.</p>
 
   <h2 id="themes">13. Themes</h2>
-  <p>Four themes available (click the colored circles in the sidebar footer):</p>
+  <p>Five themes available (use the quick theme controls in the sidebar footer or the full settings workspace):</p>
   <ul>
-  <li><strong>NOMAD</strong> &mdash; Desert/tactical tan theme (default, matches the original project palette)</li>
-    <li><strong>Night Ops</strong> &mdash; Dark charcoal theme for low-light use</li>
-    <li><strong>Cyber</strong> &mdash; Blue-accent dark theme</li>
-    <li><strong>Red Light</strong> &mdash; Pure red-on-black for preserving night vision. Ideal for use after dark when you need to maintain your ability to see in the dark after looking away from the screen.</li>
+  <li><strong>Atlas</strong> &mdash; Warm daylight workspace with soft surfaces and calm contrast</li>
+    <li><strong>Midnight</strong> &mdash; Deep neutral dark theme for long operating sessions</li>
+    <li><strong>Cobalt</strong> &mdash; Blue-steel dark theme with cooler accents for analysis-heavy work</li>
+    <li><strong>Ember</strong> &mdash; Warm dark theme with stronger urgency and night-operations character</li>
+    <li><strong>Paper</strong> &mdash; Quiet low-distraction mode for reading, printing, and e-ink style use</li>
   </ul>
 
   <h2 id="settings">14. Settings &amp; Backup</h2>
@@ -283,7 +284,7 @@ function showHelp(section) {
   <tr><td><kbd>Alt+T</kbd></td><td>Open/close the timer widget</td></tr>
   <tr><td><kbd>Alt+C</kbd></td><td>Open/close LAN chat</td></tr>
   <tr><td><kbd>Alt+N</kbd></td><td>Create a new note</td></tr>
-  <tr><td><kbd>Ctrl+K</kbd></td><td>Focus the global search bar</td></tr>
+  <tr><td><kbd>Ctrl+K</kbd></td><td>Open the command palette</td></tr>
   <tr><td><kbd>Escape</kbd></td><td>Close any open overlay, panel, or dialog</td></tr></table>
 
   <h2 id="data">17. Data &amp; Privacy</h2>

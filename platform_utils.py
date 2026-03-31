@@ -121,8 +121,8 @@ def pid_alive(pid: int) -> bool:
                     kernel32.CloseHandle(handle)
             return False
         except Exception:
-            pass
-    # Unix fallback (also used if Windows ctypes fails)
+            return False
+    # Unix fallback
     try:
         os.kill(pid, 0)
         # Check for zombie processes on Linux

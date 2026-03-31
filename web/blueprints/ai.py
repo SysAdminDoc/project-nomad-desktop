@@ -836,13 +836,16 @@ def api_training_datasets_create():
     db = get_db()
     records = []
     if source == 'conversations':
-        # Extract Q&A pairs from conversation history
-        convos = db.execute('SELECT id FROM conversations ORDER BY updated_at DESC LIMIT 20').fetchall()
+        # Extract Q&A pairs from conversation history (messages stored as JSON array in conversations.messages)
+        convos = db.execute('SELECT messages FROM conversations ORDER BY updated_at DESC LIMIT 20').fetchall()
         for c in convos:
-            msgs = db.execute('SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at', (c['id'],)).fetchall()
+            try:
+                msgs = json.loads(c['messages'] or '[]')
+            except (json.JSONDecodeError, TypeError):
+                continue
             for i in range(len(msgs) - 1):
-                if msgs[i]['role'] == 'user' and msgs[i+1]['role'] == 'assistant':
-                    records.append({'instruction': msgs[i]['content'][:2000], 'output': msgs[i+1]['content'][:2000]})
+                if isinstance(msgs[i], dict) and isinstance(msgs[i+1], dict) and msgs[i].get('role') == 'user' and msgs[i+1].get('role') == 'assistant':
+                    records.append({'instruction': (msgs[i].get('content', '') or '')[:2000], 'output': (msgs[i+1].get('content', '') or '')[:2000]})
 
     # Save dataset file
     ds_dir = os.path.join(get_data_dir(), 'training_datasets')

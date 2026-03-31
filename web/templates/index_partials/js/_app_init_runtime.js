@@ -3,7 +3,7 @@
 loadServices();
 loadReadiness();
 // Situation Room — initialize on startup since it's the default landing tab
-setTimeout(() => { initSituationRoom(); }, 300);
+requestAnimationFrame(() => { initSituationRoom(); });
 // Defer non-critical by 500ms to avoid 11 concurrent fetches on startup
 setTimeout(() => { loadWidgetConfig().then(() => startLiveDashPolling()); loadSuggestedActions(); loadNeedsOverview(); loadGettingStarted(); loadCmdDashboard(); loadServiceQuickLinks(); loadCmdChecklists(); }, 500);
 setTimeout(() => { loadActivity(); loadContentSummary(); updateStatusStrip(); updateTabBadges(); }, 1000);
@@ -4094,12 +4094,31 @@ BatteryManager.init();
 // Initialize internationalization
 NomadI18n.init();
 
+// Restore deep-linked workspace state after the shell is ready.
+setTimeout(async () => {
+  if (typeof hydrateWorkspaceResumeState === 'function') {
+    try {
+      await hydrateWorkspaceResumeState();
+    } catch (error) {
+      console.warn('Workspace memory hydration failed:', error);
+    }
+  }
+  if (typeof restoreWorkspaceUrlState === 'function') restoreWorkspaceUrlState();
+}, 120);
+
 // Check portable mode
 fetch('/api/system/portable-mode').then(r=>r.json()).then(d=>{if(d.portable){const el=document.getElementById('portable-indicator');if(el)el.style.display='';}}).catch(()=>{});
 
 /* ─── NomadEvents: loaded from /static/js/events.js ─── */
 
 /* ─── Accessibility: Keyboard Navigation Enhancements ─── */
+const commandPaletteOverlay = document.getElementById('command-palette-overlay');
+if (commandPaletteOverlay) {
+  commandPaletteOverlay.addEventListener('click', e => {
+    if (e.target === commandPaletteOverlay) toggleCommandPalette(false);
+  });
+}
+
 const shortcutsOverlay = document.getElementById('shortcuts-overlay');
 if (shortcutsOverlay) {
   shortcutsOverlay.addEventListener('click', e => {

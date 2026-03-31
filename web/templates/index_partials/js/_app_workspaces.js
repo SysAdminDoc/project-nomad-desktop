@@ -1881,524 +1881,51 @@ function filterConvos() {
 
 /* ─── Unified Search ─── */
 let _searchTimer;
-function debounceSearch() {
-  clearTimeout(_searchTimer);
-  _searchTimer = setTimeout(doUnifiedSearch, 300);
-}
+let _commandPaletteTimer;
+let _commandPaletteItems = [];
+let _commandPaletteActiveIndex = -1;
+let _commandPaletteReturnFocus = null;
 
-function highlightMatch(text, query) {
-  if (!query) return escapeHtml(text);
-  const escaped = escapeHtml(text);
-  const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-  return escaped.replace(re, '<mark class="search-highlight">$1</mark>');
-}
+const UNIFIED_SEARCH_TYPE_ICONS = {
+  inventory: '&#128230;',
+  contact: '&#128100;',
+  note: '&#128196;',
+  conversation: '&#128172;',
+  document: '&#128206;',
+  checklist: '&#9745;',
+  skill: '&#127919;',
+  ammo: '&#128299;',
+  equipment: '&#128295;',
+  waypoint: '&#128205;',
+  frequency: '&#128225;',
+  patient: '&#9829;',
+  incident: '&#9888;',
+  fuel: '&#9981;',
+};
 
-async function doUnifiedSearch() {
-  const q = document.getElementById('unified-search').value.trim();
-  const el = document.getElementById('search-results');
-  if (!q) { el.classList.remove('active'); return; }
-  try {
-    const resp = await fetch(`/api/search/all?q=${encodeURIComponent(q)}`);
-    if (!resp.ok) { el.classList.remove('active'); return; }
-    const r = await resp.json();
-    const items = [
-      ...r.conversations.map(c => ({...c, type: 'conversation'})),
-      ...r.notes.map(n => ({...n, type: 'note'})),
-      ...r.documents.map(d => ({...d, type: 'document'})),
-      ...(r.inventory||[]).map(i => ({...i, type: 'inventory'})),
-      ...(r.contacts||[]).map(c => ({...c, type: 'contact'})),
-      ...(r.checklists||[]).map(c => ({...c, type: 'checklist'})),
-      ...(r.skills||[]).map(s => ({...s, type: 'skill'})),
-      ...(r.ammo||[]).map(a => ({...a, type: 'ammo'})),
-      ...(r.equipment||[]).map(e => ({...e, type: 'equipment'})),
-      ...(r.waypoints||[]).map(w => ({...w, type: 'waypoint'})),
-      ...(r.frequencies||[]).map(f => ({...f, type: 'frequency'})),
-      ...(r.patients||[]).map(p => ({...p, type: 'patient'})),
-      ...(r.incidents||[]).map(i => ({...i, type: 'incident'})),
-      ...(r.fuel||[]).map(f => ({...f, type: 'fuel'})),
-    ];
-    if (!items.length) {
-      el.innerHTML = '<div class="search-result-empty">No results for "' + escapeHtml(q) + '" across ' + Object.keys(r).length + ' modules</div>';
-    } else {
-      const typeIcons = {inventory:'&#128230;',contact:'&#128100;',note:'&#128196;',conversation:'&#128172;',document:'&#128206;',checklist:'&#9745;',skill:'&#127919;',ammo:'&#128299;',equipment:'&#128295;',waypoint:'&#128205;',frequency:'&#128225;',patient:'&#9829;',incident:'&#9888;',fuel:'&#9981;'};
-      const typeLabels = {inventory:'Supply',contact:'Contact',note:'Note',conversation:'Chat',document:'Document',checklist:'Checklist',skill:'Skill',ammo:'Ammo',equipment:'Equipment',waypoint:'Waypoint',frequency:'Frequency',patient:'Patient',incident:'Incident',fuel:'Fuel'};
-      // Group by type
-      const groups = {};
-      items.forEach(i => { if (!groups[i.type]) groups[i.type] = []; groups[i.type].push(i); });
-      let html = '';
-      for (const [type, list] of Object.entries(groups)) {
-        html += `<div class="search-result-group-head"><span>${typeIcons[type]||''} ${typeLabels[type]||type}</span><span class="search-result-count">${list.length}</span></div>`;
-        html += list.map(i => `
-          <div class="search-result-item" data-shell-action="open-search-result" data-result-type="${escapeAttr(i.type)}" data-result-id="${parseInt(i.id)||0}" data-prevent-mousedown role="button" tabindex="0">
-            <span class="search-result-title">${highlightMatch(i.title, q)}</span>
-          </div>
-        `).join('');
-      }
-      el.innerHTML = html;
-    }
-    el.classList.add('active');
-  } catch(e) { el.classList.remove('active'); }
-}
+const UNIFIED_SEARCH_TYPE_LABELS = {
+  inventory: 'Supply',
+  contact: 'Contact',
+  note: 'Note',
+  conversation: 'Chat',
+  document: 'Document',
+  checklist: 'Checklist',
+  skill: 'Skill',
+  ammo: 'Ammo',
+  equipment: 'Equipment',
+  waypoint: 'Waypoint',
+  frequency: 'Frequency',
+  patient: 'Patient',
+  incident: 'Incident',
+  fuel: 'Fuel',
+};
 
-function showSearchResults() {
-  const q = document.getElementById('unified-search').value.trim();
-  if (q) document.getElementById('search-results').classList.add('active');
-}
-function hideSearchResults() { document.getElementById('search-results').classList.remove('active'); }
-
-function openSearchResult(type, id) {
-  hideSearchResults();
-  document.getElementById('unified-search').value = '';
-  if (type === 'conversation') {
-    document.querySelector('[data-tab="ai-chat"]').click();
-    setTimeout(() => selectConvo(id), 200);
-  } else if (type === 'note') {
-    document.querySelector('[data-tab="notes"]').click();
-    setTimeout(() => { loadNotes().then(() => selectNote(id)); }, 200);
-  } else if (type === 'document') {
-    document.querySelector('[data-tab="kiwix-library"]').click();
-    setTimeout(() => { loadPDFList(); toast('Document found in library', 'info'); }, 200);
-  } else if (type === 'inventory') {
-    document.querySelector('[data-tab="preparedness"]').click();
-    setTimeout(() => switchPrepSub('inventory'), 200);
-  } else if (type === 'contact') {
-    document.querySelector('[data-tab="preparedness"]').click();
-    setTimeout(() => switchPrepSub('contacts'), 200);
-  } else if (type === 'checklist') {
-    document.querySelector('[data-tab="preparedness"]').click();
-    setTimeout(() => { switchPrepSub('checklists'); selectChecklist(id); }, 200);
-  } else if (type === 'skill') {
-    document.querySelector('[data-tab="preparedness"]').click();
-    setTimeout(() => switchPrepSub('skills'), 200);
-  } else if (type === 'ammo') {
-    document.querySelector('[data-tab="preparedness"]').click();
-    setTimeout(() => switchPrepSub('ammo'), 200);
-  } else if (type === 'equipment') {
-    document.querySelector('[data-tab="preparedness"]').click();
-    setTimeout(() => switchPrepSub('equipment'), 200);
-  } else if (type === 'waypoint') {
-    document.querySelector('[data-tab="maps"]').click();
-    toast('Waypoint: navigate to it on the map', 'info');
-  } else if (type === 'frequency') {
-    document.querySelector('[data-tab="preparedness"]').click();
-    setTimeout(() => switchPrepSub('radio'), 200);
-  } else if (type === 'patient') {
-    document.querySelector('[data-tab="preparedness"]').click();
-    setTimeout(() => switchPrepSub('medical'), 200);
-  } else if (type === 'incident') {
-    document.querySelector('[data-tab="preparedness"]').click();
-    setTimeout(() => switchPrepSub('incidents'), 200);
-  } else if (type === 'fuel') {
-    document.querySelector('[data-tab="preparedness"]').click();
-    setTimeout(() => switchPrepSub('fuel'), 200);
+function openWorkspaceTab(tabId) {
+  if (typeof openWorkspaceRouteAware === 'function') {
+    openWorkspaceRouteAware(tabId);
+    return;
   }
-}
-
-/* ─── Content Summary ─── */
-async function loadContentSummary() {
-  try {
-    const s = await (await fetch('/api/content-summary')).json();
-    document.getElementById('content-summary').innerHTML = `
-      <div>
-        <div class="cs-total">${s.total_size}</div>
-        <div class="cs-label">Offline Knowledge</div>
-      </div>
-      <div class="cs-stat"><div class="cs-val">${s.ai_models}</div><div class="cs-label">AI Models</div></div>
-      <div class="cs-stat"><div class="cs-val">${s.zim_files}</div><div class="cs-label">Content Packs</div></div>
-      <div class="cs-stat"><div class="cs-val">${s.documents}</div><div class="cs-label">Documents</div></div>
-      <div class="cs-stat"><div class="cs-val">${s.conversations}</div><div class="cs-label">Conversations</div></div>
-      <div class="cs-stat"><div class="cs-val">${s.notes}</div><div class="cs-label">Notes</div></div>
-    `;
-  } catch(e) {
-    document.getElementById('content-summary').innerHTML = '<div class="cs-label content-summary-empty">Content summary unavailable</div>';
-  }
-}
-
-/* ─── Log Viewer ─── */
-async function loadLogViewer() {
-  const level = document.getElementById('log-level-filter').value;
-  try {
-    const items = await (await fetch('/api/activity?limit=100')).json();
-    const filtered = level ? items.filter(a => a.level === level) : items;
-    const el = document.getElementById('log-viewer');
-    if (!filtered.length) { el.innerHTML = '<span class="settings-empty-state log-viewer-empty">No log entries.</span>'; return; }
-    el.innerHTML = filtered.map(a => {
-      const t = new Date(a.created_at);
-      const ts = t.toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
-      const badge = a.level === 'error' ? 'ERR' : a.level === 'warning' ? 'WRN' : 'INF';
-      const badgeClass = a.level === 'error' ? 'settings-log-badge-error' : a.level === 'warning' ? 'settings-log-badge-warning' : 'settings-log-badge-info';
-      return `<div class="settings-log-row">
-        <span class="settings-log-time">${ts}</span>
-        <span class="settings-log-badge ${badgeClass}">${badge}</span>
-        <span class="settings-log-service">${a.service||'-'}</span>
-        <span>${escapeHtml(a.event.replace(/_/g,' '))}${a.detail ? ' — '+escapeHtml(a.detail) : ''}</span>
-      </div>`;
-    }).join('');
-  } catch(e) {}
-}
-
-/* ─── Disk Monitor ─── */
-async function loadDataSummary() {
-  try {
-    const d = await (await fetch('/api/data-summary')).json();
-    const el = document.getElementById('data-summary');
-    if (!d.tables.length) {
-      el.innerHTML = '<div class="settings-empty-state">No data yet. Start adding inventory, contacts, and notes to see your data summary.</div>';
-      return;
-    }
-    el.innerHTML = `
-      <div class="settings-summary-total"><strong>${d.total_records.toLocaleString()}</strong> total records across ${d.tables.length} tables</div>
-      <div class="utility-summary-result settings-summary-grid">
-        ${d.tables.map(t => `<div class="prep-summary-card utility-summary-card">
-          <div class="prep-summary-meta">${escapeHtml(t.label)}</div>
-          <div class="prep-summary-value prep-summary-value-compact">${t.count.toLocaleString()}</div>
-        </div>`).join('')}
-      </div>`;
-  } catch(e) {}
-}
-
-async function loadDiskMonitor() {
-  try {
-    const sys = await (await fetch('/api/system')).json();
-    const summary = await (await fetch('/api/content-summary')).json();
-    const el = document.getElementById('disk-monitor');
-
-    // Calculate usage breakdown
-    const totalBytes = summary.total_bytes || 0;
-    const freeStr = sys.disk_free || 'Unknown';
-    const totalStr = sys.disk_total || 'Unknown';
-
-    let warn = '';
-    const devices = sys.disk_devices || [];
-    const criticalDisk = devices.find(d => d.percent > 90);
-    if (criticalDisk) {
-      warn = `<div class="prep-reference-callout prep-reference-callout-danger settings-summary-alert">
-        Drive ${criticalDisk.mountpoint} is ${criticalDisk.percent}% full. Consider freeing space or moving data.
-      </div>`;
-    }
-
-    el.innerHTML = `${warn}
-      <div class="utility-summary-result settings-summary-grid">
-        <div class="prep-summary-card utility-summary-card">
-<div class="prep-summary-meta">NOMAD Data</div>
-          <div class="prep-summary-value prep-summary-value-compact">${summary.total_size}</div>
-        </div>
-        <div class="prep-summary-card utility-summary-card">
-          <div class="prep-summary-meta">ZIM Content</div>
-          <div class="prep-summary-value prep-summary-value-compact">${summary.zim_size}</div>
-        </div>
-        <div class="prep-summary-card utility-summary-card">
-          <div class="prep-summary-meta">Disk Free</div>
-          <div class="prep-summary-value prep-summary-value-compact">${freeStr}</div>
-        </div>
-        <div class="prep-summary-card utility-summary-card">
-          <div class="prep-summary-meta">Disk Total</div>
-          <div class="prep-summary-value prep-summary-value-compact">${totalStr}</div>
-        </div>
-      </div>
-      <div class="settings-summary-note">
-        Tip: Large ZIM files (Wikipedia Full, Stack Overflow) can be deleted from the Library tab when not needed.
-      </div>`;
-  } catch(e) {}
-}
-
-/* ─── Mission Readiness ─── */
-async function loadReadiness() {
-  try {
-    const services = await (await fetch('/api/services')).json();
-    const caps = [
-      {id:'ollama', label:'AI Chat', need:['ollama']},
-      {id:'kiwix', label:'Library', need:['kiwix']},
-      {id:'cyberchef', label:'Data Tools', need:['cyberchef']},
-      {id:'kolibri', label:'Education', need:['kolibri']},
-      {id:'qdrant', label:'Knowledge Base', need:['qdrant','ollama']},
-      {id:'stirling', label:'PDF Tools', need:['stirling']},
-    ];
-    const svcMap = {};
-    services.forEach(s => svcMap[s.id] = s);
-
-    document.getElementById('readiness-bar').innerHTML = caps.map(c => {
-      const allInstalled = c.need.every(n => svcMap[n]?.installed);
-      const allRunning = c.need.every(n => svcMap[n]?.running);
-      const cls = allRunning ? 'ready' : allInstalled ? 'partial' : 'offline';
-      const label = allRunning ? 'Ready' : allInstalled ? 'Stopped' : 'Not Installed';
-      return `<div class="readiness-pill ${cls}"><span class="rdot"></span>${c.label}: ${label}</div>`;
-    }).join('');
-  } catch(e) {
-    document.getElementById('readiness-bar').innerHTML = '';
-  }
-}
-
-/* ─── Activity Feed ─── */
-async function loadActivity() {
-  try {
-    const filter = document.getElementById('activity-filter')?.value || '';
-    const url = filter ? `/api/activity?limit=30&filter=${encodeURIComponent(filter)}` : '/api/activity?limit=30';
-    const items = await (await fetch(url)).json();
-    const el = document.getElementById('activity-feed');
-    if (!items.length) { el.innerHTML = '<span class="text-muted">No activity yet.</span>'; return; }
-    el.innerHTML = items.map(a => {
-      const t = new Date(a.created_at);
-      const time = t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-      const date = t.toLocaleDateString([], {month:'short',day:'numeric'});
-      const event = a.event.replace(/_/g, ' ');
-      const eventToneClass = a.level === 'error' ? 'activity-event-error' : a.level === 'warning' ? 'activity-event-warning' : 'activity-event-info';
-      return `<div class="activity-item">
-        <span class="activity-time">${date} ${time}</span>
-        <span class="activity-event ${eventToneClass}">${event}</span>
-        ${a.service ? `<span class="activity-service-tag">${a.service}</span>` : ''}
-        ${a.detail ? `<span class="activity-detail">${escapeHtml(a.detail)}</span>` : ''}
-      </div>`;
-    }).join('');
-  } catch(e) {
-    document.getElementById('activity-feed').innerHTML = '<span class="text-muted">Activity unavailable</span>';
-  }
-}
-
-/* ─── Update Checker ─── */
-async function checkForUpdate() {
-  try {
-    const u = await (await fetch('/api/update-check')).json();
-    if (u.update_available) {
-      const banner = document.getElementById('update-banner');
-      banner.style.display = 'inline-flex';
-      banner.textContent = `Update: v${u.latest}`;
-      banner.href = u.download_url;
-      // Show download button in Settings About section
-      const dlBtn = document.getElementById('update-download-btn');
-      if (dlBtn) { dlBtn.style.display = 'inline-flex'; }
-      const statusEl = document.getElementById('update-status-text');
-      if (statusEl) { statusEl.textContent = `v${u.latest} available`; statusEl.style.color = 'var(--green)'; }
-    }
-  } catch(e) {}
-}
-
-/* ─── Self-Update Download ─── */
-async function downloadUpdate() {
-  const btn = document.getElementById('update-download-btn');
-  btn.disabled = true; btn.textContent = 'Downloading…';
-  document.getElementById('update-progress-bar').style.display = 'block';
-  await fetch('/api/update-download', {method:'POST'});
-  pollUpdateProgress();
-}
-
-function pollUpdateProgress() {
-  const poll = setInterval(async () => {
-    try {
-      const s = await (await fetch('/api/update-download/status')).json();
-      document.getElementById('update-progress-pct').textContent = s.progress + '%';
-      document.getElementById('update-progress-fill').style.width = s.progress + '%';
-      document.getElementById('update-progress-label').textContent =
-        s.status === 'checking' ? 'Checking for update…' :
-        s.status === 'downloading' ? 'Downloading update…' : s.status;
-      if (s.status === 'complete') {
-        clearInterval(poll);
-        document.getElementById('update-progress-bar').style.display = 'none';
-        document.getElementById('update-complete-msg').style.display = 'block';
-        document.getElementById('update-download-btn').style.display = 'none';
-        toast('Update downloaded successfully', 'success');
-      } else if (s.status === 'error') {
-        clearInterval(poll);
-        document.getElementById('update-progress-bar').style.display = 'none';
-        document.getElementById('update-download-btn').disabled = false;
-        document.getElementById('update-download-btn').textContent = 'Retry Download';
-        toast('Update failed: ' + (s.error || 'Unknown error'), 'error');
-      }
-    } catch(e) { clearInterval(poll); }
-  }, 1000);
-}
-
-async function openUpdateFolder() {
-  await fetch('/api/update-download/open', {method:'POST'});
-}
-
-/* ─── Startup Toggle ─── */
-async function loadStartupState() {
-  try {
-    const s = await (await fetch('/api/startup')).json();
-    document.getElementById('startup-toggle').checked = s.enabled;
-  } catch(e) {}
-}
-
-async function toggleStartup() {
-  const enabled = document.getElementById('startup-toggle').checked;
-  await fetch('/api/startup', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({enabled})});
-  toast(enabled ? 'Will start at login' : 'Removed from startup', enabled ? 'success' : 'info');
-}
-
-/* ─── Unified Download Queue ─── */
-async function pollDownloadQueue() {
-  try {
-    const downloads = await (await fetch('/api/downloads/active')).json();
-    const banner = document.getElementById('download-queue-banner');
-    const itemsEl = document.getElementById('download-queue-items');
-    if (!downloads.length) { banner.style.display = 'none'; return; }
-    banner.style.display = 'block';
-    itemsEl.innerHTML = downloads.map(d => {
-      const icon = d.type === 'service' ? '&#9881;' : d.type === 'content' ? '&#128218;' : d.type === 'model' ? '&#129302;' : d.type === 'map' ? '&#127758;' : '&#128229;';
-      return '<div class="download-banner-entry">' +
-        '<span class="download-banner-icon">' + icon + '</span>' +
-        '<div class="download-banner-body">' +
-          '<div class="download-banner-head">' +
-            '<span class="download-banner-label">' + escapeHtml(d.label) + '</span>' +
-            '<span class="download-banner-meta">' + escapeHtml(String(d.percent || 0)) + '% ' + escapeHtml(d.speed || '') + '</span>' +
-          '</div>' +
-          '<div class="utility-progress">' +
-            '<div class="utility-progress-bar" style="--utility-progress-width:' + d.percent + '%;"></div>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-  } catch(e) {}
-}
-
-/* ─── Service Process Logs ─── */
-async function loadServiceLogs() {
-  const svc = document.getElementById('svc-log-select').value;
-  const el = document.getElementById('svc-log-viewer');
-  if (!svc) { el.innerHTML = '<span class="settings-console-hint">Select a service above to view its process output.</span>'; return; }
-  try {
-    const data = await (await fetch('/api/services/' + svc + '/logs?tail=200')).json();
-    if (!data.lines || !data.lines.length) {
-      el.innerHTML = '<span class="settings-console-hint">No log output captured for ' + svc + '. Logs appear when the service is running.</span>';
-      return;
-    }
-    el.innerHTML = data.lines.map(line => {
-      const tone = /error|fail|exception/i.test(line) ? ' settings-console-line-danger' : /warn/i.test(line) ? ' settings-console-line-warn' : '';
-      return '<div class="settings-console-line' + tone + '">' + escapeHtml(line) + '</div>';
-    }).join('');
-    el.scrollTop = el.scrollHeight;
-  } catch(e) {
-    el.innerHTML = '<span class="settings-console-line-danger">Failed to load service logs.</span>';
-  }
-}
-
-/* ─── Content Update Checker ─── */
-async function checkContentUpdates() {
-  try {
-    const updates = await (await fetch('/api/kiwix/check-updates')).json();
-    const panel = document.getElementById('content-updates-panel');
-    const itemsEl = document.getElementById('content-update-items');
-    if (!updates.length) { panel.style.display = 'none'; toast('All content is up to date', 'success'); return; }
-    panel.style.display = 'block';
-    itemsEl.innerHTML = updates.map(u =>
-      '<div class="library-update-row">' +
-        '<div class="library-update-copy">' +
-          '<div class="library-update-title">' + escapeHtml(u.name) + '</div>' +
-          '<div class="library-update-meta">' + escapeHtml(u.installed) + ' &#8594; ' + escapeHtml(u.available) + ' (' + escapeHtml(u.size) + ')</div>' +
-        '</div>' +
-        '<button class="btn btn-sm btn-primary" type="button" data-library-action="update-zim-content" data-zim-url="' + escapeAttr(u.url) + '" data-zim-filename="' + escapeAttr(u.available) + '">Update</button>' +
-      '</div>'
-    ).join('');
-  } catch(e) { toast('Failed to check for updates', 'error'); }
-}
-
-async function updateZimContent(url, filename) {
-  await fetch('/api/kiwix/download-zim', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url, filename})});
-  toast('Downloading updated content...', 'info');
-  loadZimDownloads();
-}
-
-/* ─── Wikipedia Tier Selector ─── */
-async function loadWikipediaTiers() {
-  try {
-    const options = await (await fetch('/api/kiwix/wikipedia-options')).json();
-    const installed = await (await fetch('/api/kiwix/zims')).json();
-    const installedNames = new Set(installed.map(z => typeof z === 'string' ? z : z.name || ''));
-    const el = document.getElementById('wiki-tier-options');
-    if (!options.length) { el.innerHTML = '<div class="settings-empty-state">Install Kiwix first to download Wikipedia.</div>'; return; }
-    el.innerHTML = options.map(o => {
-      const isInstalled = installedNames.has(o.filename);
-      const tierColor = o.tier === 'essential' ? 'var(--green)' : o.tier === 'standard' ? 'var(--accent)' : 'var(--orange)';
-      return '<div class="contact-card wiki-tier-card" style="--wiki-tier-tone:' + tierColor + ';">' +
-        '<div class="wiki-tier-topline"></div>' +
-        '<div class="wiki-tier-title">' + escapeHtml(o.name) + '</div>' +
-        '<div class="wiki-tier-copy">' + escapeHtml(o.desc) + '</div>' +
-        '<div class="wiki-tier-footer">' +
-          '<span class="wiki-tier-size">' + escapeHtml(o.size) + '</span>' +
-          (isInstalled
-            ? '<span class="wiki-tier-installed">&#10003; Installed</span>'
-            : '<button class="btn btn-sm btn-primary" type="button" data-library-action="download-wiki-tier" data-zim-url="' + escapeAttr(o.url) + '" data-zim-filename="' + escapeAttr(o.filename) + '">Download</button>') +
-        '</div>' +
-      '</div>';
-    }).join('');
-  } catch(e) {}
-}
-
-async function downloadWikiTier(url, filename) {
-  await fetch('/api/kiwix/download-zim', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url, filename})});
-  toast('Downloading Wikipedia...', 'info');
-  loadZimDownloads();
-}
-
-/* ─── Export / Import Config ─── */
-function exportConfig() {
-  window.location='/api/export-config';
-  toast('Config exported');
-}
-function doFullBackup() {
-  window.location='/api/export-all';
-  localStorage.setItem('nomad-last-backup', new Date().toISOString());
-  updateLastBackup();
-  toast('Backup downloaded', 'success');
-}
-function doExportConfig() {
-  exportConfig();
-  localStorage.setItem('nomad-last-backup', new Date().toISOString());
-  updateLastBackup();
-}
-async function showBackupList() {
-  try {
-    const backups = await (await fetch('/api/backups')).json();
-    if (!backups.length) { toast('No automatic backups found', 'info'); return; }
-    const html = backups.map(b => {
-      const d = new Date(b.modified * 1000);
-      const ts = d.toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-      return '<div class="settings-action-row">'
-        + '<div class="settings-stack">'
-        + '<div class="settings-row-title">' + escapeHtml(b.filename) + '</div>'
-        + '<div class="settings-row-detail">' + ts + ' — ' + escapeHtml(b.size) + '</div></div>'
-        + '<span class="settings-row-spacer"></span>'
-        + '<button class="btn btn-sm btn-primary" type="button" data-shell-action="restore-legacy-backup" data-backup-filename="' + escapeAttr(b.filename) + '">Restore</button>'
-        + '</div>';
-    }).join('');
-    const modal = document.createElement('div');
-    modal.className = 'generated-modal-overlay';
-    modal.dataset.backdropClose = 'generated-modal';
-    modal.innerHTML = '<div class="modal-card settings-modal-card settings-modal-card-md generated-modal-card">'
-      + '<div class="generated-modal-head">'
-      + '<h3>Restore from Backup</h3>'
-      + '<button class="btn btn-sm btn-ghost" type="button" data-shell-action="close-generated-modal" aria-label="Close restore backup modal">x</button></div>'
-      + '<div class="generated-modal-copy">Current database will be backed up first. Restart the app after restoring.</div>'
-      + '<div class="generated-modal-list">' + html + '</div></div>';
-    document.body.appendChild(modal);
-  } catch(e) { toast('Failed to load backups', 'error'); }
-}
-async function restoreBackup(filename) {
-  if (!confirm('Restore database from ' + filename + '? Current data will be backed up first.')) return;
-  try {
-    const r = await fetch('/api/backups/restore', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({filename})});
-    const d = await r.json();
-    if (r.ok) {
-      toast(d.message || 'Database restored', 'success');
-      document.querySelectorAll('.generated-modal-overlay').forEach(m => m.remove());
-    } else {
-      toast(d.error || 'Restore failed', 'error');
-    }
-  } catch(e) { toast('Restore failed', 'error'); }
-}
-function updateLastBackup() {
-  const el = document.getElementById('last-backup-time');
-  if (!el) return;
-  const ts = localStorage.getItem('nomad-last-backup');
-  if (ts) {
-    const d = new Date(ts);
-    const ago = Math.round((Date.now() - d.getTime()) / (1000*60*60*24));
-    const toneClass = ago > 30 ? 'text-red' : ago > 7 ? 'text-orange' : 'text-green';
-    el.innerHTML = `Last: ${d.toLocaleDateString()} <span class="${toneClass}">(${ago === 0 ? 'today' : ago + 'd ago'})</span>`;
-  } else {
-    el.innerHTML = '<span class="text-orange">Never backed up</span>';
-  }
+  document.querySelector(`.tab[data-tab="${tabId}"]`)?.click();
 }
 
 async function importConfig() {
@@ -2455,16 +1982,19 @@ document.addEventListener('keydown', e => {
 
 /* ─── Global Keyboard Shortcuts ─── */
 document.addEventListener('keydown', e => {
-  // Skip if user is typing in an input/textarea
-  const tag = document.activeElement?.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
-  // Ctrl+K — Focus search
+  if (e.key === 'Escape' && !document.getElementById('command-palette-overlay')?.hidden) {
+    e.preventDefault();
+    toggleCommandPalette(false);
+    return;
+  }
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
     e.preventDefault();
-    const search = document.getElementById('unified-search');
-    if (search) { search.focus(); search.select(); }
+    toggleCommandPalette(true);
+    return;
   }
+  // Skip if user is typing in an input/textarea for the remaining shortcuts
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
   // Ctrl+/ — Focus copilot dock (available on all tabs)
   if ((e.ctrlKey || e.metaKey) && e.key === '/') {
     e.preventDefault();

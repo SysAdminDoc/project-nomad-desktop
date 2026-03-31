@@ -38,7 +38,219 @@ const PREP_CATEGORIES = {
     {id:'calculators',label:'Calculators'}
   ]},
 };
+const PREP_WORKSPACE_STORAGE_KEY = 'nomad-prep-workspace-memory-v2';
+const PREP_DEFAULT_FAVORITES = ['checklists', 'inventory', 'medical', 'security', 'guides'];
+const PREP_WORKSPACE_DETAILS = {
+  checklists: {icon:'&#9745;', summary:'Run active response checklists and keep handoffs clear.'},
+  incidents: {icon:'&#9888;', summary:'Capture events, severity, and timing in sequence.'},
+  ops: {icon:'&#9878;', summary:'Manage command-post operations and active posture.'},
+  analytics: {icon:'&#128202;', summary:'Review trend lines before they become new problems.'},
+  inventory: {icon:'&#128230;', summary:'Track stock, expiry pressure, and replenishment needs.'},
+  fuel: {icon:'&#9981;', summary:'Watch fuel posture, reserves, and burn planning.'},
+  power: {icon:'&#9889;', summary:'Manage power sources, devices, and continuity.'},
+  garden: {icon:'&#127793;', summary:'Keep food production and seasonal planting on track.'},
+  equipment: {icon:'&#128295;', summary:'Review tool readiness, repair needs, and spares.'},
+  weather: {icon:'&#9729;', summary:'Monitor forecast changes and weather-driven risk.'},
+  medical: {icon:'&#10010;', summary:'Check patient status, supplies, and medical readiness.'},
+  contacts: {icon:'&#128101;', summary:'Keep key people, roles, and contact paths current.'},
+  family: {icon:'&#127968;', summary:'Update family plans, rally points, and responsibilities.'},
+  community: {icon:'&#129309;', summary:'Track local support, peers, and mutual-aid posture.'},
+  skills: {icon:'&#127891;', summary:'Review capability gaps and who can cover them.'},
+  journal: {icon:'&#9999;', summary:'Capture observations, decisions, and daily context.'},
+  security: {icon:'&#128737;', summary:'Check security posture, perimeter, and threat state.'},
+  radio: {icon:'&#128225;', summary:'Manage radio readiness, propagation, and frequencies.'},
+  signals: {icon:'&#128246;', summary:'Plan check-ins, signal windows, and message flow.'},
+  vault: {icon:'&#128274;', summary:'Access protected records and sensitive materials.'},
+  ammo: {icon:'&#127919;', summary:'Watch supply levels, compatibility, and gaps.'},
+  radiation: {icon:'&#9762;', summary:'Track exposure, contamination, and fallout posture.'},
+  guides: {icon:'&#128214;', summary:'Open decision guides and step-by-step field help.'},
+  protocols: {icon:'&#128196;', summary:'Use operating procedures and standard playbooks fast.'},
+  reference: {icon:'&#128209;', summary:'Reach quick-reference answers without digging.'},
+  calculators: {icon:'&#129518;', summary:'Run planning and survival calculations quickly.'},
+};
 let _currentPrepCat = 'coordinate';
+
+function getAllPrepWorkspaceIds() {
+  return Object.values(PREP_CATEGORIES).flatMap(group => group.tabs.map(tab => tab.id));
+}
+
+function getPrepWorkspaceMeta(sub) {
+  const cat = _findCategoryForSub(sub);
+  const group = PREP_CATEGORIES[cat];
+  const tab = group?.tabs.find(item => item.id === sub);
+  const detail = PREP_WORKSPACE_DETAILS[sub] || {};
+  return {
+    id: sub,
+    lane: cat,
+    laneLabel: group?.label || 'Preparedness',
+    label: tab?.label || sub,
+    icon: detail.icon || '&#8250;',
+    summary: detail.summary || group?.description || 'Open workspace',
+  };
+}
+
+function normalizePrepWorkspaceState(raw) {
+  const validIds = new Set(getAllPrepWorkspaceIds());
+  const toList = value => Array.isArray(value) ? value.filter(id => validIds.has(id)) : [];
+  const dedupe = list => Array.from(new Set(list));
+  const favorites = dedupe(toList(raw?.favorites));
+  const recent = dedupe(toList(raw?.recent));
+  const current = validIds.has(raw?.current) ? raw.current : 'checklists';
+  const last = validIds.has(raw?.last) && raw.last !== current ? raw.last : '';
+  return {
+    current,
+    last,
+    favorites: (favorites.length ? favorites : PREP_DEFAULT_FAVORITES.filter(id => validIds.has(id))).slice(0, 6),
+    recent: [current, ...recent.filter(id => id !== current)].slice(0, 6),
+  };
+}
+
+function getPrepWorkspaceState() {
+  try {
+    return normalizePrepWorkspaceState(JSON.parse(localStorage.getItem(PREP_WORKSPACE_STORAGE_KEY) || '{}'));
+  } catch (error) {
+    return normalizePrepWorkspaceState({});
+  }
+}
+
+function savePrepWorkspaceState(state) {
+  try {
+    localStorage.setItem(PREP_WORKSPACE_STORAGE_KEY, JSON.stringify(normalizePrepWorkspaceState(state)));
+  } catch (error) {
+    console.warn('Unable to save preparedness workspace state', error);
+  }
+}
+
+function openPrepWorkspaceFromMemory(sub) {
+  if (!sub) return;
+  document.querySelector('[data-tab="preparedness"]')?.click();
+  setTimeout(() => {
+    if (typeof switchPrepSub === 'function') switchPrepSub(sub);
+  }, 160);
+}
+
+function rememberPrepWorkspace(sub) {
+  if (!sub) return;
+  const state = getPrepWorkspaceState();
+  if (state.current && state.current !== sub) state.last = state.current;
+  state.current = sub;
+  state.recent = [sub, ...state.recent.filter(id => id !== sub)].slice(0, 6);
+  savePrepWorkspaceState(state);
+}
+
+function togglePrepWorkspaceFavorite(sub) {
+  if (!sub) return false;
+  const state = getPrepWorkspaceState();
+  if (state.favorites.includes(sub)) {
+    state.favorites = state.favorites.filter(id => id !== sub);
+  } else {
+    state.favorites = [sub, ...state.favorites.filter(id => id !== sub)].slice(0, 6);
+  }
+  savePrepWorkspaceState(state);
+  return state.favorites.includes(sub);
+}
+
+function buildPrepWorkspaceChip(meta, options = {}) {
+  const classes = [
+    'prep-workspace-chip',
+    options.isCurrent ? 'is-current' : '',
+    options.isFavorite ? 'is-favorite' : '',
+  ].filter(Boolean).join(' ');
+  return `<button type="button" class="${classes}" data-prep-nav-open="${meta.id}">
+    <span class="prep-workspace-chip-icon" aria-hidden="true">${meta.icon}</span>
+    <span class="prep-workspace-chip-body">
+      <span class="prep-workspace-chip-title">${escapeHtml(meta.label)}</span>
+      <span class="prep-workspace-chip-meta">${escapeHtml(meta.laneLabel)} · ${escapeHtml(meta.summary)}</span>
+    </span>
+  </button>`;
+}
+
+function renderPrepWorkspaceHub() {
+  const state = getPrepWorkspaceState();
+  const currentMeta = getPrepWorkspaceMeta(state.current || 'checklists');
+  const lastMeta = state.last && state.last !== currentMeta.id ? getPrepWorkspaceMeta(state.last) : null;
+  const recentIds = state.recent.filter(id => id !== currentMeta.id && !state.favorites.includes(id)).slice(0, 5);
+  const activeLane = _currentPrepCat;
+  const favoriteMetas = state.favorites
+    .map((id, index) => ({...getPrepWorkspaceMeta(id), _index: index}))
+    .sort((a, b) => {
+      const laneDelta = (a.lane === activeLane ? 0 : 1) - (b.lane === activeLane ? 0 : 1);
+      return laneDelta || a._index - b._index;
+    });
+
+  const recentEl = document.getElementById('prep-recent-workspaces');
+  const favoritesEl = document.getElementById('prep-favorite-workspaces');
+  const summaryEl = document.getElementById('prep-resume-summary');
+  const favoriteSummaryEl = document.getElementById('prep-favorite-summary');
+  const subtabsCopyEl = document.getElementById('prep-subtabs-copy');
+  const resumeBtn = document.getElementById('prep-resume-last-btn');
+  const favoriteBtn = document.getElementById('prep-favorite-current-btn');
+  if (!recentEl || !favoritesEl || !summaryEl || !favoriteSummaryEl || !resumeBtn || !favoriteBtn) return;
+
+  summaryEl.textContent = lastMeta
+    ? `Current: ${currentMeta.label} in ${currentMeta.laneLabel}. Last workspace: ${lastMeta.label}.`
+    : `Current: ${currentMeta.label} in ${currentMeta.laneLabel}. Your last workspace will appear here once you move around.`;
+  recentEl.innerHTML = recentIds.length
+    ? recentIds.map(id => buildPrepWorkspaceChip(getPrepWorkspaceMeta(id))).join('')
+    : '<div class="prep-workbench-empty">Recent workspace jumps will show up here.</div>';
+
+  favoritesEl.innerHTML = favoriteMetas.length
+    ? favoriteMetas.map(meta => buildPrepWorkspaceChip(meta, {isCurrent: meta.id === currentMeta.id, isFavorite: true})).join('')
+    : '<div class="prep-workbench-empty">Pin the workspaces you use most.</div>';
+
+  const isCurrentFavorite = state.favorites.includes(currentMeta.id);
+  favoriteSummaryEl.textContent = isCurrentFavorite
+    ? `${currentMeta.label} is pinned. Open any workspace, then pin or unpin it from here.`
+    : `${currentMeta.label} is not pinned yet. Pin it if this is part of your normal operating loop.`;
+  favoriteBtn.textContent = isCurrentFavorite ? `Unpin ${currentMeta.label}` : `Pin ${currentMeta.label}`;
+  favoriteBtn.setAttribute('aria-pressed', isCurrentFavorite ? 'true' : 'false');
+
+  resumeBtn.disabled = !lastMeta;
+  resumeBtn.textContent = lastMeta ? `Resume ${lastMeta.label}` : 'Resume Last Workspace';
+  resumeBtn.setAttribute('aria-disabled', lastMeta ? 'false' : 'true');
+
+  if (subtabsCopyEl) {
+    subtabsCopyEl.textContent = isCurrentFavorite
+      ? `${currentMeta.label} is pinned for faster return. Switch lanes when the situation changes.`
+      : `${currentMeta.label} is active now. Pin it if you keep coming back here.`;
+  }
+}
+
+function getPrepWorkspacePaletteCommands() {
+  const state = getPrepWorkspaceState();
+  const favorites = state.favorites.slice(0, 5).map((id, index) => {
+    const meta = getPrepWorkspaceMeta(id);
+    return {
+      id: `prep-favorite-${meta.id}`,
+      section: 'Preparedness Favorites',
+      title: `Open ${meta.label}`,
+      subtitle: `${meta.laneLabel} · ${meta.summary}`,
+      keywords: `preparedness favorite ${meta.laneLabel} ${meta.label} ${meta.summary}`,
+      icon: meta.icon,
+      meta: 'Pinned',
+      priority: 93 - index,
+      run: () => openPrepWorkspaceFromMemory(meta.id),
+    };
+  });
+  const recent = state.recent
+    .filter(id => id !== state.current && !state.favorites.includes(id))
+    .slice(0, 4)
+    .map((id, index) => {
+      const meta = getPrepWorkspaceMeta(id);
+      return {
+        id: `prep-recent-${meta.id}`,
+        section: 'Recent Preparedness',
+        title: `Resume ${meta.label}`,
+        subtitle: `${meta.laneLabel} · ${meta.summary}`,
+        keywords: `preparedness recent ${meta.laneLabel} ${meta.label} ${meta.summary}`,
+        icon: meta.icon,
+        meta: 'Recent',
+        priority: 85 - index,
+        run: () => openPrepWorkspaceFromMemory(meta.id),
+      };
+    });
+  return [...favorites, ...recent];
+}
 
 function setPrepScenarioFocus(group) {
   const kicker = document.getElementById('prep-scenario-focus-kicker');
@@ -58,6 +270,7 @@ function showPrepCategory(cat) {
     b.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   });
   setPrepScenarioFocus(group);
+  renderPrepWorkspaceHub();
   // Render sub-tabs for this lane
   const bar = document.getElementById('prep-subtab-bar');
   bar.innerHTML = group.tabs.map(function(t) {
@@ -94,6 +307,8 @@ function switchPrepSub(sub) {
   if (cat !== _currentPrepCat) showPrepCategory(cat);
   document.querySelectorAll('.prep-subtab').forEach(b => b.classList.toggle('active', b.dataset.psub === sub));
   document.querySelectorAll('.prep-sub').forEach(p => p.classList.toggle('active', p.id === 'psub-' + sub));
+  rememberPrepWorkspace(sub);
+  renderPrepWorkspaceHub();
   if (sub === 'incidents') loadIncidents();
   if (sub === 'inventory') { loadInventory(); loadBurnRate(); loadInvViz(); }
   if (sub === 'contacts') { loadContacts(); loadSkillsMatrix(); }
@@ -119,6 +334,7 @@ function switchPrepSub(sub) {
   if (sub === 'fuel') loadFuel();
   if (sub === 'equipment') loadEquipment();
   if (sub === 'analytics') loadAnalyticsDashboard();
+  if (typeof syncWorkspaceUrlState === 'function') syncWorkspaceUrlState();
 }
 
 /* ─── Preparedness ─── */
@@ -138,6 +354,7 @@ async function loadPrepTab() {
     // Ensure the category bar has tabs (in case it wasn't initialized)
     if (!document.getElementById('prep-subtab-bar').children.length) initPrepNav();
   }
+  renderPrepWorkspaceHub();
   await loadChecklists();
 }
 
@@ -280,3 +497,29 @@ async function deleteChecklist(id) {
   }
   await loadChecklists();
 }
+
+document.addEventListener('click', event => {
+  const openButton = event.target.closest('[data-prep-nav-open]');
+  if (openButton) {
+    event.preventDefault();
+    openPrepWorkspaceFromMemory(openButton.dataset.prepNavOpen);
+    return;
+  }
+
+  const actionButton = event.target.closest('[data-prep-nav-action]');
+  if (!actionButton) return;
+
+  if (actionButton.dataset.prepNavAction === 'resume-last') {
+    const state = getPrepWorkspaceState();
+    if (state.last) openPrepWorkspaceFromMemory(state.last);
+    return;
+  }
+
+  if (actionButton.dataset.prepNavAction === 'toggle-current-favorite') {
+    const current = getPrepWorkspaceState().current;
+    if (!current) return;
+    const isPinned = togglePrepWorkspaceFavorite(current);
+    renderPrepWorkspaceHub();
+    toast(isPinned ? 'Workspace pinned' : 'Workspace unpinned', isPinned ? 'success' : 'info');
+  }
+});

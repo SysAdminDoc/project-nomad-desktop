@@ -1402,7 +1402,7 @@ def _init_db_inner(conn):
         'CREATE INDEX IF NOT EXISTS idx_upc_database_upc ON upc_database(upc)',
         'CREATE INDEX IF NOT EXISTS idx_upc_database_category ON upc_database(category)',
         'CREATE INDEX IF NOT EXISTS idx_shopping_list_inventory_id ON shopping_list(inventory_id)',
-        'CREATE INDEX IF NOT EXISTS idx_conversation_branches_parent ON conversation_branches(parent_id)',
+        'CREATE INDEX IF NOT EXISTS idx_conversation_branches_parent ON conversation_branches(conversation_id, parent_message_idx)',
     ]:
         try:
             conn.execute(idx)

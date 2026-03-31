@@ -71,7 +71,36 @@
         <div class="prep-scenario-focus-kicker" id="prep-scenario-focus-kicker">Coordinate</div>
         <div class="prep-scenario-focus-copy" id="prep-scenario-focus-copy">Run checklists, capture incidents, and keep the operational picture current.</div>
       </div>
-      <div class="prep-subtabs-label">Choose a workspace inside this lane</div>
+      <div class="prep-workbench-strip">
+        <section class="prep-workbench-panel" aria-labelledby="prep-recent-title">
+          <div class="prep-workbench-head">
+            <div class="prep-workbench-copy">
+              <div class="section-header-label prep-workbench-kicker">Resume Work</div>
+              <h4 class="prep-workbench-title" id="prep-recent-title">Jump back into the workspaces you were using last.</h4>
+            </div>
+            <button type="button" class="btn btn-sm btn-ghost prep-workbench-action" id="prep-resume-last-btn" data-prep-nav-action="resume-last">Resume Last Workspace</button>
+          </div>
+          <div class="prep-workbench-summary" id="prep-resume-summary">Keep moving without rebuilding context from scratch.</div>
+          <div class="prep-workbench-chip-row" id="prep-recent-workspaces" aria-live="polite"></div>
+        </section>
+        <section class="prep-workbench-panel" aria-labelledby="prep-favorites-title">
+          <div class="prep-workbench-head">
+            <div class="prep-workbench-copy">
+              <div class="section-header-label prep-workbench-kicker">Pinned Workspaces</div>
+              <h4 class="prep-workbench-title" id="prep-favorites-title">Keep the tools you return to most one click away.</h4>
+            </div>
+            <button type="button" class="btn btn-sm btn-ghost prep-workbench-action" id="prep-favorite-current-btn" data-prep-nav-action="toggle-current-favorite">Pin Current Workspace</button>
+          </div>
+          <div class="prep-workbench-summary" id="prep-favorite-summary">Pin your most-used workspaces so Preparedness opens like your desk, not a catalog.</div>
+          <div class="prep-workbench-chip-row" id="prep-favorite-workspaces" aria-live="polite"></div>
+        </section>
+      </div>
+      <div class="prep-subtabs-head">
+        <div class="prep-subtabs-label-group">
+          <div class="prep-subtabs-label">Choose a workspace inside this lane</div>
+          <div class="prep-subtabs-copy" id="prep-subtabs-copy">Switch lanes when the situation changes, or jump back into a pinned workspace below.</div>
+        </div>
+      </div>
       <!-- Sub-tabs within selected category -->
       <div class="prep-subtabs prep-subtabs-shell" id="prep-subtab-bar">
         <!-- Populated by showPrepCategory() -->

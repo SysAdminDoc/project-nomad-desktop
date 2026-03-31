@@ -10,20 +10,479 @@ let _sitroomIsGlobe = false;
 let _sitroomAlertsSeen = new Set();
 let _sitroomInitDone = false;
 let _sitroomNewsCat = ''; // preserve category across refreshes
+let _sitroomView = 'topline';
+let _sitroomNewsGroup = 'all';
+let _sitroomLayoutEdit = false;
+let _sitroomRegionPreset = 'global';
+let _sitroomNewsArticles = [];
+let _sitroomDeskPreset = 'executive';
+let _sitroomLayerPreset = 'crisis';
+let _sitroomSavedDeskId = '';
+let _sitroomBriefMode = 'morning';
+let _sitroomSnapshotTemplate = 'morning';
+
+const SITROOM_VIEW_META = {
+  topline: {
+    copy: 'Critical signals, narrative shifts, and decision support in one live surface.',
+    mapTitle: 'Track live pressure points, infrastructure risk, and narrative shifts in one canvas.',
+    mapCopy: 'Start with the map for orientation, then drop into the intelligence cards below for depth, analyst output, and follow-up action.',
+  },
+  news: {
+    copy: 'Work the information picture by desk instead of scanning a warehouse of unrelated cards.',
+    mapTitle: 'Use the map for orientation, then work the news desk by lane.',
+    mapCopy: 'Topline stories, topic feeds, and drill-down reporting are grouped so you can follow a narrative instead of hunting through the whole grid.',
+  },
+  markets: {
+    copy: 'Keep macro stress, flows, regime, and business signals in one operator view.',
+    mapTitle: 'Watch market risk against the same global operating picture.',
+    mapCopy: 'Use the map for context, then stay focused on price action, calendars, flows, and structural stress.',
+  },
+  security: {
+    copy: 'Focus on conflict, cyber, disruption, escalation, and intelligence quality without the rest of the noise.',
+    mapTitle: 'Track pressure points, adversary signals, and disruption risk in one security surface.',
+    mapCopy: 'Keep the global picture visible, but prioritize conflict, cyber, infrastructure, and warning indicators.',
+  },
+  map: {
+    copy: 'Operate from the map first, then pull only the supporting panels you need.',
+    mapTitle: 'Use the map as the primary command canvas.',
+    mapCopy: 'Layer presets, hotspot monitoring, and country drill-down stay in focus while the card field trims down to map-relevant support.',
+  },
+};
+
+const SITROOM_TOPLINE_PANELS = new Set([
+  'sitroom-news-list',
+  'sr-live-player',
+  'sr-cii',
+  'sitroom-timeline',
+  'sitroom-correlations',
+  'sitroom-breaking-detection',
+  'sitroom-briefing-content',
+  'sitroom-deduction',
+  'sitroom-country-brief-content',
+  'sitroom-snapshot',
+  'sitroom-anomalies',
+  'sitroom-enhanced-signals',
+  'sitroom-source-health',
+  'sitroom-alert-history',
+  'sitroom-outages-list',
+]);
+
+const SITROOM_MAP_PANELS = new Set([
+  'sitroom-quake-list',
+  'sitroom-weather-list',
+  'sitroom-fires-list',
+  'sitroom-diseases-list',
+  'sitroom-radiation',
+  'sitroom-outages-list',
+  'sr-cii',
+  'sitroom-country-brief-content',
+  'sitroom-space-weather',
+  'sitroom-ucdp',
+]);
+
+const SITROOM_MARKETS_KEYWORDS = [
+  'market', 'fear-greed', 'predictions', 'yield', 'macro', 'forex', 'crypto', 'stablecoins',
+  'bigmac', 'btc-etf', 'fintech', 'earnings', 'central-banks', 'cb-calendar', 'ipo',
+  'derivatives', 'hedgefunds', 'unicorn', 'gulf', 'commodities', 'debt', 'fin-regulation',
+  'fuel', 'velocity',
+];
+
+const SITROOM_SECURITY_KEYWORDS = [
+  'intel', 'osint', 'cyber', 'sec-advisories', 'source-health', 'cable-health', 'chokepoints',
+  'escalation', 'oref', 'apt', 'anomalies', 'enhanced-signals', 'radiation', 'ucdp', 'protests',
+  'sanctions', 'outages', 'internet-health', 'country-brief', 'briefing', 'deduction',
+  'displacement', 'humanitarian',
+];
+
+const SITROOM_TECH_KEYWORDS = [
+  'github', 'arxiv', 'semiconductors', 'space-news', 'cloud-infra', 'dev-community',
+  'startups', 'ai-regulation', 'rd-signal', 'tech-events', 'renewable', 'producthunt',
+];
+
+const SITROOM_POSITIVE_KEYWORDS = [
+  'good-news', 'conservation', 'progress', 'breakthroughs', 'species-tracker',
+  'todays-hero', 'good-things', 'live-counters',
+];
+
+const SITROOM_WORLD_KEYWORDS = [
+  'news-list', 'timeline', 'think-tanks', 'layoffs', 'airline', 'supplychain', 'world-clock',
+  'intel-gap', 'news-clusters', 'country-brief',
+];
+
+const SITROOM_REGION_PRESETS = {
+  global: {
+    label: 'Global',
+    title: 'Global watchfloor',
+    copy: 'Scan the widest signal mix first, then pin the story or country that deserves a longer read.',
+    keywords: [],
+  },
+  americas: {
+    label: 'Americas',
+    title: 'Americas desk',
+    copy: 'Track North and South American political, weather, infrastructure, and market spillover without the rest of the globe crowding the lane.',
+    keywords: ['united states', 'u.s.', 'usa', 'canada', 'mexico', 'brazil', 'argentina', 'colombia', 'chile', 'peru', 'venezuela', 'latin america', 'caribbean', 'americas'],
+  },
+  europe: {
+    label: 'Europe',
+    title: 'Europe desk',
+    copy: 'Keep Europe, Russia, and adjacent pressure points in one reading lane so escalation and market shifts connect faster.',
+    keywords: ['europe', 'uk', 'united kingdom', 'britain', 'france', 'germany', 'poland', 'italy', 'spain', 'ukraine', 'russia', 'eu', 'nato', 'baltic'],
+  },
+  mena: {
+    label: 'Middle East',
+    title: 'Middle East desk',
+    copy: 'Prioritize the Eastern Mediterranean, Gulf, Levant, and Red Sea storylines where escalation and infrastructure risk move together.',
+    keywords: ['middle east', 'mena', 'israel', 'gaza', 'west bank', 'iran', 'iraq', 'syria', 'lebanon', 'saudi', 'uae', 'qatar', 'oman', 'yemen', 'jordan', 'egypt', 'turkey', 'red sea', 'gulf'],
+  },
+  'indo-pacific': {
+    label: 'Indo-Pacific',
+    title: 'Indo-Pacific desk',
+    copy: 'Keep Asia-Pacific security, logistics, semiconductor, and maritime stories together so the regional operating picture stays coherent.',
+    keywords: ['asia-pacific', 'indo-pacific', 'china', 'taiwan', 'japan', 'korea', 'south korea', 'north korea', 'india', 'pakistan', 'philippines', 'australia', 'indonesia', 'malaysia', 'vietnam', 'south china sea'],
+  },
+};
+
+const SITROOM_BRIEF_MODE_META = {
+  morning: {
+    label: 'Morning Brief',
+    copy: 'Morning Brief keeps the desk broad and helps you establish the operating picture before you narrow down.',
+    keywords: ['breaking', 'weather', 'conflict', 'market', 'election', 'outage', 'summit', 'policy', 'quake', 'storm'],
+  },
+  crisis: {
+    label: 'Crisis Brief',
+    copy: 'Crisis Brief pushes escalation, disruption, and safety-critical reporting to the top so you can assess what needs attention fastest.',
+    keywords: ['conflict', 'strike', 'attack', 'evacuation', 'storm', 'quake', 'wildfire', 'outage', 'cyber', 'protest', 'military', 'missile', 'sanction', 'explosion', 'emergency', 'warning'],
+  },
+  'market-open': {
+    label: 'Market Open',
+    copy: 'Market Open surfaces macro, policy, rates, oil, and business pressure so you can get a cleaner risk picture before the session moves.',
+    keywords: ['market', 'fed', 'rates', 'inflation', 'treasury', 'oil', 'futures', 'earnings', 'currency', 'bond', 'jobs', 'cpi', 'pmi', 'growth', 'tariff', 'export'],
+  },
+};
+
+const SITROOM_SNAPSHOT_TEMPLATES = {
+  morning: {
+    label: 'AM Brief',
+    title: 'Situation Room AM Brief',
+  },
+  handoff: {
+    label: 'Crisis Handoff',
+    title: 'Situation Room Crisis Handoff',
+  },
+  market: {
+    label: 'Market Note',
+    title: 'Situation Room Market Note',
+  },
+};
+
+const SITROOM_LAYER_PRESETS = {
+  crisis: ['earthquakes', 'weather', 'conflicts', 'fires', 'volcanoes', 'ucdp', 'diseases', 'radiation', 'protests', 'daynight'],
+  infrastructure: ['nuclear', 'bases', 'cables', 'datacenters', 'pipelines', 'airports', 'cloudRegions', 'ixps', 'weatherStations', 'spaceTracking'],
+  markets: ['fincenters', 'exchanges', 'commodityHubs', 'shipping', 'tradeRoutes', 'airports', 'mining', 'rareEarths'],
+  mobility: ['aviation', 'ships', 'shipping', 'waterways', 'tradeRoutes', 'borderCrossings', 'airports', 'weather', 'radar'],
+  comms: ['cables', 'datacenters', 'ixps', 'cloudRegions', 'listeningPosts', 'techHQs', 'spaceTracking', 'gpsJamming', 'webcams'],
+};
+
+const SITROOM_DESK_PRESETS = {
+  executive: {
+    view: 'topline',
+    newsGroup: 'all',
+    region: 'global',
+    layerPreset: 'crisis',
+    briefMode: 'morning',
+  },
+  crisis: {
+    view: 'security',
+    newsGroup: 'security',
+    region: 'global',
+    layerPreset: 'crisis',
+    briefMode: 'crisis',
+  },
+  markets: {
+    view: 'markets',
+    newsGroup: 'markets',
+    region: 'global',
+    layerPreset: 'markets',
+    briefMode: 'market-open',
+  },
+  cyber: {
+    view: 'security',
+    newsGroup: 'security',
+    region: 'global',
+    layerPreset: 'comms',
+    briefMode: 'crisis',
+  },
+  'middle-east': {
+    view: 'news',
+    newsGroup: 'security',
+    region: 'mena',
+    layerPreset: 'mobility',
+    briefMode: 'crisis',
+  },
+};
+
+const SITROOM_VIEW_LABELS = {
+  topline: 'Topline',
+  news: 'News Desk',
+  markets: 'Markets',
+  security: 'Security',
+  map: 'Map',
+};
+
+function _titleCaseSitroomLabel(value) {
+  return String(value || '')
+    .split('-')
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function _getSitroomViewLabel(view = _sitroomView) {
+  return SITROOM_VIEW_LABELS[view] || 'Topline';
+}
+
+function _getSitroomDeskLabel(name = _sitroomDeskPreset) {
+  return name === 'custom' ? 'Custom Desk' : `${_titleCaseSitroomLabel(name)} Desk`;
+}
+
+function _getSitroomLayerLabel(name = _sitroomLayerPreset) {
+  return name === 'custom' ? 'Custom Layers' : `${_titleCaseSitroomLabel(name)} Layers`;
+}
+
+function _getSitroomDefaultSnapshotTemplate(mode = _sitroomBriefMode) {
+  if (mode === 'crisis') return 'handoff';
+  if (mode === 'market-open') return 'market';
+  return 'morning';
+}
+
+function _formatSitroomSavedTime(value) {
+  if (!value) return '';
+  try {
+    return new Date(value).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+  } catch (e) {
+    return '';
+  }
+}
+
+function _getActiveSitroomLayerLabels() {
+  return [...document.querySelectorAll('[data-sitroom-layer]')]
+    .filter(cb => cb.checked)
+    .map(cb => cb.closest('label')?.textContent?.replace(/\s+/g, ' ').trim() || cb.dataset.sitroomLayer)
+    .filter(Boolean);
+}
+
+function _getSitroomSnapshotContext() {
+  const saved = _getSitroomSavedDeskById(_sitroomSavedDeskId);
+  const preset = SITROOM_REGION_PRESETS[_sitroomRegionPreset] || SITROOM_REGION_PRESETS.global;
+  const brief = SITROOM_BRIEF_MODE_META[_sitroomBriefMode] || SITROOM_BRIEF_MODE_META.morning;
+  const template = SITROOM_SNAPSHOT_TEMPLATES[_sitroomSnapshotTemplate] || SITROOM_SNAPSHOT_TEMPLATES.morning;
+  const deskName = saved?.name || _getSitroomDeskLabel();
+  const headlineLines = (_sitroomNewsArticles || []).slice(0, 5).map((article, index) => {
+    const source = article.source_name ? ` (${article.source_name})` : '';
+    return `${index + 1}. ${article.title || 'Untitled'}${source}`;
+  });
+  const layerLines = _getActiveSitroomLayerLabels().slice(0, 10);
+  const updateText = document.getElementById('sitroom-last-update')?.textContent?.trim() || 'Update time unavailable';
+  const threat = document.getElementById('sitroom-threat-level')?.textContent?.trim() || 'Unknown';
+  const online = document.getElementById('sitroom-online-badge')?.textContent?.trim() || 'Unknown';
+  return {saved, preset, brief, template, deskName, headlineLines, layerLines, updateText, threat, online};
+}
+
+function _buildSitroomDeskSnapshot() {
+  const {saved, preset, brief, template, deskName, headlineLines, layerLines, updateText, threat, online} = _getSitroomSnapshotContext();
+  const header = [
+    `${template.title}`,
+    `Desk: ${deskName}${saved?.isDefault ? ' (Launch Desk)' : ''}`,
+    `View: ${_getSitroomViewLabel()} · ${preset.label}`,
+    `News Lane: ${_getSitroomNewsGroupLabel()} · ${brief.label}`,
+    `Layers: ${_getSitroomLayerLabel()}`,
+    `Threat: ${threat} · Status: ${online}`,
+    `Updated: ${updateText}`,
+    '',
+  ];
+
+  if (_sitroomSnapshotTemplate === 'handoff') {
+    return [
+      ...header,
+      `Immediate Focus:`,
+      ...(headlineLines.length ? headlineLines.slice(0, 3) : ['No immediate headlines currently loaded.']),
+      '',
+      `Next Operator Needs To Watch:`,
+      `- Keep ${_getSitroomNewsGroupLabel().toLowerCase()} in focus for ${preset.label}.`,
+      `- Maintain ${_getSitroomLayerLabel().toLowerCase()} on the map while validating new alerts.`,
+      `- Recheck the desk after the next refresh cycle if threat or status changes.`,
+      '',
+      `Active Layers:`,
+      ...(layerLines.length ? layerLines.map(item => `- ${item}`) : ['- No active layers recorded.']),
+    ].join('\n');
+  }
+
+  if (_sitroomSnapshotTemplate === 'market') {
+    return [
+      ...header,
+      `Market Drivers:`,
+      ...(headlineLines.length ? headlineLines : ['No market headlines currently loaded.']),
+      '',
+      `Desk Posture:`,
+      `- Region focus: ${preset.label}`,
+      `- Primary lane: ${_getSitroomNewsGroupLabel()}`,
+      `- Map stance: ${_getSitroomLayerLabel()}`,
+      '',
+      `Active Layers:`,
+      ...(layerLines.length ? layerLines.map(item => `- ${item}`) : ['- No active layers recorded.']),
+    ].join('\n');
+  }
+
+  return [
+    ...header,
+    `Top Headlines:`,
+    ...(headlineLines.length ? headlineLines : ['No headlines currently loaded.']),
+    '',
+    `Watch Items:`,
+    `- Region focus: ${preset.label}`,
+    `- News lane: ${_getSitroomNewsGroupLabel()}`,
+    `- Map stance: ${_getSitroomLayerLabel()}`,
+    '',
+    `Active Layers:`,
+    ...(layerLines.length ? layerLines.map(item => `- ${item}`) : ['- No active layers recorded.']),
+  ].join('\n');
+}
+
+function _buildSitroomDeskSnapshotMarkdown() {
+  const {saved, preset, brief, template, deskName, headlineLines, layerLines, updateText, threat, online} = _getSitroomSnapshotContext();
+  const lines = [
+    `# ${template.title}`,
+    ``,
+    `- **Desk:** ${deskName}${saved?.isDefault ? ' (Launch Desk)' : ''}`,
+    `- **View:** ${_getSitroomViewLabel()} · ${preset.label}`,
+    `- **News Lane:** ${_getSitroomNewsGroupLabel()} · ${brief.label}`,
+    `- **Layers:** ${_getSitroomLayerLabel()}`,
+    `- **Threat:** ${threat}`,
+    `- **Status:** ${online}`,
+    `- **Updated:** ${updateText}`,
+    ``,
+  ];
+
+  if (_sitroomSnapshotTemplate === 'handoff') {
+    lines.push(`## Immediate Focus`);
+    lines.push(...(headlineLines.length ? headlineLines.map(item => item.replace(/^\d+\.\s*/, '- ')) : ['- No immediate headlines currently loaded.']));
+    lines.push(``);
+    lines.push(`## Next Operator Needs To Watch`);
+    lines.push(`- Keep ${_getSitroomNewsGroupLabel().toLowerCase()} in focus for ${preset.label}.`);
+    lines.push(`- Maintain ${_getSitroomLayerLabel().toLowerCase()} on the map while validating new alerts.`);
+    lines.push(`- Recheck the desk after the next refresh cycle if threat or status changes.`);
+  } else if (_sitroomSnapshotTemplate === 'market') {
+    lines.push(`## Market Drivers`);
+    lines.push(...(headlineLines.length ? headlineLines.map(item => item.replace(/^\d+\.\s*/, '- ')) : ['- No market headlines currently loaded.']));
+    lines.push(``);
+    lines.push(`## Desk Posture`);
+    lines.push(`- Region focus: ${preset.label}`);
+    lines.push(`- Primary lane: ${_getSitroomNewsGroupLabel()}`);
+    lines.push(`- Map stance: ${_getSitroomLayerLabel()}`);
+  } else {
+    lines.push(`## Top Headlines`);
+    lines.push(...(headlineLines.length ? headlineLines.map(item => item.replace(/^\d+\.\s*/, '- ')) : ['- No headlines currently loaded.']));
+    lines.push(``);
+    lines.push(`## Watch Items`);
+    lines.push(`- Region focus: ${preset.label}`);
+    lines.push(`- News lane: ${_getSitroomNewsGroupLabel()}`);
+    lines.push(`- Map stance: ${_getSitroomLayerLabel()}`);
+  }
+
+  lines.push(``);
+  lines.push(`## Active Layers`);
+  lines.push(...(layerLines.length ? layerLines.map(item => `- ${item}`) : ['- No active layers recorded.']));
+  return lines.join('\n');
+}
+
+async function _copySitroomDeskSnapshot() {
+  const text = _buildSitroomDeskSnapshot();
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      toast('Desk snapshot copied', 'success');
+      return;
+    }
+  } catch (e) { /* clipboard blocked */ }
+
+  try {
+    const blob = new Blob([text], {type: 'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sitroom-desk-snapshot-${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast('Desk snapshot downloaded', 'info');
+  } catch (e) {
+    _showSitroomAlert('warning', 'Unable to share desk snapshot on this device');
+  }
+}
+
+async function _saveSitroomDeskSnapshotToNotes() {
+  const {template, deskName} = _getSitroomSnapshotContext();
+  const now = new Date();
+  const stamp = now.toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+  const title = `${template.label} · ${deskName} · ${stamp}`;
+  const content = _buildSitroomDeskSnapshotMarkdown();
+  try {
+    const note = await safeFetch('/api/notes', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title, content}),
+    }, null);
+    if (!note?.id) { toast('Failed to save desk note', 'error'); return; }
+    if (typeof loadNotes === 'function') await loadNotes();
+    const tab = document.querySelector('[data-tab="notes"]');
+    if (tab) tab.click();
+    setTimeout(() => { if (typeof selectNote === 'function') selectNote(note.id); }, 250);
+    toast('Desk note created', 'success');
+  } catch (e) {
+    toast('Failed to save desk note', 'error');
+  }
+}
+
+async function _sendSitroomDeskSnapshotToLan() {
+  const {template, deskName} = _getSitroomSnapshotContext();
+  const sender = document.getElementById('lan-chat-name')?.value.trim() || 'Situation Room';
+  const content = `${template.title}\nDesk: ${deskName}\n\n${_buildSitroomDeskSnapshot()}`;
+  try {
+    const msg = await safeFetch('/api/lan/messages', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sender, content, msg_type: 'sitroom_snapshot'}),
+    }, null);
+    if (!msg?.id) { toast('Failed to send to LAN', 'error'); return; }
+    toast('Desk snapshot sent to LAN', 'success');
+    if (typeof loadLanMessages === 'function') loadLanMessages();
+  } catch (e) {
+    toast('Failed to send to LAN', 'error');
+  }
+}
 
 /* ─── Init ─── */
 function initSituationRoom() {
+  _setSitroomShellState(true);
   _closeSitroomOverlays();
   setTimeout(_closeSitroomOverlays, 500);
+  _decorateSitroomPanels();
+  _restoreSitroomWorkspaceState();
+  _applySitroomDefaultDeskOnOpen();
+  _applySitroomWorkspaceState();
 
   if (_sitroomInitDone) {
     _sitroomRefreshPanels();
+    _applySitroomWorkspaceState();
     setTimeout(_sitroomResizeMap, 100);
     return;
   }
   _sitroomInitDone = true;
   _sitroomRefreshPanels();
   _restoreLayerState();
+  _applySitroomDefaultDeskOnOpen();
+  _applySitroomWorkspaceState();
   initSitroomMap();
   _initSitroomMapResize();
   _initSitroomClock();
@@ -147,6 +606,15 @@ async function _sitroomAutoRefreshIfEmpty() {
   }
 }
 
+function _setSitroomShellState(active) {
+  document.body.classList.toggle('situation-room-active', active);
+  const tab = document.getElementById('tab-situation-room');
+  const container = tab?.closest('.container');
+  const main = tab?.closest('.main-content');
+  if (container) container.classList.toggle('container-situation-room', active);
+  if (main) main.classList.toggle('situation-room-main', active);
+}
+
 /* ─── Close Overlays / Copilot Dock ─── */
 function _closeSitroomOverlays() {
   ['lan-chat-panel', 'timer-panel', 'quick-actions-menu'].forEach(id => {
@@ -166,12 +634,823 @@ function _closeSitroomOverlays() {
 }
 
 function _restoreCopilotDock() {
+  _setSitroomShellState(false);
   const dock = document.getElementById('copilot-dock');
   if (dock) dock.style.removeProperty('display');
   ['lan-chat-panel', 'timer-panel', 'quick-actions-menu'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.hidden = false;
   });
+}
+
+function _slugSitroomPanelId(text) {
+  return String(text || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+}
+
+function _getSitroomPanelId(card) {
+  if (!card) return '';
+  if (card.dataset.panelId) return card.dataset.panelId;
+  const panelBody = card.querySelector('.sr-card-body[id], .sr-live-player[id]');
+  const panelId = panelBody?.id || `sr-panel-${_slugSitroomPanelId(card.querySelector('.sr-card-head')?.textContent || '')}`;
+  card.dataset.panelId = panelId;
+  return panelId;
+}
+
+function _sitroomPanelHasKeyword(panelId, keywords) {
+  return keywords.some(keyword => panelId.includes(keyword));
+}
+
+function _getSitroomPanelMeta(panelId) {
+  const views = new Set();
+  let newsGroup = '';
+
+  if (SITROOM_TOPLINE_PANELS.has(panelId)) views.add('topline');
+  if (SITROOM_MAP_PANELS.has(panelId)) views.add('map');
+
+  const isMarkets = _sitroomPanelHasKeyword(panelId, SITROOM_MARKETS_KEYWORDS);
+  const isSecurity = _sitroomPanelHasKeyword(panelId, SITROOM_SECURITY_KEYWORDS);
+  const isTech = _sitroomPanelHasKeyword(panelId, SITROOM_TECH_KEYWORDS);
+  const isPositive = _sitroomPanelHasKeyword(panelId, SITROOM_POSITIVE_KEYWORDS);
+  const isWorld = _sitroomPanelHasKeyword(panelId, SITROOM_WORLD_KEYWORDS);
+  const isNews = isWorld || isSecurity || isMarkets || isTech || isPositive;
+
+  if (isNews) views.add('news');
+  if (isMarkets) views.add('markets');
+  if (isSecurity) views.add('security');
+
+  if (!views.size) views.add('news');
+
+  if (isPositive) newsGroup = 'positive';
+  else if (isTech) newsGroup = 'tech';
+  else if (isMarkets) newsGroup = 'markets';
+  else if (isSecurity) newsGroup = 'security';
+  else newsGroup = 'world';
+
+  return {views: [...views], newsGroup};
+}
+
+function _decorateSitroomPanels() {
+  document.querySelectorAll('#sr-cards-anchor .sr-card').forEach(card => {
+    const panelId = _getSitroomPanelId(card);
+    const meta = _getSitroomPanelMeta(panelId);
+    card.dataset.srViews = meta.views.join(' ');
+    if (meta.newsGroup) card.dataset.newsGroup = meta.newsGroup;
+  });
+}
+
+function _saveSitroomWorkspaceState() {
+  try {
+    localStorage.setItem('sr-workspace-state', JSON.stringify({
+      view: _sitroomView,
+      newsGroup: _sitroomNewsGroup,
+      regionPreset: _sitroomRegionPreset,
+      deskPreset: _sitroomDeskPreset,
+      layerPreset: _sitroomLayerPreset,
+      savedDeskId: _sitroomSavedDeskId,
+      briefMode: _sitroomBriefMode,
+      snapshotTemplate: _sitroomSnapshotTemplate,
+    }));
+  } catch (e) { /* localStorage unavailable */ }
+  if (typeof syncWorkspaceUrlState === 'function') syncWorkspaceUrlState();
+}
+
+function _restoreSitroomWorkspaceState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('sr-workspace-state'));
+    if (!saved) return;
+    if (saved.view && SITROOM_VIEW_META[saved.view]) _sitroomView = saved.view;
+    if (saved.newsGroup) _sitroomNewsGroup = saved.newsGroup;
+    if (saved.regionPreset && SITROOM_REGION_PRESETS[saved.regionPreset]) _sitroomRegionPreset = saved.regionPreset;
+    if (saved.deskPreset && (SITROOM_DESK_PRESETS[saved.deskPreset] || saved.deskPreset === 'custom')) _sitroomDeskPreset = saved.deskPreset;
+    if (saved.layerPreset && (SITROOM_LAYER_PRESETS[saved.layerPreset] || saved.layerPreset === 'custom')) _sitroomLayerPreset = saved.layerPreset;
+    if (saved.savedDeskId) _sitroomSavedDeskId = saved.savedDeskId;
+    if (saved.briefMode && SITROOM_BRIEF_MODE_META[saved.briefMode]) _sitroomBriefMode = saved.briefMode;
+    if (saved.snapshotTemplate && SITROOM_SNAPSHOT_TEMPLATES[saved.snapshotTemplate]) _sitroomSnapshotTemplate = saved.snapshotTemplate;
+  } catch (e) { /* localStorage unavailable */ }
+}
+
+function _syncSitroomLayoutEditState() {
+  const tab = document.getElementById('tab-situation-room');
+  if (tab) tab.dataset.layoutEditing = _sitroomLayoutEdit ? 'true' : 'false';
+  const btn = document.getElementById('sr-layout-edit-btn');
+  if (btn) {
+    btn.classList.toggle('active', _sitroomLayoutEdit);
+    btn.setAttribute('aria-pressed', _sitroomLayoutEdit ? 'true' : 'false');
+    btn.textContent = _sitroomLayoutEdit ? 'DONE LAYOUT' : 'EDIT LAYOUT';
+  }
+  const note = document.getElementById('sr-layout-note');
+  if (note) note.hidden = !_sitroomLayoutEdit;
+  document.querySelectorAll('#sr-cards-anchor .sr-card').forEach(card => {
+    card.setAttribute('draggable', _sitroomLayoutEdit ? 'true' : 'false');
+  });
+}
+
+function _applySitroomWorkspaceState() {
+  const tab = document.getElementById('tab-situation-room');
+  if (tab) tab.dataset.srView = _sitroomView;
+
+  document.querySelectorAll('[data-sitroom-view]').forEach(btn => {
+    const active = btn.dataset.sitroomView === _sitroomView;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+
+  document.querySelectorAll('[data-sitroom-news-group]').forEach(btn => {
+    const active = btn.dataset.sitroomNewsGroup === _sitroomNewsGroup;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+
+  document.querySelectorAll('[data-sitroom-region]').forEach(btn => {
+    const active = btn.dataset.sitroomRegion === _sitroomRegionPreset;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+
+  document.querySelectorAll('[data-sitroom-desk]').forEach(btn => {
+    const active = btn.dataset.sitroomDesk === _sitroomDeskPreset;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+
+  document.querySelectorAll('[data-sitroom-layer-preset]').forEach(btn => {
+    const active = btn.dataset.sitroomLayerPreset === _sitroomLayerPreset;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+
+  document.querySelectorAll('[data-sitroom-brief-mode]').forEach(btn => {
+    const active = btn.dataset.sitroomBriefMode === _sitroomBriefMode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+
+  document.querySelectorAll('[data-sitroom-snapshot-template]').forEach(btn => {
+    const active = btn.dataset.sitroomSnapshotTemplate === _sitroomSnapshotTemplate;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+
+  _renderSitroomSavedDesks();
+  _renderSitroomPosture();
+
+  const newsNav = document.getElementById('sr-newsdesk-nav');
+  if (newsNav) newsNav.hidden = _sitroomView !== 'news';
+  const newsBrief = document.getElementById('sr-newsdesk-brief');
+  if (newsBrief) newsBrief.hidden = _sitroomView !== 'news';
+
+  const copy = document.getElementById('sr-view-copy');
+  const mapTitle = document.getElementById('sr-map-command-title');
+  const mapCopy = document.getElementById('sr-map-command-copy');
+  const meta = SITROOM_VIEW_META[_sitroomView] || SITROOM_VIEW_META.topline;
+  const preset = SITROOM_REGION_PRESETS[_sitroomRegionPreset] || SITROOM_REGION_PRESETS.global;
+  const deskLabel = _sitroomDeskPreset === 'custom'
+    ? 'Custom desk'
+    : `${String(_sitroomDeskPreset).replace(/-/g, ' ')} desk`;
+  if (copy) copy.textContent = _sitroomView === 'news' ? `${meta.copy} Regional preset: ${preset.label}. ${deskLabel}.` : `${meta.copy} ${deskLabel}.`;
+  if (mapTitle) mapTitle.textContent = _sitroomView === 'news' ? `Use the map to anchor the ${preset.label} desk before reading the story stack.` : meta.mapTitle;
+  if (mapCopy) mapCopy.textContent = _sitroomView === 'news' ? `The ${preset.label} preset keeps geographic context visible while News Desk narrows the narrative lane to ${_getSitroomNewsGroupLabel().toLowerCase()}.` : meta.mapCopy;
+
+  document.querySelectorAll('#sr-cards-anchor .sr-card').forEach(card => {
+    const views = (card.dataset.srViews || '').split(/\s+/).filter(Boolean);
+    let visible = views.includes(_sitroomView);
+    if (visible && _sitroomView === 'news' && _sitroomNewsGroup !== 'all') {
+      const groups = (card.dataset.newsGroup || '').split(/\s+/).filter(Boolean);
+      visible = groups.includes(_sitroomNewsGroup);
+    }
+    card.hidden = !visible;
+  });
+
+  _renderSitroomNewsDeskBriefing(_sitroomNewsArticles, _sitroomNewsArticles.length);
+  _syncSitroomLayoutEditState();
+  _syncSitroomAnalysisState();
+}
+
+function _setSitroomView(view) {
+  if (!SITROOM_VIEW_META[view]) return;
+  _sitroomView = view;
+  _sitroomDeskPreset = 'custom';
+  _sitroomSavedDeskId = '';
+  _applySitroomWorkspaceState();
+  _saveSitroomWorkspaceState();
+  setTimeout(_sitroomResizeMap, 60);
+}
+
+function _setSitroomNewsGroup(group) {
+  _sitroomNewsGroup = group || 'all';
+  _sitroomDeskPreset = 'custom';
+  _sitroomSavedDeskId = '';
+  _applySitroomWorkspaceState();
+  _saveSitroomWorkspaceState();
+}
+
+function _setSitroomRegionPreset(region) {
+  if (!SITROOM_REGION_PRESETS[region]) return;
+  _sitroomRegionPreset = region;
+  _sitroomDeskPreset = 'custom';
+  _sitroomSavedDeskId = '';
+  _applySitroomWorkspaceState();
+  _saveSitroomWorkspaceState();
+  loadSitroomNews();
+}
+
+function _setSitroomBriefMode(mode) {
+  if (!SITROOM_BRIEF_MODE_META[mode]) return;
+  _sitroomBriefMode = mode;
+  _sitroomSnapshotTemplate = _getSitroomDefaultSnapshotTemplate(mode);
+  _sitroomDeskPreset = 'custom';
+  _sitroomSavedDeskId = '';
+  _applySitroomWorkspaceState();
+  _saveSitroomWorkspaceState();
+  loadSitroomNews();
+}
+
+function _setSitroomSnapshotTemplate(template) {
+  if (!SITROOM_SNAPSHOT_TEMPLATES[template]) return;
+  _sitroomSnapshotTemplate = template;
+  _applySitroomWorkspaceState();
+  _saveSitroomWorkspaceState();
+}
+
+function _applySitroomLayerPreset(name, options = {}) {
+  const {persist = true, saveState = true} = options;
+  const layers = SITROOM_LAYER_PRESETS[name];
+  if (!layers) return;
+  const next = new Set(layers);
+  document.querySelectorAll('[data-sitroom-layer]').forEach(cb => {
+    cb.checked = next.has(cb.dataset.sitroomLayer);
+  });
+  _sitroomLayerPreset = name;
+  _updateActiveLayerCount();
+  if (persist) _saveLayerState();
+  if (saveState) _saveSitroomWorkspaceState();
+  loadSitroomMapData();
+  _updateMapLegend();
+  _renderDayNight();
+}
+
+function _setSitroomLayerPreset(name) {
+  if (!SITROOM_LAYER_PRESETS[name]) return;
+  _sitroomDeskPreset = 'custom';
+  _sitroomSavedDeskId = '';
+  _applySitroomLayerPreset(name, {persist: true, saveState: true});
+}
+
+function _setSitroomDeskPreset(name) {
+  const preset = SITROOM_DESK_PRESETS[name];
+  if (!preset) return;
+  _sitroomDeskPreset = name;
+  _sitroomSavedDeskId = '';
+  _sitroomView = preset.view;
+  _sitroomNewsGroup = preset.newsGroup;
+  _sitroomRegionPreset = preset.region;
+  _sitroomBriefMode = preset.briefMode || 'morning';
+  _sitroomSnapshotTemplate = _getSitroomDefaultSnapshotTemplate(_sitroomBriefMode);
+  _applySitroomLayerPreset(preset.layerPreset, {persist: true, saveState: false});
+  _applySitroomWorkspaceState();
+  _saveSitroomWorkspaceState();
+  loadSitroomNews();
+  setTimeout(_sitroomResizeMap, 60);
+}
+
+function _inferSitroomLayerPreset() {
+  const checked = [...document.querySelectorAll('[data-sitroom-layer]')]
+    .filter(cb => cb.checked)
+    .map(cb => cb.dataset.sitroomLayer)
+    .sort()
+    .join('|');
+  for (const [name, layers] of Object.entries(SITROOM_LAYER_PRESETS)) {
+    if ([...layers].sort().join('|') === checked) return name;
+  }
+  return 'custom';
+}
+
+function _applySitroomLayerState(state, options = {}) {
+  const {persist = true, saveState = true} = options;
+  if (!state) return;
+  document.querySelectorAll('[data-sitroom-layer]').forEach(cb => {
+    if (state[cb.dataset.sitroomLayer] !== undefined) cb.checked = !!state[cb.dataset.sitroomLayer];
+  });
+  _sitroomLayerPreset = _inferSitroomLayerPreset();
+  _updateActiveLayerCount();
+  if (persist) _saveLayerState();
+  if (saveState) _saveSitroomWorkspaceState();
+  loadSitroomMapData();
+  _updateMapLegend();
+  _renderDayNight();
+}
+
+function _saveCurrentSitroomDesk() {
+  const input = document.getElementById('sr-saved-desk-name');
+  if (!input) return;
+  const rawName = input.value.trim();
+  if (!rawName) {
+    input.focus();
+    return;
+  }
+  const idBase = _slugSitroomPanelId(rawName) || `desk-${Date.now()}`;
+  const saved = _readSitroomSavedDesks();
+  const existing = saved.find(item => item.name.toLowerCase() === rawName.toLowerCase());
+  const entry = {
+    id: existing?.id || `${idBase}-${Date.now()}`,
+    name: rawName,
+    view: _sitroomView,
+    newsGroup: _sitroomNewsGroup,
+    regionPreset: _sitroomRegionPreset,
+    layerPreset: _sitroomLayerPreset,
+    briefMode: _sitroomBriefMode,
+    snapshotTemplate: _sitroomSnapshotTemplate,
+    isDefault: existing?.isDefault || false,
+    pinned: existing?.pinned || false,
+    order: existing?.order ?? _getNextSitroomSavedDeskOrder(saved),
+    layerState: _captureSitroomLayerState(),
+    savedAt: new Date().toISOString(),
+  };
+  const next = existing
+    ? saved.map(item => item.id === existing.id ? entry : item)
+    : [entry, ...saved].slice(0, 8);
+  _writeSitroomSavedDesks(next);
+  _sitroomSavedDeskId = entry.id;
+  _sitroomDeskPreset = 'custom';
+  _saveSitroomWorkspaceState();
+  _applySitroomWorkspaceState();
+  input.value = '';
+}
+
+function _loadSavedSitroomDesk(id) {
+  const saved = _readSitroomSavedDesks().find(item => item.id === id);
+  if (!saved) return;
+  _sitroomSavedDeskId = saved.id;
+  _sitroomDeskPreset = 'custom';
+  _sitroomView = saved.view && SITROOM_VIEW_META[saved.view] ? saved.view : 'topline';
+  _sitroomNewsGroup = saved.newsGroup || 'all';
+  _sitroomRegionPreset = SITROOM_REGION_PRESETS[saved.regionPreset] ? saved.regionPreset : 'global';
+  _sitroomBriefMode = SITROOM_BRIEF_MODE_META[saved.briefMode] ? saved.briefMode : 'morning';
+  _sitroomSnapshotTemplate = SITROOM_SNAPSHOT_TEMPLATES[saved.snapshotTemplate] ? saved.snapshotTemplate : _getSitroomDefaultSnapshotTemplate(_sitroomBriefMode);
+  if (saved.layerState) {
+    _applySitroomLayerState(saved.layerState, {persist: true, saveState: false});
+  } else if (saved.layerPreset && SITROOM_LAYER_PRESETS[saved.layerPreset]) {
+    _applySitroomLayerPreset(saved.layerPreset, {persist: true, saveState: false});
+  }
+  _applySitroomWorkspaceState();
+  _saveSitroomWorkspaceState();
+  loadSitroomNews();
+  setTimeout(_sitroomResizeMap, 60);
+}
+
+function _deleteSavedSitroomDesk(id) {
+  const next = _readSitroomSavedDesks().filter(item => item.id !== id);
+  _writeSitroomSavedDesks(next);
+  if (_sitroomSavedDeskId === id) _sitroomSavedDeskId = '';
+  _saveSitroomWorkspaceState();
+  _applySitroomWorkspaceState();
+}
+
+function _toggleSitroomLayoutEdit() {
+  _sitroomLayoutEdit = !_sitroomLayoutEdit;
+  _syncSitroomLayoutEditState();
+}
+
+function _srFeedBadge(text, tone = 'neutral') {
+  return `<span class="sr-feed-badge" data-tone="${tone}">${escapeHtml(String(text))}</span>`;
+}
+
+function _srFeedIcon(icon, tone = 'neutral') {
+  return `<span class="sr-feed-icon" data-tone="${tone}">${icon}</span>`;
+}
+
+function _srSummaryChip(text, tone = 'neutral') {
+  return `<span class="sr-summary-chip" data-tone="${tone}">${escapeHtml(String(text))}</span>`;
+}
+
+function _srMetricRow(label, value, fillPct, tone = 'accent') {
+  const pct = Math.max(0, Math.min(100, Number(fillPct) || 0));
+  return `<div class="sr-metric-row">
+    <span class="sr-metric-label">${escapeHtml(String(label))}</span>
+    <div class="sr-metric-bar"><div class="sr-metric-bar-fill" data-tone="${tone}" data-sr-fill="${pct.toFixed(0)}"></div></div>
+    <span class="sr-metric-value">${escapeHtml(String(value))}</span>
+  </div>`;
+}
+
+function _hydrateSitroomRuntimeVars(root) {
+  if (!root) return;
+  const selector = '[data-sr-fill],[data-sr-width],[data-sr-height],[data-sr-spark-height],[data-sr-monitor-color]';
+  const nodes = [];
+  if (typeof root.matches === 'function' && root.matches(selector)) nodes.push(root);
+  if (typeof root.querySelectorAll === 'function') nodes.push(...root.querySelectorAll(selector));
+  nodes.forEach(node => {
+    if (node.dataset.srFill) node.style.setProperty('--sr-fill', `${node.dataset.srFill}%`);
+    if (node.dataset.srWidth) node.style.setProperty('--sr-width', `${node.dataset.srWidth}%`);
+    if (node.dataset.srHeight) node.style.setProperty('--sr-height', `${node.dataset.srHeight}%`);
+    if (node.dataset.srSparkHeight) node.style.setProperty('--sr-spark-height', `${node.dataset.srSparkHeight}px`);
+    if (node.dataset.srMonitorColor) node.style.setProperty('--sr-monitor-color', node.dataset.srMonitorColor);
+  });
+}
+
+function _normalizeSitroomText(value) {
+  return String(value || '').toLowerCase();
+}
+
+function _formatSitroomRelativeTime(value) {
+  if (!value) return '';
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return String(value);
+  const diffMs = Date.now() - parsed;
+  const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
+  if (diffMinutes < 1) return 'just now';
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.round(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return new Date(parsed).toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function _getSitroomFreshnessMeta(status) {
+  const meta = {
+    LIVE: {label: 'Fresh', tone: 'good', title: 'Live feed updated on schedule and behaving normally.'},
+    CACHED: {label: 'Cached', tone: 'warn', title: 'Using cached data. Feed is still usable, but it is not fully live right now.'},
+    STALE: {label: 'Stale', tone: 'danger', title: 'Data is older than expected. Treat this feed as aging, not current.'},
+    UNAVAILABLE: {label: 'Offline', tone: 'neutral', title: 'The source is unavailable or not responding right now.'},
+  };
+  return meta[String(status || '').toUpperCase()] || {label: humanizeWorkspaceSlug(status || 'unknown'), tone: 'neutral', title: 'Feed freshness is unknown.'};
+}
+
+function _getSitroomSourceAgeLabel(ageSeconds) {
+  const value = Number(ageSeconds);
+  if (!Number.isFinite(value) || value <= 0) return 'No recent check';
+  const minutes = Math.round(value / 60);
+  if (minutes < 1) return 'Checked just now';
+  if (minutes < 60) return `${minutes}m since last good pull`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h since last good pull`;
+  const days = Math.round(hours / 24);
+  return `${days}d since last good pull`;
+}
+
+function _getSitroomConfidenceMeta(confidence) {
+  const value = String(confidence || '').toLowerCase();
+  if (value === 'high') return {label: 'High confidence', tone: 'good'};
+  if (value === 'medium') return {label: 'Medium confidence', tone: 'warn'};
+  if (value === 'low') return {label: 'Low confidence', tone: 'neutral'};
+  return {label: humanizeWorkspaceSlug(confidence || 'unknown confidence'), tone: 'neutral'};
+}
+
+function _storyMetaLine(source, published) {
+  const relativeTime = _formatSitroomRelativeTime(published);
+  return [source, relativeTime || published].filter(Boolean).join(' | ');
+}
+
+function _captureSitroomLayerState() {
+  const state = {};
+  document.querySelectorAll('[data-sitroom-layer]').forEach(cb => {
+    state[cb.dataset.sitroomLayer] = cb.checked;
+  });
+  return state;
+}
+
+function _readSitroomSavedDesks() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('sr-saved-desks'));
+    return Array.isArray(saved) ? _sortSitroomSavedDesks(saved.map((item, index) => _normalizeSitroomSavedDesk(item, index))) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function _getSitroomSavedDeskById(id) {
+  if (!id) return null;
+  return _readSitroomSavedDesks().find(item => item.id === id) || null;
+}
+
+function _writeSitroomSavedDesks(saved) {
+  try {
+    const normalized = _sortSitroomSavedDesks((saved || []).map((item, index) => _normalizeSitroomSavedDesk(item, index)));
+    localStorage.setItem('sr-saved-desks', JSON.stringify(normalized));
+  } catch (e) { /* localStorage unavailable */ }
+}
+
+function _normalizeSitroomSavedDesk(item, index = 0) {
+  return {
+    ...item,
+    isDefault: !!item?.isDefault,
+    pinned: !!item?.pinned,
+    order: Number.isFinite(Number(item?.order)) ? Number(item.order) : index,
+    briefMode: SITROOM_BRIEF_MODE_META[item?.briefMode] ? item.briefMode : 'morning',
+    snapshotTemplate: SITROOM_SNAPSHOT_TEMPLATES[item?.snapshotTemplate] ? item.snapshotTemplate : _getSitroomDefaultSnapshotTemplate(item?.briefMode || 'morning'),
+  };
+}
+
+function _sortSitroomSavedDesks(saved) {
+  return [...saved].sort((a, b) => {
+    if (!!a.isDefault !== !!b.isDefault) return a.isDefault ? -1 : 1;
+    if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+    if ((a.order ?? 0) !== (b.order ?? 0)) return (a.order ?? 0) - (b.order ?? 0);
+    return String(b.savedAt || '').localeCompare(String(a.savedAt || ''));
+  });
+}
+
+function _getNextSitroomSavedDeskOrder(saved) {
+  return saved.reduce((max, item) => Math.max(max, Number(item.order) || 0), -1) + 1;
+}
+
+function _getSitroomDefaultDesk() {
+  return _readSitroomSavedDesks().find(item => item.isDefault) || null;
+}
+
+function _shouldApplySitroomDefaultDesk() {
+  return !_sitroomSavedDeskId
+    && _sitroomDeskPreset === 'executive'
+    && _sitroomView === 'topline'
+    && _sitroomNewsGroup === 'all'
+    && _sitroomRegionPreset === 'global';
+}
+
+function _applySitroomDefaultDeskOnOpen() {
+  const launchDesk = _getSitroomDefaultDesk();
+  if (!launchDesk || !_shouldApplySitroomDefaultDesk()) return;
+  _loadSavedSitroomDesk(launchDesk.id);
+}
+
+function _updateCurrentSavedSitroomDesk() {
+  const current = _getSitroomSavedDeskById(_sitroomSavedDeskId);
+  if (!current) return;
+  const next = _readSitroomSavedDesks().map(item => item.id === current.id ? {
+    ...item,
+    view: _sitroomView,
+    newsGroup: _sitroomNewsGroup,
+    regionPreset: _sitroomRegionPreset,
+    layerPreset: _sitroomLayerPreset,
+    briefMode: _sitroomBriefMode,
+    snapshotTemplate: _sitroomSnapshotTemplate,
+    layerState: _captureSitroomLayerState(),
+    savedAt: new Date().toISOString(),
+  } : item);
+  _writeSitroomSavedDesks(next);
+  _saveSitroomWorkspaceState();
+  _applySitroomWorkspaceState();
+}
+
+function _togglePinSavedSitroomDesk(id) {
+  const next = _readSitroomSavedDesks().map(item => item.id === id ? {...item, pinned: !item.pinned} : item);
+  _writeSitroomSavedDesks(next);
+  _applySitroomWorkspaceState();
+}
+
+function _setSitroomDefaultDesk(id) {
+  const next = _readSitroomSavedDesks().map(item => ({
+    ...item,
+    isDefault: item.id === id ? !item.isDefault : false,
+  }));
+  _writeSitroomSavedDesks(next);
+  _applySitroomWorkspaceState();
+}
+
+function _moveSitroomSavedDesk(id, direction = 'later') {
+  const saved = _readSitroomSavedDesks();
+  const current = saved.find(item => item.id === id);
+  if (!current) return;
+  const peers = saved.filter(item => !!item.pinned === !!current.pinned);
+  const index = peers.findIndex(item => item.id === id);
+  const targetIndex = direction === 'earlier' ? index - 1 : index + 1;
+  if (index < 0 || targetIndex < 0 || targetIndex >= peers.length) return;
+  const target = peers[targetIndex];
+  const next = saved.map(item => {
+    if (item.id === current.id) return {...item, order: target.order};
+    if (item.id === target.id) return {...item, order: current.order};
+    return item;
+  });
+  _writeSitroomSavedDesks(next);
+  _applySitroomWorkspaceState();
+}
+
+function _renderSitroomSavedDesks() {
+  const list = document.getElementById('sr-saved-desk-list');
+  if (!list) return;
+  const saved = _readSitroomSavedDesks();
+  if (!saved.length) {
+    list.innerHTML = '<span class="sr-saved-desk-empty">No saved watchlists yet.</span>';
+    return;
+  }
+  list.innerHTML = saved.map(item => `
+    <span class="sr-saved-desk-chip${item.id === _sitroomSavedDeskId ? ' active' : ''}">
+      <button type="button" class="sr-saved-desk-chip-btn sr-saved-desk-chip-main" data-sitroom-action="load-saved-desk" data-sitroom-saved-desk="${escapeAttr(item.id)}" title="${escapeAttr(`${_getSitroomViewLabel(item.view || 'topline')} · ${(SITROOM_REGION_PRESETS[item.regionPreset] || SITROOM_REGION_PRESETS.global).label} · ${_getSitroomLayerLabel(item.layerPreset || 'custom')} · ${(SITROOM_BRIEF_MODE_META[item.briefMode] || SITROOM_BRIEF_MODE_META.morning).label}`)}">
+        <span class="sr-saved-desk-chip-name">${escapeHtml(item.name)}</span>
+        <span class="sr-saved-desk-chip-meta">${escapeHtml(`${item.isDefault ? 'Launch Desk · ' : ''}${_getSitroomViewLabel(item.view || 'topline')} · ${(SITROOM_REGION_PRESETS[item.regionPreset] || SITROOM_REGION_PRESETS.global).label} · ${(SITROOM_BRIEF_MODE_META[item.briefMode] || SITROOM_BRIEF_MODE_META.morning).label}`)}</span>
+      </button>
+      <span class="sr-saved-desk-chip-actions">
+        <button type="button" class="sr-saved-desk-chip-btn sr-saved-desk-chip-control sr-saved-desk-chip-default${item.isDefault ? ' is-default' : ''}" data-sitroom-action="set-default-saved-desk" data-sitroom-saved-desk="${escapeAttr(item.id)}" aria-label="${item.isDefault ? 'Unset' : 'Set'} launch desk ${escapeAttr(item.name)}" title="${item.isDefault ? 'Unset launch desk' : 'Set as launch desk'}">&#8962;</button>
+        <button type="button" class="sr-saved-desk-chip-btn sr-saved-desk-chip-control sr-saved-desk-chip-pin${item.pinned ? ' is-pinned' : ''}" data-sitroom-action="toggle-pin-saved-desk" data-sitroom-saved-desk="${escapeAttr(item.id)}" aria-label="${item.pinned ? 'Unpin' : 'Pin'} saved desk ${escapeAttr(item.name)}" title="${item.pinned ? 'Unpin watchlist' : 'Pin watchlist'}">&#9733;</button>
+        <button type="button" class="sr-saved-desk-chip-btn sr-saved-desk-chip-control" data-sitroom-action="move-saved-desk-earlier" data-sitroom-saved-desk="${escapeAttr(item.id)}" aria-label="Move saved desk ${escapeAttr(item.name)} earlier" title="Move earlier">&#8592;</button>
+        <button type="button" class="sr-saved-desk-chip-btn sr-saved-desk-chip-control" data-sitroom-action="move-saved-desk-later" data-sitroom-saved-desk="${escapeAttr(item.id)}" aria-label="Move saved desk ${escapeAttr(item.name)} later" title="Move later">&#8594;</button>
+        <button type="button" class="sr-saved-desk-chip-btn sr-saved-desk-chip-remove sr-saved-desk-chip-control" data-sitroom-action="delete-saved-desk" data-sitroom-saved-desk="${escapeAttr(item.id)}" aria-label="Delete saved desk ${escapeAttr(item.name)}">&#10005;</button>
+      </span>
+    </span>`).join('');
+}
+
+function _renderSitroomPosture() {
+  const titleEl = document.getElementById('sr-posture-title');
+  const copyEl = document.getElementById('sr-posture-copy');
+  const chipRow = document.getElementById('sr-posture-chip-row');
+  const updateBtn = document.getElementById('sr-update-saved-desk-btn');
+  const copyBtn = document.getElementById('sr-copy-desk-snapshot-btn');
+  const saveNoteBtn = document.getElementById('sr-save-desk-note-btn');
+  const sendLanBtn = document.getElementById('sr-send-desk-lan-btn');
+  const input = document.getElementById('sr-saved-desk-name');
+  const saved = _getSitroomSavedDeskById(_sitroomSavedDeskId);
+  const preset = SITROOM_REGION_PRESETS[_sitroomRegionPreset] || SITROOM_REGION_PRESETS.global;
+  const viewLabel = _getSitroomViewLabel();
+  const deskLabel = saved ? saved.name : _getSitroomDeskLabel();
+  const layerLabel = _getSitroomLayerLabel();
+  const groupLabel = _getSitroomNewsGroupLabel();
+  const briefLabel = (SITROOM_BRIEF_MODE_META[_sitroomBriefMode] || SITROOM_BRIEF_MODE_META.morning).label;
+  const snapshotLabel = (SITROOM_SNAPSHOT_TEMPLATES[_sitroomSnapshotTemplate] || SITROOM_SNAPSHOT_TEMPLATES.morning).label;
+  const savedTime = saved ? _formatSitroomSavedTime(saved.savedAt) : '';
+  const launchDesk = saved?.isDefault;
+
+  if (titleEl) titleEl.textContent = `${deskLabel} · ${preset.label}`;
+
+  if (copyEl) {
+    if (saved) {
+      copyEl.textContent = `${viewLabel} view with ${layerLabel.toLowerCase()}, ${groupLabel.toLowerCase()}, and ${briefLabel.toLowerCase()}. Loaded from a saved watchlist${launchDesk ? ' that is also your launch desk' : ''}${savedTime ? ` updated ${savedTime}` : ''}.`;
+    } else if (_sitroomDeskPreset === 'custom') {
+      copyEl.textContent = `${viewLabel} view with ${layerLabel.toLowerCase()}, ${groupLabel.toLowerCase()}, and ${briefLabel.toLowerCase()}. This is a custom posture, so save it if you expect to return to it.`;
+    } else {
+      copyEl.textContent = `${viewLabel} view with ${layerLabel.toLowerCase()}, ${groupLabel.toLowerCase()}, and ${briefLabel.toLowerCase()}. Built-in desk presets are meant to get you oriented quickly before you narrow the watchfloor.`;
+    }
+  }
+
+  if (chipRow) {
+    const chips = [
+      saved
+        ? `<span class="sr-posture-chip is-saved">${launchDesk ? 'Launch Desk' : 'Saved Watchlist'}</span>`
+        : _sitroomDeskPreset === 'custom'
+          ? '<span class="sr-posture-chip is-custom">Custom Desk</span>'
+          : `<span class="sr-posture-chip">${escapeHtml(_getSitroomDeskLabel())}</span>`,
+      `<span class="sr-posture-chip">${escapeHtml(viewLabel)}</span>`,
+      `<span class="sr-posture-chip">${escapeHtml(preset.label)}</span>`,
+      `<span class="sr-posture-chip is-layer">${escapeHtml(layerLabel)}</span>`,
+      `<span class="sr-posture-chip">${escapeHtml(briefLabel)}</span>`,
+      `<span class="sr-posture-chip">${escapeHtml(snapshotLabel)}</span>`,
+    ];
+    if (_sitroomView === 'news' || _sitroomNewsGroup !== 'all') {
+      chips.push(`<span class="sr-posture-chip">${escapeHtml(groupLabel)}</span>`);
+    }
+    if (savedTime) chips.push(`<span class="sr-posture-chip">${escapeHtml(savedTime)}</span>`);
+    chipRow.innerHTML = chips.join('');
+  }
+
+  if (updateBtn) updateBtn.hidden = !saved;
+  if (copyBtn) copyBtn.textContent = `Copy ${snapshotLabel}`;
+  if (saveNoteBtn) saveNoteBtn.textContent = `Save ${snapshotLabel} to Notes`;
+  if (sendLanBtn) sendLanBtn.textContent = `Send ${snapshotLabel} to LAN`;
+  if (input && !input.value) {
+    input.placeholder = saved ? `Save new desk or update "${saved.name}"` : 'Name current desk';
+  }
+}
+
+function _filterSitroomNewsByRegion(articles) {
+  if (_sitroomRegionPreset === 'global') return articles;
+  const preset = SITROOM_REGION_PRESETS[_sitroomRegionPreset];
+  if (!preset || !preset.keywords?.length) return articles;
+  return articles.filter(article => {
+    const haystack = _normalizeSitroomText([
+      article.category,
+      article.title,
+      article.source_name,
+      article.description,
+      article.published,
+    ].filter(Boolean).join(' '));
+    return preset.keywords.some(keyword => haystack.includes(keyword));
+  });
+}
+
+function _scoreSitroomArticleForBriefMode(article) {
+  const mode = SITROOM_BRIEF_MODE_META[_sitroomBriefMode];
+  if (!mode || _sitroomBriefMode === 'morning') return 0;
+  const haystack = _normalizeSitroomText([
+    article.category,
+    article.title,
+    article.description,
+    article.source_name,
+  ].filter(Boolean).join(' '));
+  return mode.keywords.reduce((score, keyword) => score + (haystack.includes(keyword) ? 1 : 0), 0);
+}
+
+function _prioritizeSitroomBriefArticles(articles) {
+  if (!Array.isArray(articles) || articles.length < 2 || _sitroomBriefMode === 'morning') return articles.slice();
+  return articles
+    .map((article, index) => ({article, index, score: _scoreSitroomArticleForBriefMode(article)}))
+    .sort((a, b) => (b.score - a.score) || (a.index - b.index))
+    .map(item => item.article);
+}
+
+function _getSitroomNewsGroupLabel() {
+  const labels = {
+    all: 'All desks',
+    world: 'World desk',
+    security: 'Security desk',
+    markets: 'Markets desk',
+    tech: 'Tech desk',
+    positive: 'Positive signals',
+  };
+  return labels[_sitroomNewsGroup] || 'News Desk';
+}
+
+function _renderSitroomNewsDeskBriefing(articles = [], totalAvailable = 0) {
+  const title = document.getElementById('sr-newsdesk-title');
+  const copy = document.getElementById('sr-newsdesk-copy');
+  const focus = document.getElementById('sr-newsdesk-focus');
+  const chipRow = document.getElementById('sr-newsdesk-chip-row');
+  const modeCopy = document.getElementById('sr-newsdesk-mode-copy');
+  const preset = SITROOM_REGION_PRESETS[_sitroomRegionPreset] || SITROOM_REGION_PRESETS.global;
+  const mode = SITROOM_BRIEF_MODE_META[_sitroomBriefMode] || SITROOM_BRIEF_MODE_META.morning;
+  const visibleCount = articles.length;
+  const categoryCounts = {};
+  const sourceCounts = {};
+
+  articles.forEach(article => {
+    if (article.category) categoryCounts[article.category] = (categoryCounts[article.category] || 0) + 1;
+    if (article.source_name) sourceCounts[article.source_name] = (sourceCounts[article.source_name] || 0) + 1;
+  });
+
+  const topCategories = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const leadSource = Object.entries(sourceCounts).sort((a, b) => b[1] - a[1])[0];
+  const groupLabel = _getSitroomNewsGroupLabel();
+
+  if (title) title.textContent = `${preset.title} · ${groupLabel}`;
+  if (copy) {
+    copy.textContent = visibleCount
+      ? `${preset.copy} ${mode.label} is active, and ${visibleCount} live headlines are in this lane${totalAvailable ? ` out of ${totalAvailable} loaded` : ''}.`
+      : `${preset.copy} No current headlines match this regional preset, so switch presets or broaden the desk.`;
+  }
+  if (modeCopy) modeCopy.textContent = mode.copy;
+  if (focus) {
+    focus.textContent = visibleCount
+      ? `Lead signal: ${topCategories[0] ? `${topCategories[0][0]} is driving this desk` : 'Mixed coverage across sources'}${leadSource ? `, with ${leadSource[0]} appearing most often.` : '.'} ${mode.label} is weighting the headline order for this pass.`
+      : `No ${preset.label.toLowerCase()} stories are visible in this desk right now. Use another preset or open the broader News Desk.`;
+  }
+  if (chipRow) {
+    const chips = [];
+    chips.push(`<span class="sr-newsdesk-chip">${preset.label}</span>`);
+    chips.push(`<span class="sr-newsdesk-chip">${groupLabel}</span>`);
+    chips.push(`<span class="sr-newsdesk-chip">${escapeHtml(mode.label)}</span>`);
+    topCategories.forEach(([name, count]) => chips.push(`<span class="sr-newsdesk-chip">${escapeHtml(name)} ${count}</span>`));
+    chipRow.innerHTML = chips.join('');
+  }
+}
+
+function _syncSitroomAnalysisState() {
+  const tab = document.getElementById('tab-situation-room');
+  const panel = document.getElementById('sr-analysis-panel');
+  if (tab) tab.dataset.inspectorOpen = panel && !panel.hidden ? 'true' : 'false';
+}
+
+function _closeSitroomAnalysis() {
+  const panel = document.getElementById('sr-analysis-panel');
+  if (panel) panel.hidden = true;
+  _syncSitroomAnalysisState();
+}
+
+function _openSitroomAnalysis({kicker, title, meta, bodyHtml, link, linkLabel = 'Open Source'}) {
+  const panel = document.getElementById('sr-analysis-panel');
+  const kickerEl = document.getElementById('sr-analysis-kicker');
+  const titleEl = document.getElementById('sr-analysis-title');
+  const metaEl = document.getElementById('sr-analysis-meta');
+  const bodyEl = document.getElementById('sr-analysis-body');
+  const linkEl = document.getElementById('sr-analysis-link');
+  if (!panel || !kickerEl || !titleEl || !metaEl || !bodyEl || !linkEl) return;
+  kickerEl.textContent = kicker || 'Analyst Inspector';
+  titleEl.textContent = title || 'Situation Detail';
+  metaEl.textContent = meta || 'Context stays docked here while you continue working the main surface.';
+  bodyEl.innerHTML = bodyHtml || '<div class="sr-empty">No detail available</div>';
+  if (link) {
+    linkEl.hidden = false;
+    linkEl.href = link;
+    linkEl.textContent = linkLabel;
+  } else {
+    linkEl.hidden = true;
+    linkEl.href = '#';
+    linkEl.textContent = 'Open Source';
+  }
+  panel.hidden = false;
+  _syncSitroomAnalysisState();
+}
+
+function _srKvRow(label, value) {
+  return `<div class="sr-kv-row">
+    <span class="sr-kv-label">${escapeHtml(String(label))}</span>
+    <span class="sr-kv-value">${escapeHtml(String(value))}</span>
+  </div>`;
+}
+
+function _srHeatIntensity(change) {
+  return Math.max(1, Math.min(4, Math.ceil(Math.abs(change) / 0.75)));
 }
 
 /* ─── Map ─── */
@@ -1421,7 +2700,11 @@ function addSitroomMarker(ev, layerType) {
 
   const el = document.createElement('div');
   el.className = 'sitroom-marker sitroom-marker-' + layerType;
-  el.style.cssText = `width:${size}px;height:${size}px;background:${color};border-radius:50%;border:1px solid rgba(255,255,255,0.3);cursor:pointer;box-shadow:0 0 ${size}px ${color}40;`;
+  el.dataset.layer = layerType;
+  el.style.setProperty('--sr-marker-size', `${size}px`);
+  el.style.setProperty('--sr-marker-glow-size', `${size}px`);
+  el.style.setProperty('--sr-marker-color', color);
+  el.style.setProperty('--sr-marker-glow', `${color}40`);
 
   let popupHtml = `<div class="sitroom-popup"><strong>${escapeHtml(ev.title || 'Event')}</strong>`;
   if (ev.magnitude) popupHtml += `<br>Magnitude: ${escapeHtml(String(ev.magnitude))}`;
@@ -1573,12 +2856,13 @@ async function loadSitroomPredictions() {
     return `<div class="sitroom-prediction-item">
       <div class="sitroom-prediction-q">${escapeHtml(p.question)}</div>
       <div class="sitroom-prediction-bar">
-        <div class="sitroom-prediction-yes" style="width:${yPct}%">${yPct}%</div>
-        <div class="sitroom-prediction-no" style="width:${nPct}%">${nPct}%</div>
+        <div class="sitroom-prediction-yes" data-sr-width="${yPct}">${yPct}%</div>
+        <div class="sitroom-prediction-no" data-sr-width="${nPct}">${nPct}%</div>
       </div>
       <div class="sitroom-prediction-meta">Vol: $${Number(p.volume || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
     </div>`;
   }).join('');
+  _hydrateSitroomRuntimeVars(c);
 }
 
 /* ─── News Deduplication ─── */
@@ -1606,21 +2890,42 @@ async function loadSitroomNews(append) {
   const more = document.getElementById('sitroom-news-more');
   if (!list) return;
   if (!d || !d.articles?.length) {
-    if (!append) { list.innerHTML = '<div class="sitroom-empty">No news cached — click Refresh Feeds</div>'; if (more) more.style.display = 'none'; }
+    if (!append) { list.innerHTML = '<div class="sitroom-empty">No news cached — click Refresh Feeds</div>'; if (more) more.hidden = true; }
     return;
   }
   // Deduplicate similar headlines (Jaccard similarity on word sets)
   const deduped = _dedupeHeadlines(d.articles);
-  const html = deduped.map(a => `<div class="sitroom-news-item">
+  const filtered = _filterSitroomNewsByRegion(deduped);
+  const prioritized = _prioritizeSitroomBriefArticles(filtered);
+  if (!append) _sitroomNewsArticles = [];
+  _sitroomNewsArticles = append ? _sitroomNewsArticles.concat(prioritized) : prioritized.slice();
+  if (!prioritized.length) {
+    if (!append) {
+      list.innerHTML = '<div class="sitroom-empty">No headlines match this regional preset yet. Try another preset or broaden the desk.</div>';
+      if (more) more.hidden = _sitroomNewsOffset >= (d.total || 0);
+    }
+    _renderSitroomNewsDeskBriefing(_sitroomNewsArticles, d.total || 0);
+    return;
+  }
+  const html = prioritized.map(a => `<div class="sitroom-news-item">
     <span class="sitroom-news-cat" data-cat="${escapeAttr(a.category || '')}">${escapeHtml(a.category || '')}</span>
     <div class="sitroom-news-body">
-      <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
+      <button type="button" class="sitroom-news-title sitroom-news-title-action"
+        data-sitroom-action="open-story"
+        data-story-title="${escapeAttr(a.title || '')}"
+        data-story-category="${escapeAttr(a.category || 'News')}"
+        data-story-link="${escapeAttr(a.link || '#')}"
+        data-story-description="${escapeAttr(a.description || '')}"
+        data-story-source="${escapeAttr(a.source_name || '')}"
+        data-story-published="${escapeAttr(a.published || '')}">${escapeHtml(a.title)}</button>
       <div class="sitroom-news-meta">${escapeHtml(a.source_name || '')} ${a.published ? '| ' + escapeHtml(a.published) : ''}</div>
     </div>
+    ${a.link ? `<a href="${escapeAttr(a.link)}" target="_blank" rel="noopener" class="sr-analysis-linkout" aria-label="Open source article">&#8599;</a>` : ''}
   </div>`).join('');
   if (append) list.insertAdjacentHTML('beforeend', html); else list.innerHTML = html;
   _sitroomNewsOffset += deduped.length;
-  if (more) more.style.display = _sitroomNewsOffset < (d.total || 0) ? '' : 'none';
+  if (more) more.hidden = _sitroomNewsOffset >= (d.total || 0);
+  _renderSitroomNewsDeskBriefing(_sitroomNewsArticles, d.total || 0);
 }
 
 /* ─── Feeds ─── */
@@ -1651,19 +2956,7 @@ async function loadSitroomFeeds() {
 
 /* ─── AI Briefing ─── */
 async function generateSitroomBriefing() {
-  const btn = document.getElementById('sitroom-gen-briefing');
-  const c = document.getElementById('sitroom-briefing-content');
-  if (!c) return;
-  if (btn) btn.disabled = true;
-  c.innerHTML = '<div class="sitroom-loading">Generating intelligence briefing...</div>';
-  try {
-    const resp = await fetch('/api/sitroom/ai-briefing', { method: 'POST', headers: {'Content-Type': 'application/json'} });
-    const d = await resp.json();
-    if (!resp.ok) { c.innerHTML = '<div class="sitroom-empty">' + escapeHtml(d.error || 'Briefing failed') + '</div>'; return; }
-    c.innerHTML = '<div class="sitroom-briefing-text">' + _renderBriefing(d.briefing || '') + '</div>';
-  } catch (e) {
-    c.innerHTML = '<div class="sitroom-empty">Network error generating briefing</div>';
-  } finally { if (btn) btn.disabled = false; }
+  return _generateAiBriefing();
 }
 
 function _renderBriefing(text) {
@@ -1835,24 +3128,25 @@ async function loadSitroomCII() {
   const maxScore = sorted[0].score || 1;
   el.innerHTML = sorted.map(c => {
     const cls = c.score >= 60 ? 'sr-cii-high' : c.score >= 30 ? 'sr-cii-med' : 'sr-cii-low';
-    const color = c.score >= 60 ? '#e05050' : c.score >= 30 ? '#d4a017' : '#2aad94';
+    const tone = c.score >= 60 ? 'danger' : c.score >= 30 ? 'warn' : 'good';
     // Signal type icons
     const typeIcons = [];
-    if (c.types.earthquake) typeIcons.push('<span title="Seismic" style="color:#ff4444">S</span>');
-    if (c.types.conflict) typeIcons.push('<span title="Crisis" style="color:#ff6600">C</span>');
-    if (c.types.weather_alert) typeIcons.push('<span title="Weather" style="color:#ffaa00">W</span>');
-    if (c.types.fire) typeIcons.push('<span title="Fires" style="color:#ff8800">F</span>');
-    if (c.types.disease) typeIcons.push('<span title="Disease" style="color:#44aa44">D</span>');
-    if (c.types.internet_outage) typeIcons.push('<span title="Outage" style="color:#3388ff">O</span>');
-    if (c.types.news) typeIcons.push('<span title="News mentions" style="color:#888">N</span>');
+    if (c.types.earthquake) typeIcons.push('<span class="sr-cii-signal" data-type="seismic" title="Seismic">S</span>');
+    if (c.types.conflict) typeIcons.push('<span class="sr-cii-signal" data-type="crisis" title="Crisis">C</span>');
+    if (c.types.weather_alert) typeIcons.push('<span class="sr-cii-signal" data-type="weather" title="Weather">W</span>');
+    if (c.types.fire) typeIcons.push('<span class="sr-cii-signal" data-type="fires" title="Fires">F</span>');
+    if (c.types.disease) typeIcons.push('<span class="sr-cii-signal" data-type="disease" title="Disease">D</span>');
+    if (c.types.internet_outage) typeIcons.push('<span class="sr-cii-signal" data-type="outage" title="Outage">O</span>');
+    if (c.types.news) typeIcons.push('<span class="sr-cii-signal" data-type="news" title="News mentions">N</span>');
     const signals = typeIcons.length ? `<span class="sr-cii-signals">${typeIcons.join('')}</span>` : '';
-    return `<div class="sr-cii-row" style="cursor:pointer" data-cii-country="${escapeAttr(c.country)}">
+    return `<div class="sr-cii-row" data-cii-country="${escapeAttr(c.country)}">
       <span class="sr-cii-country">${escapeHtml(c.country)}</span>
       ${signals}
-      <div class="sr-cii-bar"><div class="sr-cii-bar-fill" style="width:${(c.score/maxScore*100).toFixed(0)}%;background:${color}"></div></div>
+      <div class="sr-cii-bar"><div class="sr-cii-bar-fill" data-tone="${tone}" data-sr-fill="${(c.score / maxScore * 100).toFixed(0)}"></div></div>
       <span class="sr-cii-score ${cls}">${c.score}</span>
     </div>`;
   }).join('');
+  _hydrateSitroomRuntimeVars(el);
 }
 
 /* ─── Intel Feed ─── */
@@ -1890,14 +3184,11 @@ function renderSitroomSectorHeatmap(markets) {
   if (!sectors.length) { el.innerHTML = '<div class="sr-empty">No sector data</div>'; return; }
   el.innerHTML = sectors.map(s => {
     const ch = s.change_24h || 0;
-    const intensity = Math.min(1, Math.abs(ch) / 3);
-    const bg = ch >= 0
-      ? `rgba(74,237,196,${0.1 + intensity * 0.4})`
-      : `rgba(224,80,80,${0.1 + intensity * 0.4})`;
-    const color = ch >= 0 ? '#4aedc4' : '#e05050';
-    return `<div class="sr-heatmap-cell" style="background:${bg}">
+    const tone = ch > 0.05 ? 'up' : ch < -0.05 ? 'down' : 'flat';
+    const intensity = tone === 'flat' ? 1 : _srHeatIntensity(ch);
+    return `<div class="sr-heatmap-cell" data-tone="${tone}" data-intensity="${intensity}">
       <span class="sr-heatmap-cell-name">${escapeHtml(s.symbol)}</span>
-      <span class="sr-heatmap-cell-val" style="color:${color}">${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%</span>
+      <span class="sr-heatmap-cell-val" data-tone="${tone}">${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%</span>
     </div>`;
   }).join('');
 }
@@ -1907,25 +3198,25 @@ function _updateMapLegend() {
   const el = document.getElementById('sr-map-legend');
   if (!el) return;
   const layers = {
-    quakes: {color:'#ff4444',label:'Quakes'}, weather: {color:'#ffaa00',label:'Weather'},
-    conflicts: {color:'#ff6600',label:'Crises'}, aviation: {color:'#44aaff',label:'Aircraft'},
-    volcanoes: {color:'#ff3366',label:'Volcanoes'}, fires: {color:'#ff8800',label:'Fires'},
-    nuclear: {color:'#ffff00',label:'Nuclear'}, bases: {color:'#44ff88',label:'Mil. Bases'},
-    cables: {color:'#3388ff',label:'Cables'}, datacenters: {color:'#aa66ff',label:'Data Ctrs'},
-    pipelines: {color:'#cc8844',label:'Pipelines'}, waterways: {color:'#00ddff',label:'Waterways'},
-    spaceports: {color:'#ff66ff',label:'Spaceports'}, shipping: {color:'#88ccaa',label:'Shipping'},
-    ucdp: {color:'#dd2222',label:'Armed Conflicts'},
-    airports: {color:'#cccccc',label:'Airports'}, fincenters: {color:'#44dd88',label:'Finance'},
-    mining: {color:'#cc8844',label:'Mining'}, techHQs: {color:'#44aadd',label:'Tech HQs'},
+    quakes: 'Quakes', weather: 'Weather',
+    conflicts: 'Crises', aviation: 'Aircraft',
+    volcanoes: 'Volcanoes', fires: 'Fires',
+    nuclear: 'Nuclear', bases: 'Mil. Bases',
+    cables: 'Cables', datacenters: 'Data Ctrs',
+    pipelines: 'Pipelines', waterways: 'Waterways',
+    spaceports: 'Spaceports', shipping: 'Shipping',
+    ucdp: 'Armed Conflicts',
+    airports: 'Airports', fincenters: 'Finance',
+    mining: 'Mining', techHQs: 'Tech HQs',
   };
   const active = [];
   document.querySelectorAll('[data-sitroom-layer]').forEach(cb => {
     if (cb.checked && layers[cb.dataset.sitroomLayer]) {
-      const l = layers[cb.dataset.sitroomLayer];
-      active.push(`<span class="sr-legend-item"><span class="sr-legend-dot" style="background:${l.color}"></span>${l.label}</span>`);
+      const label = layers[cb.dataset.sitroomLayer];
+      active.push(`<span class="sr-legend-item"><span class="sr-legend-dot" data-layer="${escapeAttr(cb.dataset.sitroomLayer || '')}"></span>${label}</span>`);
     }
   });
-  el.innerHTML = active.join('');
+  el.innerHTML = active.length ? `<span class="sr-legend-label">Active Layers</span>${active.join('')}` : '';
 }
 
 /* ─── Day/Night Terminator ─── */
@@ -2009,7 +3300,7 @@ async function loadSitroomOutages() {
   el.innerHTML = d.outages.map(o => {
     let det = {}; try { det = o.detail_json ? JSON.parse(o.detail_json) : {}; } catch(e) {}
     return `<div class="sitroom-event-item">
-      <span class="sitroom-mag" style="background:#3388ff;color:#fff">NET</span>
+      <span class="sitroom-mag sitroom-mag-net">NET</span>
       <div class="sitroom-event-info">
         <div class="sitroom-event-title" title="${escapeAttr(o.title || '')}">${escapeHtml(o.title || 'Disruption')}</div>
         <div class="sitroom-event-meta">${det.country ? escapeHtml(det.country) : ''}${det.start ? ' | ' + escapeHtml(det.start) : ''}${det.scope ? ' | ' + escapeHtml(det.scope) : ''}</div>
@@ -2026,15 +3317,16 @@ function renderSitroomFearGreed(markets) {
   if (!fg) { el.innerHTML = '<div class="sr-empty">No Fear & Greed data</div>'; return; }
   const val = fg.price || 50;
   const label = fg.label || (val <= 25 ? 'Extreme Fear' : val <= 45 ? 'Fear' : val <= 55 ? 'Neutral' : val <= 75 ? 'Greed' : 'Extreme Greed');
-  const color = val <= 25 ? '#e05050' : val <= 45 ? '#d4a017' : val <= 55 ? '#888' : val <= 75 ? '#2aad94' : '#4aedc4';
+  const tone = val <= 25 ? 'danger' : val <= 45 ? 'warn' : val <= 55 ? 'neutral' : 'good';
   // Needle rotation: 0=left (-90deg), 100=right (90deg)
   const deg = -90 + (val / 100) * 180;
   el.innerHTML = `<div class="sr-fg-gauge">
     <div class="sr-fg-arc"></div>
-    <div class="sr-fg-needle" style="transform:rotate(${deg}deg)"></div>
+    <div class="sr-fg-needle"></div>
   </div>
-  <div class="sr-fg-value" style="color:${color}">${val}</div>
+  <div class="sr-fg-value" data-tone="${tone}">${val}</div>
   <div class="sr-fg-label">${escapeHtml(label.toUpperCase())}</div>`;
+  el.querySelector('.sr-fg-gauge')?.style.setProperty('--sr-fg-rotation', `${deg}deg`);
 }
 
 /* ─── Fires ─── */
@@ -2047,7 +3339,7 @@ async function loadSitroomFires() {
     let det = {}; try { det = f.detail_json ? JSON.parse(f.detail_json) : {}; } catch(e) {}
     const bright = f.magnitude ? f.magnitude.toFixed(0) + 'K' : '?';
     return `<div class="sitroom-event-item">
-      <span class="sitroom-mag" style="background:#ff8800">${bright}</span>
+      <span class="sitroom-mag sitroom-mag-fire">${bright}</span>
       <div class="sitroom-event-info">
         <div class="sitroom-event-title">${escapeHtml(f.title || 'Fire detection')}</div>
         <div class="sitroom-event-meta">${f.lat?.toFixed(2)}, ${f.lng?.toFixed(2)}${det.acq_date ? ' | ' + escapeHtml(det.acq_date) : ''}</div>
@@ -2079,9 +3371,13 @@ function _initPanelDragReorder() {
   const grid = document.getElementById('sr-cards-anchor');
   if (!grid) return;
   grid.querySelectorAll('.sr-card').forEach((card, i) => {
-    card.setAttribute('draggable', 'true');
+    card.setAttribute('draggable', 'false');
     card.dataset.panelIdx = i;
     card.addEventListener('dragstart', e => {
+      if (!_sitroomLayoutEdit) {
+        e.preventDefault();
+        return;
+      }
       card.classList.add('dragging');
       e.dataTransfer.setData('text/plain', i);
       e.dataTransfer.effectAllowed = 'move';
@@ -2110,10 +3406,7 @@ function _initPanelDragReorder() {
 function _savePanelOrder() {
   const grid = document.getElementById('sr-cards-anchor');
   if (!grid) return;
-  const order = [...grid.querySelectorAll('.sr-card')].map(c => {
-    const head = c.querySelector('.sr-card-head');
-    return head ? head.textContent.trim().substring(0, 30) : '';
-  });
+  const order = [...grid.querySelectorAll('.sr-card')].map(c => _getSitroomPanelId(c));
   try { localStorage.setItem('sr-panel-order', JSON.stringify(order)); } catch(e) {}
 }
 
@@ -2126,8 +3419,8 @@ function _restorePanelOrder() {
     const cards = [...grid.querySelectorAll('.sr-card')];
     const byTitle = {};
     cards.forEach(c => {
-      const head = c.querySelector('.sr-card-head');
-      if (head) byTitle[head.textContent.trim().substring(0, 30)] = c;
+      const panelId = _getSitroomPanelId(c);
+      if (panelId) byTitle[panelId] = c;
     });
     saved.forEach(title => {
       if (byTitle[title]) grid.appendChild(byTitle[title]);
@@ -2160,7 +3453,7 @@ function _toggleGlobe() {
     setTimeout(_sitroomResizeMap, 200);
   } catch(e) {
     // Globe projection not supported in this MapLibre build
-    if (btn) btn.style.display = 'none';
+    if (btn) btn.hidden = true;
   }
 }
 
@@ -2230,21 +3523,29 @@ function _initSitroomWorldClock() {
   setInterval(render, 30000);
 }
 
-/* ─── Search Modal (Ctrl+K) ─── */
+/* ─── Search Modal (desk-local search) ─── */
 function _initSitroomSearch() {
   document.addEventListener('keydown', e => {
     // Don't handle shortcuts when typing in inputs
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-      if (e.key === 'Escape') _toggleSitroomSearch(false);
+      if (e.key === 'Escape') {
+        _toggleSitroomSearch(false);
+        _closeStoryModal();
+      }
       return;
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    const srTab = document.getElementById('tab-situation-room');
+    if (srTab?.classList.contains('active') && e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       _toggleSitroomSearch(true);
     }
-    if (e.key === 'Escape') { _toggleSitroomSearch(false); const cp = document.getElementById('sr-country-panel'); if (cp) cp.hidden = true; }
+    if (e.key === 'Escape') {
+      _toggleSitroomSearch(false);
+      _closeSitroomAnalysis();
+      const fp = document.getElementById('sr-feed-panel');
+      if (fp) fp.hidden = true;
+    }
     // Keyboard shortcuts (only when SR tab is active)
-    const srTab = document.getElementById('tab-situation-room');
     if (!srTab?.classList.contains('active')) return;
     if (e.key === 'f' || e.key === 'F') _toggleMapFullscreen();
     if (e.key === 'r' || e.key === 'R') refreshSitroomFeeds();
@@ -2273,24 +3574,30 @@ async function _sitroomDoSearch(query) {
   // Search news
   if (d?.articles) {
     d.articles.filter(a => (a.title || '').toLowerCase().includes(q)).slice(0, 8).forEach(a => {
-      html += `<a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sr-search-result">
+      html += `<button type="button" class="sr-search-result" data-sitroom-action="open-story"
+        data-story-title="${escapeAttr(a.title || '')}"
+        data-story-category="${escapeAttr(a.category || 'News')}"
+        data-story-link="${escapeAttr(a.link || '#')}"
+        data-story-description="${escapeAttr(a.description || '')}"
+        data-story-source="${escapeAttr(a.source_name || '')}"
+        data-story-published="${escapeAttr(a.published || '')}">
         <span class="sr-search-result-type">${escapeHtml(a.category || 'NEWS')}</span>
         <span class="sr-search-result-title">${escapeHtml(a.title)}</span>
-      </a>`;
+      </button>`;
     });
   }
 
   // Search events
   if (ev?.events) {
     ev.events.filter(e => (e.title || '').toLowerCase().includes(q)).slice(0, 5).forEach(e => {
-      html += `<div class="sr-search-result" onclick="if(_sitroomMap){_sitroomMap.flyTo({center:[${e.lng||0},${e.lat||0}],zoom:6});_toggleSitroomSearch(false)}">
-        <span class="sr-search-result-type" style="background:#3a1515;color:#e05050">${escapeHtml(e.event_type || 'EVENT')}</span>
+      html += `<button type="button" class="sr-search-result" data-sitroom-action="fly-search-result" data-lng="${escapeAttr(e.lng || 0)}" data-lat="${escapeAttr(e.lat || 0)}">
+        <span class="sr-search-result-type sr-search-result-type-event">${escapeHtml(e.event_type || 'EVENT')}</span>
         <span class="sr-search-result-title">${escapeHtml(e.title)}</span>
-      </div>`;
+      </button>`;
     });
   }
 
-  results.innerHTML = html || '<div class="sr-empty" style="padding:12px">No results</div>';
+  results.innerHTML = html || '<div class="sr-empty sr-empty-padded">No results</div>';
 }
 
 /* ─── UTC Clock ─── */
@@ -2336,7 +3643,7 @@ async function loadSitroomTrending() {
     const tone = t.magnitude || 0;
     const toneColor = tone > 2 ? '#4aedc4' : tone < -2 ? '#e05050' : '#888';
     return `<div class="sitroom-news-item">
-      <span class="sitroom-news-cat" style="background:${tone > 0 ? '#0f5040' : '#3a1515'}">${tone > 0 ? '+' : ''}${tone.toFixed(1)}</span>
+      <span class="sitroom-news-cat" data-tone="${tone > 2 ? 'positive' : tone < -2 ? 'negative' : 'neutral'}">${tone > 0 ? '+' : ''}${tone.toFixed(1)}</span>
       <div class="sitroom-news-body">
         <a href="${escapeAttr(t.source_url || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(t.title || '')}</a>
         <div class="sitroom-news-meta">${escapeHtml(det.domain || '')}${det.seendate ? ' | ' + escapeHtml(det.seendate.substring(0, 8)) : ''}</div>
@@ -2399,7 +3706,10 @@ function _showSitroomAlert(type, message) {
   const toast = document.createElement('div');
   toast.className = 'sr-alert-toast ' + (type === 'critical' ? '' : type);
   const icon = type === 'critical' ? '&#9888;' : type === 'warning' ? '&#9888;' : '&#8505;';
-  toast.innerHTML = `<span class="sr-alert-icon">${icon}</span><span class="sr-alert-text">${escapeHtml(message)}</span><span class="sr-alert-dismiss" onclick="this.parentElement.remove()">&#10005;</span>`;
+  toast.innerHTML = `<span class="sr-alert-icon">${icon}</span><span class="sr-alert-text">${escapeHtml(message)}</span><button type="button" class="sr-alert-dismiss" aria-label="Dismiss alert">&#10005;</button>`;
+  toast.querySelector('.sr-alert-dismiss')?.addEventListener('click', () => {
+    if (toast.parentElement) toast.remove();
+  });
   stack.appendChild(toast);
   // Auto-dismiss after 15s
   setTimeout(() => { if (toast.parentElement) toast.remove(); }, 15000);
@@ -2467,17 +3777,18 @@ async function loadSitroomSentiment() {
   const negPct = ((d.negative || 0) / total * 100).toFixed(0);
   const neuPct = ((d.neutral || 0) / total * 100).toFixed(0);
   const score = d.sentiment_score || 0;
-  const color = score > 10 ? '#4aedc4' : score < -10 ? '#e05050' : '#888';
+  const tone = score > 10 ? 'good' : score < -10 ? 'danger' : 'neutral';
   const label = score > 20 ? 'BULLISH' : score > 5 ? 'POSITIVE' : score < -20 ? 'BEARISH' : score < -5 ? 'NEGATIVE' : 'NEUTRAL';
-  el.innerHTML = `<div class="sr-sentiment-score" style="color:${color}">${score > 0 ? '+' : ''}${score.toFixed(0)}</div>
+  el.innerHTML = `<div class="sr-sentiment-score" data-tone="${tone}">${score > 0 ? '+' : ''}${score.toFixed(0)}</div>
     <div class="sr-sentiment-label">${label}</div>
     <div class="sr-sentiment-row">
       <div class="sr-sentiment-bar">
-        <div class="sr-sentiment-pos" style="width:${posPct}%">${posPct}%</div>
-        <div class="sr-sentiment-neu" style="width:${neuPct}%">${neuPct}%</div>
-        <div class="sr-sentiment-neg" style="width:${negPct}%">${negPct}%</div>
+        <div class="sr-sentiment-pos" data-sr-width="${posPct}">${posPct}%</div>
+        <div class="sr-sentiment-neu" data-sr-width="${neuPct}">${neuPct}%</div>
+        <div class="sr-sentiment-neg" data-sr-width="${negPct}">${negPct}%</div>
       </div>
     </div>`;
+  _hydrateSitroomRuntimeVars(el);
 }
 
 /* ─── Generic Category Card Loader ─── */
@@ -2502,7 +3813,7 @@ async function loadSitroomPopExposure() {
   if (!d || !d.exposures?.length) { el.innerHTML = '<div class="sr-empty">No M5+ earthquakes for exposure calc</div>'; return; }
   el.innerHTML = '<div class="sr-humanitarian-grid">' + d.exposures.map(e =>
     `<div class="sr-humanitarian-stat">
-      <div class="sr-humanitarian-val" style="font-size:14px;color:${e.magnitude >= 6 ? '#e05050' : '#d4a017'}">${(e.estimated_population/1000).toFixed(0)}K</div>
+      <div class="sr-humanitarian-val sr-humanitarian-val-large" data-tone="${e.magnitude >= 6 ? 'danger' : 'warn'}">${(e.estimated_population/1000).toFixed(0)}K</div>
       <div class="sr-humanitarian-lbl">M${e.magnitude.toFixed(1)} ~${e.radius_km}km</div>
     </div>`
   ).join('') + '</div>';
@@ -2519,10 +3830,10 @@ async function _generateMarketBrief() {
     const d = await resp.json();
     if (d.brief) {
       let h = escapeHtml(d.brief);
-      h = h.replace(/^### (.*?)$/gm, '<h4 style="color:#4aedc4;margin:6px 0 3px;font-size:10px;letter-spacing:0.08em">$1</h4>');
-      h = h.replace(/^## (.*?)$/gm, '<h3 style="color:#e0e4e8;margin:8px 0 4px;font-size:12px">$1</h3>');
+      h = h.replace(/^### (.*?)$/gm, '<h4 class="sr-market-brief-subhead">$1</h4>');
+      h = h.replace(/^## (.*?)$/gm, '<h3 class="sr-market-brief-head">$1</h3>');
       h = h.replace(/\n/g, '<br>');
-      el.innerHTML = '<div style="padding:8px 12px;font-size:10px;line-height:1.5;color:#c8ccd0">' + h + '</div>';
+      el.innerHTML = '<div class="sr-market-brief">' + h + '</div>';
     }
   } catch(e) { el.innerHTML = '<div class="sr-empty">Failed to generate brief</div>'; }
 }
@@ -2535,7 +3846,7 @@ async function _loadKeywordCard(elId, apiUrl, dataKey) {
   const items = d ? (d[dataKey] || []) : [];
   if (!items.length) { el.innerHTML = '<div class="sr-empty">No data available</div>'; return; }
   el.innerHTML = items.map(a => `<div class="sitroom-news-item">
-    <span class="sitroom-news-cat" style="background:#1a1a2a;color:#8888cc">${escapeHtml(a.source_name || '')}</span>
+    <span class="sitroom-news-cat sitroom-news-cat-muted">${escapeHtml(a.source_name || '')}</span>
     <div class="sitroom-news-body">
       <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
     </div>
@@ -2564,7 +3875,7 @@ async function loadSitroomCentralBanks() {
   if (!el) return;
   if (!d || !d.articles?.length) { el.innerHTML = '<div class="sr-empty">No central bank data</div>'; return; }
   el.innerHTML = d.articles.map(a => `<div class="sitroom-news-item">
-    <span class="sitroom-news-cat" style="background:#0a2a20;color:#44dd88">${escapeHtml(a.source_name || '')}</span>
+    <span class="sitroom-news-cat" data-cat="Central Bank">${escapeHtml(a.source_name || '')}</span>
     <div class="sitroom-news-body">
       <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
     </div>
@@ -2578,7 +3889,7 @@ async function loadSitroomArxiv() {
   if (!el) return;
   if (!d || !d.papers?.length) { el.innerHTML = '<div class="sr-empty">No ArXiv data</div>'; return; }
   el.innerHTML = d.papers.map(p => `<div class="sitroom-news-item">
-    <span class="sitroom-news-cat" style="background:#1a1040;color:#aa88ff">AI</span>
+    <span class="sitroom-news-cat" data-cat="Arxiv">AI</span>
     <div class="sitroom-news-body">
       <a href="${escapeAttr(p.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(p.title)}</a>
     </div>
@@ -2592,7 +3903,7 @@ async function loadSitroomLayoffs() {
   if (!el) return;
   if (!d || !d.layoffs?.length) { el.innerHTML = '<div class="sr-empty">No layoff data</div>'; return; }
   el.innerHTML = d.layoffs.map(l => `<div class="sitroom-news-item">
-    <span class="sitroom-news-cat" style="background:#3a1515;color:#e05050">CUT</span>
+    <span class="sitroom-news-cat" data-cat="Layoff">CUT</span>
     <div class="sitroom-news-body">
       <a href="${escapeAttr(l.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(l.title)}</a>
       <div class="sitroom-news-meta">${escapeHtml(l.source_name || '')}</div>
@@ -2607,7 +3918,7 @@ async function loadSitroomAirline() {
   if (!el) return;
   if (!d || !d.articles?.length) { el.innerHTML = '<div class="sr-empty">No airline data</div>'; return; }
   el.innerHTML = d.articles.map(a => `<div class="sitroom-news-item">
-    <span class="sitroom-news-cat" style="background:#0a1a30;color:#44aaff">AIR</span>
+    <span class="sitroom-news-cat" data-cat="Airline">AIR</span>
     <div class="sitroom-news-body">
       <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
       <div class="sitroom-news-meta">${escapeHtml(a.source_name || '')}</div>
@@ -2622,7 +3933,7 @@ async function loadSitroomSupplyChain() {
   if (!el) return;
   if (!d || !d.articles?.length) { el.innerHTML = '<div class="sr-empty">No supply chain data</div>'; return; }
   el.innerHTML = d.articles.map(a => `<div class="sitroom-news-item">
-    <span class="sitroom-news-cat" style="background:#1a2a10;color:#88cc44">LOG</span>
+    <span class="sitroom-news-cat" data-cat="Supply Chain">LOG</span>
     <div class="sitroom-news-body">
       <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
       <div class="sitroom-news-meta">${escapeHtml(a.source_name || '')}</div>
@@ -2637,7 +3948,7 @@ async function loadSitroomProductHunt() {
   if (!el) return;
   if (!d || !d.products?.length) { el.innerHTML = '<div class="sr-empty">No Product Hunt data</div>'; return; }
   el.innerHTML = d.products.map(p => `<div class="sitroom-news-item">
-    <span class="sitroom-news-cat" style="background:#3a1a08;color:#ff6600">PH</span>
+    <span class="sitroom-news-cat" data-cat="Product Hunt">PH</span>
     <div class="sitroom-news-body">
       <a href="${escapeAttr(p.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(p.title)}</a>
     </div>
@@ -2667,7 +3978,7 @@ async function loadSitroomGithub() {
   el.innerHTML = d.repos.map(r => {
     let det = {}; try { det = r.detail_json ? JSON.parse(r.detail_json) : {}; } catch(e) {}
     return `<div class="sitroom-news-item">
-      <span class="sitroom-news-cat" style="background:#1a1a30;color:#8888dd">${escapeHtml(det.language || '?')}</span>
+      <span class="sitroom-news-cat" data-cat="GitHub">${escapeHtml(det.language || '?')}</span>
       <div class="sitroom-news-body">
         <a href="${escapeAttr(r.source_url || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(r.title || '')}</a>
         <div class="sitroom-news-meta">${(r.magnitude||0).toLocaleString()} stars${det.forks ? ' | ' + det.forks + ' forks' : ''}</div>
@@ -2684,10 +3995,10 @@ async function loadSitroomFuel() {
   if (!d || !d.prices?.length) { el.innerHTML = '<div class="sr-empty">No fuel data</div>'; return; }
   el.innerHTML = d.prices.map(p => {
     let det = {}; try { det = p.detail_json ? JSON.parse(p.detail_json) : {}; } catch(e) {}
-    return `<div style="text-align:center;padding:16px">
-      <div style="font-size:28px;font-weight:700;color:#d4a017">$${(p.magnitude||0).toFixed(2)}</div>
-      <div style="font-size:9px;color:#555;letter-spacing:0.1em;margin-top:2px">${escapeHtml(p.title || 'US GASOLINE')}</div>
-      <div style="font-size:8px;color:#333;margin-top:4px">${escapeHtml(det.period || '')}</div>
+    return `<div class="sr-fuel-card">
+      <div class="sr-fuel-value">$${(p.magnitude||0).toFixed(2)}</div>
+      <div class="sr-fuel-label">${escapeHtml(p.title || 'US GASOLINE')}</div>
+      <div class="sr-fuel-meta">${escapeHtml(det.period || '')}</div>
     </div>`;
   }).join('');
 }
@@ -2735,11 +4046,11 @@ async function loadSitroomBigMac() {
   el.innerHTML = d.countries.map(c => {
     const price = c.magnitude || 0;
     const ppp = ((price - usPrice) / usPrice * 100).toFixed(0);
-    const color = ppp > 0 ? '#e05050' : '#4aedc4';
+    const tone = ppp > 0 ? 'danger' : 'good';
     return `<div class="sr-cii-row">
       <span class="sr-cii-country">${escapeHtml(c.title)}</span>
-      <span style="font-size:10px;color:#c8ccd0;width:50px;text-align:right">$${price.toFixed(2)}</span>
-      <span style="font-size:9px;font-weight:700;color:${color};width:40px;text-align:right">${ppp > 0 ? '+' : ''}${ppp}%</span>
+      <span class="sr-feed-time">$${price.toFixed(2)}</span>
+      <span class="sr-feed-value" data-tone="${tone}">${ppp > 0 ? '+' : ''}${ppp}%</span>
     </div>`;
   }).join('');
 }
@@ -2751,7 +4062,7 @@ async function loadSitroomRenewable() {
   if (!el) return;
   if (!d || !d.articles?.length) { el.innerHTML = '<div class="sr-empty">No renewable data</div>'; return; }
   el.innerHTML = d.articles.map(a => `<div class="sitroom-news-item">
-    <span class="sitroom-news-cat" data-cat="Renewable" style="background:#0a3a1a;color:#44dd88">${escapeHtml(a.source_name || '')}</span>
+    <span class="sitroom-news-cat" data-cat="Renewable">${escapeHtml(a.source_name || '')}</span>
     <div class="sitroom-news-body">
       <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
     </div>
@@ -2768,17 +4079,19 @@ async function loadSitroomVelocity() {
     let det = {}; try { det = s.detail_json ? JSON.parse(s.detail_json) : {}; } catch(e) {}
     const speed = s.magnitude || 0;
     const barWidth = Math.min(100, speed * 15);
-    return `<div style="padding:4px 12px;border-bottom:1px solid #1e1e1e">
-      <div style="font-size:10px;color:#c8ccd0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.title || '')}</div>
-      <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
-        <div style="flex:1;height:3px;background:#1e1e1e;border-radius:1px;overflow:hidden">
-          <div style="width:${barWidth}%;height:100%;background:${speed >= 6 ? '#e05050' : speed >= 4 ? '#d4a017' : '#0f5040'};border-radius:1px"></div>
+    const tone = speed >= 6 ? 'danger' : speed >= 4 ? 'warn' : 'neutral';
+    return `<div class="sr-velocity-item">
+      <div class="sr-velocity-title">${escapeHtml(s.title || '')}</div>
+      <div class="sr-velocity-row">
+        <div class="sr-velocity-bar">
+          <div class="sr-velocity-bar-fill" data-tone="${tone}" data-sr-fill="${barWidth}"></div>
         </div>
-        <span style="font-size:8px;font-weight:700;color:${speed >= 6 ? '#e05050' : '#888'}">${speed}x</span>
+        <span class="sr-velocity-mult" data-tone="${speed >= 6 ? 'danger' : 'neutral'}">${speed}x</span>
       </div>
-      <div style="font-size:7px;color:#333;margin-top:1px">${escapeHtml(det.sources || '')}</div>
+      <div class="sr-velocity-meta">${escapeHtml(det.sources || '')}</div>
     </div>`;
   }).join('');
+  _hydrateSitroomRuntimeVars(el);
 }
 
 /* ─── Service Status ─── */
@@ -2791,7 +4104,7 @@ async function loadSitroomServiceStatus() {
     let det = {}; try { det = s.detail_json ? JSON.parse(s.detail_json) : {}; } catch(e) {}
     const isIncident = (s.title || '').toLowerCase().includes('incident') || (s.title || '').toLowerCase().includes('outage');
     return `<div class="sitroom-event-item${isIncident ? ' sitroom-sev-extreme' : ''}">
-      <span class="sitroom-mag" style="background:${isIncident ? '#e05050' : '#2aad94'};color:#000">${(det.service || '??').substring(0,3)}</span>
+      <span class="sitroom-mag ${isIncident ? 'sitroom-mag-service-incident' : 'sitroom-mag-service-ok'}">${(det.service || '??').substring(0,3)}</span>
       <div class="sitroom-event-info">
         <div class="sitroom-event-title">${escapeHtml(s.title || '')}</div>
         <div class="sitroom-event-meta">${det.published ? escapeHtml(det.published) : ''}</div>
@@ -2831,10 +4144,11 @@ async function loadSitroomYieldCurve() {
     const label = (det.security || r.title || '').replace('Treasury ', '').substring(0, 8);
     return `<div class="sr-yield-bar">
       <div class="sr-yield-bar-rate">${rate.toFixed(2)}%</div>
-      <div class="sr-yield-bar-fill" style="height:${pct}%"></div>
+      <div class="sr-yield-bar-fill" data-sr-height="${pct}"></div>
       <div class="sr-yield-bar-label">${escapeHtml(label)}</div>
     </div>`;
   }).join('') + '</div>';
+  _hydrateSitroomRuntimeVars(el);
 }
 
 /* ─── Stablecoins ─── */
@@ -2845,11 +4159,11 @@ async function loadSitroomStablecoins() {
   if (!d || !d.stablecoins?.length) { el.innerHTML = '<div class="sr-empty">No stablecoin data</div>'; return; }
   el.innerHTML = d.stablecoins.map(s => {
     const depeg = Math.abs(s.price - 1.0);
-    const color = depeg > 0.01 ? '#e05050' : depeg > 0.003 ? '#d4a017' : '#4aedc4';
-    return `<div class="sitroom-market-card" style="border-bottom:2px solid ${color}">
+    const tone = depeg > 0.01 ? 'danger' : depeg > 0.003 ? 'warn' : 'good';
+    return `<div class="sitroom-market-card" data-tone="${tone}">
       <div class="sitroom-market-symbol">${escapeHtml(s.symbol)}</div>
-      <div class="sitroom-market-price" style="color:${color}">$${s.price.toFixed(4)}</div>
-      <div class="sitroom-market-change" style="font-size:7px;color:#555">${escapeHtml(s.label || '')}</div>
+      <div class="sitroom-market-price" data-tone="${tone}">$${s.price.toFixed(4)}</div>
+      <div class="sitroom-market-change">${escapeHtml(s.label || '')}</div>
     </div>`;
   }).join('');
 }
@@ -2871,24 +4185,23 @@ document.getElementById('sr-playback-slider')?.addEventListener('input', e => {
 
 /* ─── AI Strategic Briefing ─── */
 async function _generateAiBriefing() {
-  const el = document.getElementById('sitroom-ai-briefing');
+  const btn = document.getElementById('sitroom-gen-briefing');
+  const el = document.getElementById('sitroom-briefing-content');
   if (!el) return;
-  el.innerHTML = '<div class="sr-empty"><div class="sr-radar"></div>Generating intelligence briefing...</div>';
+  if (btn) btn.disabled = true;
+  el.innerHTML = '<div class="sr-empty sr-empty-emphasis"><div class="sr-radar"></div><span>Generating intelligence briefing...</span></div>';
   try {
     const resp = await fetch('/api/sitroom/ai-briefing', {method:'POST', headers:{'Content-Type':'application/json'}});
     const d = await resp.json();
     if (d.briefing) {
-      let h = escapeHtml(d.briefing);
-      h = h.replace(/^### (.*?)$/gm, '<h4>$1</h4>');
-      h = h.replace(/^## (.*?)$/gm, '<h3 style="color:#4aedc4;margin:8px 0 4px;font-size:11px;letter-spacing:0.06em">$1</h3>');
-      h = h.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-      h = h.replace(/\n/g, '<br>');
-      el.innerHTML = '<div style="padding:10px 12px;font-size:11px;line-height:1.55;color:#c8ccd0">' + h + '</div>';
+      el.innerHTML = '<div class="sr-briefing-text">' + _renderBriefing(d.briefing) + '</div>';
     } else {
       el.innerHTML = '<div class="sr-empty">Briefing generation failed</div>';
     }
   } catch(e) {
     el.innerHTML = '<div class="sr-empty">Network error generating briefing</div>';
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -2904,7 +4217,7 @@ async function loadSitroomMonitors() {
     ).join('') || '';
     return `<div class="sr-monitor-item">
       <div class="sr-monitor-kw">
-        <span style="width:8px;height:8px;border-radius:50%;background:${escapeAttr(m.color)};flex-shrink:0"></span>
+        <span class="sr-monitor-kw-dot" data-sr-monitor-color="${escapeAttr(m.color)}"></span>
         <span class="sr-monitor-kw-text">${escapeHtml(m.keyword)}</span>
         <span class="sr-monitor-kw-count">${m.match_count || 0}</span>
         <span class="sr-monitor-kw-del" data-sitroom-action="delete-monitor" data-monitor-id="${m.id}">&#10005;</span>
@@ -2912,6 +4225,7 @@ async function loadSitroomMonitors() {
       ${matchHtml}
     </div>`;
   }).join('');
+  _hydrateSitroomRuntimeVars(el);
 }
 
 function _promptAddMonitor() {
@@ -2956,16 +4270,37 @@ async function loadSitroomDebt() {
 }
 
 /* ─── Story Detail Modal ─── */
-function _openStoryModal(title, category, link, description) {
-  const modal = document.getElementById('sr-story-modal');
-  if (!modal) return;
-  document.getElementById('sr-story-title').textContent = title;
-  document.getElementById('sr-story-cat').textContent = category;
-  document.getElementById('sr-story-cat').setAttribute('data-cat', category);
-  document.getElementById('sr-story-link').href = link || '#';
-  document.getElementById('sr-story-body').innerHTML = description
-    ? `<p>${escapeHtml(description)}</p>` : '<p class="sr-empty">No preview available</p>';
-  modal.hidden = false;
+function _closeStoryModal() {
+  _closeSitroomAnalysis();
+}
+
+function _openStoryModal(title, category, link, description, source, published) {
+  const bodyHtml = `<div class="sr-analysis-section">
+    <div class="sr-analysis-section-title">Story Brief</div>
+    <div class="sr-analysis-story">
+      <div class="sr-analysis-story-copy">${description ? escapeHtml(description) : 'No preview was cached for this story yet. Use the source link for the full article while keeping this desk context visible.'}</div>
+    </div>
+  </div>
+  <div class="sr-analysis-section">
+    <div class="sr-analysis-section-title">Source Trail</div>
+    <div class="sr-analysis-list">
+      <div class="sr-analysis-item">
+        <div class="sr-analysis-item-head">
+          <span class="sr-analysis-item-title">${escapeHtml(source || category || 'Open-source feed')}</span>
+          <span class="sr-analysis-item-meta">${escapeHtml(published || 'Live cache')}</span>
+        </div>
+        <div class="sr-analysis-item-meta">Open the source article in a separate tab if you want the full source trail without losing the desk layout.</div>
+      </div>
+    </div>
+  </div>`;
+  _openSitroomAnalysis({
+    kicker: category || 'Story',
+    title: title || 'Untitled story',
+    meta: _storyMetaLine(source, published) || 'Pinned from News Desk',
+    bodyHtml,
+    link,
+    linkLabel: 'Open Article',
+  });
 }
 
 /* ─── UCDP Armed Conflicts ─── */
@@ -2996,9 +4331,9 @@ async function loadSitroomCyber() {
   if (!d || !d.threats?.length) { el.innerHTML = '<div class="sr-empty">No cyber threat data</div>'; return; }
   el.innerHTML = d.threats.map(t => {
     let det = {}; try { det = t.detail_json ? JSON.parse(t.detail_json) : {}; } catch(e) {}
-    const sevColor = det.severity === 'high' ? '#e05050' : '#d4a017';
+    const sevClass = det.severity === 'high' ? 'sitroom-mag-cyber-high' : 'sitroom-mag-cyber-med';
     return `<div class="sitroom-event-item">
-      <span class="sitroom-mag" style="background:${sevColor};color:#000">${(det.severity || '?').substring(0,1).toUpperCase()}</span>
+      <span class="sitroom-mag ${sevClass}">${(det.severity || '?').substring(0,1).toUpperCase()}</span>
       <div class="sitroom-event-info">
         <div class="sitroom-event-title">${escapeHtml(t.title || '')}</div>
         <div class="sitroom-event-meta">${escapeHtml(det.source || '')}${det.date ? ' | ' + escapeHtml(det.date) : ''}</div>
@@ -3015,7 +4350,7 @@ async function loadSitroomThinkTanks() {
   if (!el) return;
   if (!d || !d.articles?.length) { el.innerHTML = '<div class="sr-empty">No think tank data</div>'; return; }
   el.innerHTML = d.articles.map(a => `<div class="sitroom-news-item">
-    <span class="sitroom-news-cat" data-cat="Think Tanks" style="background:#1a1a40;color:#8888cc">${escapeHtml(a.source_name || '')}</span>
+    <span class="sitroom-news-cat" data-cat="Think Tanks">${escapeHtml(a.source_name || '')}</span>
     <div class="sitroom-news-body">
       <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
     </div>
@@ -3029,7 +4364,7 @@ async function loadSitroomOsint() {
   if (!el) return;
   if (!d || !d.articles?.length) { el.innerHTML = '<div class="sr-empty">No OSINT data — click Refresh</div>'; return; }
   el.innerHTML = d.articles.map(a => `<div class="sitroom-news-item">
-    <span class="sitroom-news-cat" data-cat="OSINT" style="background:#2a1030;color:#d080ff">${escapeHtml(a.source_name || 'OSINT')}</span>
+    <span class="sitroom-news-cat" data-cat="OSINT">${escapeHtml(a.source_name || 'OSINT')}</span>
     <div class="sitroom-news-body">
       <a href="${escapeAttr(a.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(a.title)}</a>
       <div class="sitroom-news-meta">${a.published ? escapeHtml(a.published) : ''}</div>
@@ -3062,61 +4397,58 @@ async function loadSitroomDisplacement() {
 
 /* ─── Country Deep Dive ─── */
 async function openCountryDeepDive(country) {
-  const panel = document.getElementById('sr-country-panel');
-  const nameEl = document.getElementById('sr-country-name');
-  const body = document.getElementById('sr-country-body');
-  if (!panel || !body) return;
-  nameEl.textContent = country.toUpperCase();
-  panel.hidden = false;
-  body.innerHTML = '<div class="sr-empty"><div class="sr-radar"></div>Loading intelligence...</div>';
+  _openSitroomAnalysis({
+    kicker: 'Country Deep Dive',
+    title: country.toUpperCase(),
+    meta: 'Loading country posture, recent signals, and source trail...',
+    bodyHtml: '<div class="sr-empty"><div class="sr-radar"></div>Loading intelligence...</div>',
+  });
+  const body = document.getElementById('sr-analysis-body');
+  if (!body) return;
 
   const d = await safeFetch('/api/sitroom/country/' + encodeURIComponent(country), {}, null);
   if (!d) { body.innerHTML = '<div class="sr-empty">No data available</div>'; return; }
 
-  let html = '';
+  const summaryItems = Object.entries(d.event_summary || {}).slice(0, 6).map(([type, count]) => `
+    <div class="sr-analysis-item">
+      <div class="sr-analysis-item-head">
+        <span class="sr-analysis-item-title">${escapeHtml(type.replace(/_/g, ' '))}</span>
+        <span class="sr-analysis-item-meta">${count}</span>
+      </div>
+    </div>`).join('');
+  const quakeItems = (d.recent_quakes || []).slice(0, 4).map(q => `
+    <div class="sr-analysis-item">
+      <div class="sr-analysis-item-head">
+        <span class="sr-analysis-item-title">${escapeHtml(q.title || 'Seismic event')}</span>
+        <span class="sr-analysis-item-meta">M${q.magnitude || '?'}</span>
+      </div>
+    </div>`).join('');
+  const newsItems = (d.recent_news || []).slice(0, 5).map(n => `
+    <div class="sr-analysis-item">
+      <div class="sr-analysis-item-head">
+        <span class="sr-analysis-item-title">${escapeHtml(n.title || 'Headline')}</span>
+        ${n.link ? `<a href="${escapeAttr(n.link)}" target="_blank" rel="noopener" class="sr-analysis-linkout">Source</a>` : ''}
+      </div>
+      <div class="sr-analysis-item-meta">${escapeHtml(_storyMetaLine(n.source_name || '', n.published || ''))}</div>
+    </div>`).join('');
 
-  // Overview stats
-  html += `<div class="sr-country-section"><div class="sr-country-section-title">OVERVIEW</div>
-    <div class="sr-country-stat"><span>Total Events</span><span class="sr-country-stat-val">${d.total_events || 0}</span></div>
-    <div class="sr-country-stat"><span>Signal Types</span><span class="sr-country-stat-val">${Object.keys(d.event_summary || {}).length}</span></div>
-    <div class="sr-country-stat"><span>News Mentions</span><span class="sr-country-stat-val">${(d.recent_news || []).length}</span></div>
-  </div>`;
-
-  // Event summary
-  if (d.event_summary && Object.keys(d.event_summary).length) {
-    html += '<div class="sr-country-section"><div class="sr-country-section-title">EVENT SIGNALS</div>';
-    for (const [type, count] of Object.entries(d.event_summary)) {
-      html += `<div class="sr-country-stat"><span>${escapeHtml(type.replace(/_/g, ' '))}</span><span class="sr-country-stat-val">${count}</span></div>`;
-    }
-    html += '</div>';
-  }
-
-  // Recent quakes
-  if (d.recent_quakes?.length) {
-    html += '<div class="sr-country-section"><div class="sr-country-section-title">SEISMIC ACTIVITY</div>';
-    d.recent_quakes.forEach(q => {
-      html += `<div class="sr-country-stat"><span>${escapeHtml(q.title || '')}</span><span class="sr-country-stat-val">M${q.magnitude || '?'}</span></div>`;
-    });
-    html += '</div>';
-  }
-
-  // Recent news
-  if (d.recent_news?.length) {
-    html += '<div class="sr-country-section"><div class="sr-country-section-title">RECENT INTELLIGENCE</div>';
-    d.recent_news.forEach(n => {
-      html += `<div class="sitroom-news-item" style="padding:3px 0">
-        <span class="sitroom-news-cat">${escapeHtml(n.category || '')}</span>
-        <div class="sitroom-news-body">
-          <a href="${escapeAttr(n.link || '#')}" target="_blank" rel="noopener" class="sitroom-news-title">${escapeHtml(n.title)}</a>
-          <div class="sitroom-news-meta">${escapeHtml(n.source_name || '')}</div>
-        </div>
-      </div>`;
-    });
-    html += '</div>';
-  }
-
-  if (!html) html = '<div class="sr-empty">No intelligence signals for this country</div>';
-  body.innerHTML = html;
+  const html = `<div class="sr-analysis-section">
+    <div class="sr-analysis-section-title">Overview</div>
+    <div class="sr-analysis-grid">
+      <div class="sr-analysis-stat"><span class="sr-analysis-stat-label">Total Events</span><span class="sr-analysis-stat-value">${d.total_events || 0}</span></div>
+      <div class="sr-analysis-stat"><span class="sr-analysis-stat-label">Signal Types</span><span class="sr-analysis-stat-value">${Object.keys(d.event_summary || {}).length}</span></div>
+      <div class="sr-analysis-stat"><span class="sr-analysis-stat-label">News Mentions</span><span class="sr-analysis-stat-value">${(d.recent_news || []).length}</span></div>
+    </div>
+  </div>
+  ${summaryItems ? `<div class="sr-analysis-section"><div class="sr-analysis-section-title">Event Signals</div><div class="sr-analysis-list">${summaryItems}</div></div>` : ''}
+  ${quakeItems ? `<div class="sr-analysis-section"><div class="sr-analysis-section-title">Seismic Activity</div><div class="sr-analysis-list">${quakeItems}</div></div>` : ''}
+  ${newsItems ? `<div class="sr-analysis-section"><div class="sr-analysis-section-title">Recent Intelligence</div><div class="sr-analysis-list">${newsItems}</div></div>` : '<div class="sr-empty">No intelligence signals for this country</div>'}`;
+  _openSitroomAnalysis({
+    kicker: 'Country Deep Dive',
+    title: country.toUpperCase(),
+    meta: `${d.total_events || 0} events · ${(d.recent_news || []).length} recent headlines`,
+    bodyHtml: html,
+  });
 }
 
 /* ─── Live YouTube Channels ─── */
@@ -3138,7 +4470,7 @@ async function loadSitroomLiveChannels() {
 function _sitroomPlayChannel(videoId) {
   const player = document.getElementById('sr-live-player');
   if (!player || !videoId) return;
-  player.innerHTML = `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=1&mute=1&controls=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen style="width:100%;height:100%;border:0;background:#000"></iframe>`;
+  player.innerHTML = `<iframe class="sr-live-iframe" src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=1&mute=1&controls=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
 }
 
 /* ─── Events ─── */
@@ -3154,18 +4486,56 @@ document.addEventListener('click', e => {
     const fp = document.getElementById('sr-feed-panel');
     if (fp) { fp.hidden = !fp.hidden; if (!fp.hidden) loadSitroomFeeds(); }
   }
-  if (a === 'close-country') {
-    const cp = document.getElementById('sr-country-panel');
-    if (cp) cp.hidden = true;
-  }
   if (a === 'open-search') _toggleSitroomSearch(true);
   if (a === 'toggle-map-fullscreen') _toggleMapFullscreen();
   if (a === 'toggle-globe') _toggleGlobe();
   if (a === 'export-report') _exportSitroomReport();
+  if (a === 'copy-desk-snapshot') _copySitroomDeskSnapshot();
+  if (a === 'save-desk-note') _saveSitroomDeskSnapshotToNotes();
+  if (a === 'send-desk-lan') _sendSitroomDeskSnapshotToLan();
+  if (a === 'set-snapshot-template') _setSitroomSnapshotTemplate(ctrl.dataset.sitroomSnapshotTemplate || 'morning');
+  if (a === 'set-view') _setSitroomView(ctrl.dataset.sitroomView || 'topline');
+  if (a === 'set-news-group') _setSitroomNewsGroup(ctrl.dataset.sitroomNewsGroup || 'all');
+  if (a === 'set-region-preset') _setSitroomRegionPreset(ctrl.dataset.sitroomRegion || 'global');
+  if (a === 'set-brief-mode') _setSitroomBriefMode(ctrl.dataset.sitroomBriefMode || 'morning');
+  if (a === 'set-desk-preset') _setSitroomDeskPreset(ctrl.dataset.sitroomDesk || 'executive');
+  if (a === 'set-layer-preset') _setSitroomLayerPreset(ctrl.dataset.sitroomLayerPreset || 'crisis');
+  if (a === 'save-current-desk') _saveCurrentSitroomDesk();
+  if (a === 'update-saved-desk') _updateCurrentSavedSitroomDesk();
+  if (a === 'set-default-saved-desk') _setSitroomDefaultDesk(ctrl.dataset.sitroomSavedDesk || '');
+  if (a === 'toggle-pin-saved-desk') _togglePinSavedSitroomDesk(ctrl.dataset.sitroomSavedDesk || '');
+  if (a === 'move-saved-desk-earlier') _moveSitroomSavedDesk(ctrl.dataset.sitroomSavedDesk || '', 'earlier');
+  if (a === 'move-saved-desk-later') _moveSitroomSavedDesk(ctrl.dataset.sitroomSavedDesk || '', 'later');
+  if (a === 'load-saved-desk') _loadSavedSitroomDesk(ctrl.dataset.sitroomSavedDesk || '');
+  if (a === 'delete-saved-desk') _deleteSavedSitroomDesk(ctrl.dataset.sitroomSavedDesk || '');
+  if (a === 'reset-desk-posture') _setSitroomDeskPreset('executive');
+  if (a === 'toggle-layout-edit') _toggleSitroomLayoutEdit();
   if (a === 'generate-briefing') _generateAiBriefing();
+  if (a === 'close-story') _closeStoryModal();
+  if (a === 'close-analysis') _closeSitroomAnalysis();
+  if (a === 'open-story') {
+    _openStoryModal(
+      ctrl.dataset.storyTitle || 'Untitled story',
+      ctrl.dataset.storyCategory || 'News',
+      ctrl.dataset.storyLink || '#',
+      ctrl.dataset.storyDescription || '',
+      ctrl.dataset.storySource || '',
+      ctrl.dataset.storyPublished || ''
+    );
+    _toggleSitroomSearch(false);
+  }
+  if (a === 'run-deduction') runSitroomDeduction();
   if (a === 'gen-market-brief') _generateMarketBrief();
   if (a === 'add-monitor') _promptAddMonitor();
   if (a === 'delete-monitor') _deleteMonitor(ctrl.dataset.monitorId);
+  if (a === 'fly-search-result') {
+    const lng = parseFloat(ctrl.dataset.lng || '0');
+    const lat = parseFloat(ctrl.dataset.lat || '0');
+    if (_sitroomMap && Number.isFinite(lng) && Number.isFinite(lat)) {
+      _sitroomMap.flyTo({center:[lng, lat], zoom:6});
+    }
+    _toggleSitroomSearch(false);
+  }
   if (a === 'playback-live') {
     const slider = document.getElementById('sr-playback-slider');
     if (slider) { slider.value = 24; slider.dispatchEvent(new Event('input')); }
@@ -3179,7 +4549,10 @@ document.addEventListener('click', e => {
 document.getElementById('sitroom-news-category')?.addEventListener('change', () => loadSitroomNews());
 document.getElementById('sitroom-quake-filter')?.addEventListener('change', () => renderSitroomQuakes());
 document.querySelectorAll('[data-sitroom-layer]').forEach(cb => cb.addEventListener('change', () => {
-  loadSitroomMapData(); _updateMapLegend(); _renderDayNight(); _updateActiveLayerCount(); _saveLayerState();
+  _sitroomLayerPreset = _inferSitroomLayerPreset();
+  _sitroomDeskPreset = 'custom';
+  _sitroomSavedDeskId = '';
+  loadSitroomMapData(); _updateMapLegend(); _renderDayNight(); _updateActiveLayerCount(); _saveLayerState(); _saveSitroomWorkspaceState(); _applySitroomWorkspaceState();
 }));
 
 function _updateActiveLayerCount() {
@@ -3205,6 +4578,7 @@ function _restoreLayerState() {
     document.querySelectorAll('[data-sitroom-layer]').forEach(cb => {
       if (state[cb.dataset.sitroomLayer] !== undefined) cb.checked = state[cb.dataset.sitroomLayer];
     });
+    _sitroomLayerPreset = _inferSitroomLayerPreset();
     _updateActiveLayerCount();
   } catch(e) {}
 }
@@ -3213,6 +4587,13 @@ function _restoreLayerState() {
 document.getElementById('sr-search-input')?.addEventListener('input', e => {
   clearTimeout(_searchDebounce);
   _searchDebounce = setTimeout(() => _sitroomDoSearch(e.target.value.trim()), 300);
+});
+
+document.getElementById('sr-saved-desk-name')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    _saveCurrentSitroomDesk();
+  }
 });
 
 // Search overlay click-to-close
@@ -3237,15 +4618,15 @@ async function loadSitroomCableHealth() {
   if (!d) { el.innerHTML = '<div class="sitroom-empty">No data</div>'; return; }
   let html = '';
   (d.cables || []).forEach(c => {
-    const color = c.status === 'operational' ? '#44dd88' : '#ff4444';
+    const tone = c.status === 'operational' ? 'good' : 'danger';
     const icon = c.status === 'operational' ? '&#9679;' : '&#9888;';
-    html += `<div class="sr-feed-item"><span style="color:${color};font-size:10px">${icon}</span>
+    html += `<div class="sr-feed-item" data-tone="${tone}">${_srFeedIcon(icon, tone)}
       <span class="sr-feed-title">${escapeHtml(c.name)}</span>
       <span class="sr-feed-source">${escapeHtml(c.route)}</span></div>`;
-    if (c.alert_title) html += `<div class="sr-feed-item" style="padding-left:20px;color:#ff8800;font-size:10px">${escapeHtml(c.alert_title)}</div>`;
+    if (c.alert_title) html += `<div class="sr-feed-item" data-tone="warn" data-indent="subtle">${escapeHtml(c.alert_title)}</div>`;
   });
   if (d.related_news && d.related_news.length) {
-    html += '<div class="sr-mini-label" style="margin-top:8px">Related News</div>';
+    html += '<div class="sr-mini-label sr-mini-label-spaced">Related News</div>';
     d.related_news.slice(0, 3).forEach(n => {
       html += `<div class="sr-feed-item"><span class="sr-feed-title">${escapeHtml(n.title)}</span></div>`;
     });
@@ -3259,15 +4640,18 @@ async function loadSitroomAnomalies() {
   if (!el) return;
   const d = await safeFetch('/api/sitroom/anomalies', {}, null);
   if (!d || !d.anomalies || !d.anomalies.length) {
-    el.innerHTML = '<div class="sr-feed-item" style="color:#44dd88">No anomalies detected</div>';
+    el.innerHTML = '<div class="sr-feed-item" data-tone="good">No anomalies detected</div>';
     return;
   }
   let html = '';
   d.anomalies.forEach(a => {
-    const colors = {critical:'#ff0000',high:'#ff4444',medium:'#ffaa00',low:'#888'};
-    const c = colors[a.severity] || '#888';
-    html += `<div class="sr-feed-item" style="border-left:3px solid ${c}">
-      <span class="sr-feed-badge" style="background:${c};color:#000;font-size:9px;padding:1px 4px;border-radius:2px">${escapeHtml(a.severity.toUpperCase())}</span>
+    const tone = a.severity === 'critical' || a.severity === 'high'
+      ? 'danger'
+      : a.severity === 'medium'
+        ? 'warn'
+        : 'neutral';
+    html += `<div class="sr-feed-item" data-tone="${tone}">
+      ${_srFeedBadge(a.severity.toUpperCase(), tone)}
       <span class="sr-feed-title">${escapeHtml(a.message)}</span></div>`;
   });
   el.innerHTML = html;
@@ -3282,23 +4666,21 @@ async function loadSitroomAlertHistory() {
   let html = '';
   if (d.earthquake_history && d.earthquake_history.length) {
     html += '<div class="sr-mini-label">Earthquakes (7-day)</div><div class="sr-sparkline-row">';
-    d.earthquake_history.reverse().forEach(day => {
+    [...d.earthquake_history].reverse().forEach(day => {
       const h = Math.max(3, Math.min(30, (day.count || 0) / 2));
-      html += `<div class="sr-spark-bar" style="height:${h}px;background:#ff4444" title="${day.day}: ${day.count} quakes, max M${day.max_mag || '?'}"></div>`;
+      html += `<div class="sr-spark-bar sr-spark-bar-danger" data-sr-spark-height="${h}" title="${day.day}: ${day.count} quakes, max M${day.max_mag || '?'}"></div>`;
     });
     html += '</div>';
   }
   if (d.news_volume_24h && d.news_volume_24h.length) {
-    html += '<div class="sr-mini-label" style="margin-top:8px">News Volume (24h by category)</div>';
+    html += '<div class="sr-mini-label sr-mini-label-spaced">News Volume (24h by category)</div>';
     d.news_volume_24h.slice(0, 8).forEach(cat => {
       const w = Math.min(100, (cat.count / (d.news_volume_24h[0].count || 1)) * 100);
-      html += `<div style="display:flex;gap:6px;align-items:center;font-size:10px;margin:2px 0">
-        <span style="width:70px;color:#aaa">${escapeHtml(cat.category || '?')}</span>
-        <div style="flex:1;background:#222;height:8px;border-radius:4px"><div style="width:${w}%;height:100%;background:#4aedc4;border-radius:4px"></div></div>
-        <span style="color:#888;width:25px;text-align:right">${cat.count}</span></div>`;
+      html += _srMetricRow(cat.category || '?', cat.count, w, 'accent');
     });
   }
   el.innerHTML = html || '<div class="sitroom-empty">No history</div>';
+  _hydrateSitroomRuntimeVars(el);
 }
 
 /* ─── P3: Enhanced Signals Card ─── */
@@ -3312,12 +4694,12 @@ async function loadSitroomEnhancedSignals() {
   }
   let html = '';
   d.signals.forEach(s => {
-    const confColors = {high:'#44dd88',medium:'#ffaa00',low:'#888'};
-    const c = confColors[s.confidence] || '#888';
-    html += `<div class="sr-feed-item" style="border-left:3px solid ${c}">
-      <span class="sr-feed-badge" style="background:${c};color:#000;font-size:9px;padding:1px 4px;border-radius:2px">${escapeHtml(s.confidence)}</span>
+    const confidenceMeta = _getSitroomConfidenceMeta(s.confidence);
+    const corroboratingCount = Number(s.corroborating_signals) || 0;
+    html += `<div class="sr-feed-item" data-tone="${confidenceMeta.tone}">
+      ${_srFeedBadge(confidenceMeta.label, confidenceMeta.tone)}
       <span class="sr-feed-title">${escapeHtml(s.title)}</span>
-      <span class="sr-feed-source">${escapeHtml(s.signal_type)} (${s.corroborating_signals}x)</span></div>`;
+      <span class="sr-feed-source">${escapeHtml(s.signal_type)} · corroborated by ${corroboratingCount} signal${corroboratingCount === 1 ? '' : 's'}</span></div>`;
   });
   el.innerHTML = html;
 }
@@ -3333,13 +4715,13 @@ async function loadSitroomGulfEcon() {
     html += '<div class="sr-mini-label">Oil Markets</div>';
     d.oil_markets.forEach(m => {
       const chg = m.change_24h || 0;
-      const color = chg >= 0 ? '#44dd88' : '#ff4444';
-      html += `<div class="sr-feed-item"><span class="sr-feed-title">${escapeHtml(m.symbol)}</span>
-        <span style="color:${color}">$${m.price} (${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%)</span></div>`;
+      const tone = chg >= 0 ? 'good' : 'danger';
+      html += `<div class="sr-feed-item" data-layout="split"><span class="sr-feed-title">${escapeHtml(m.symbol)}</span>
+        <span class="sr-feed-value" data-tone="${tone}">$${m.price} (${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%)</span></div>`;
     });
   }
   if (d.news && d.news.length) {
-    html += '<div class="sr-mini-label" style="margin-top:8px">GCC Headlines</div>';
+    html += '<div class="sr-mini-label sr-mini-label-spaced">GCC Headlines</div>';
     d.news.slice(0, 8).forEach(n => {
       html += `<div class="sr-feed-item"><span class="sr-feed-source">${escapeHtml(n.source_name || '')}</span>
         <span class="sr-feed-title">${escapeHtml(n.title)}</span></div>`;
@@ -3361,16 +4743,15 @@ async function loadSitroomMarketRegime() {
   if (!el) return;
   const d = await safeFetch('/api/sitroom/market-regime', {}, null);
   if (!d) { el.innerHTML = '<div class="sitroom-empty">No data</div>'; return; }
-  const colors = {'RISK-ON':'#44dd88','RISK-OFF':'#ff4444','NEUTRAL':'#ffaa00'};
-  const c = colors[d.regime] || '#888';
-  let html = `<div style="text-align:center;padding:12px 0">
-    <div style="font-size:24px;font-weight:bold;color:${c};letter-spacing:2px">${d.regime}</div>
-    <div style="font-size:11px;color:#888;margin-top:4px">Composite Score: ${d.score > 0 ? '+' : ''}${d.score}</div>
+  const tone = d.regime === 'RISK-ON' ? 'good' : d.regime === 'RISK-OFF' ? 'danger' : 'warn';
+  let html = `<div class="sr-runtime-hero">
+    <div class="sr-runtime-hero-value" data-tone="${tone}">${escapeHtml(d.regime)}</div>
+    <div class="sr-runtime-hero-meta">Composite Score: ${d.score > 0 ? '+' : ''}${d.score}</div>
   </div>`;
   if (d.signals) {
-    html += '<div style="font-size:10px;color:#666;padding:0 8px">';
+    html += '<div class="sr-kv-list">';
     for (const [k, v] of Object.entries(d.signals)) {
-      html += `<div style="display:flex;justify-content:space-between;padding:2px 0"><span>${escapeHtml(k)}</span><span style="color:#aaa">${typeof v === 'number' ? v.toFixed(1) : v}</span></div>`;
+      html += _srKvRow(k, typeof v === 'number' ? v.toFixed(1) : v);
     }
     html += '</div>';
   }
@@ -3385,9 +4766,9 @@ async function loadSitroomLiveCounters() {
   if (!d || !d.counters) { el.innerHTML = '<div class="sitroom-empty">No data</div>'; return; }
   let html = '';
   for (const [, info] of Object.entries(d.counters)) {
-    html += `<div class="sr-feed-item" style="border-left:3px solid #44dd88">
-      <span class="sr-feed-title" style="color:#ccc">${escapeHtml(info.label)}</span>
-      <span style="color:#44dd88;font-weight:bold;font-size:13px">${info.value.toLocaleString()}</span>
+    html += `<div class="sr-feed-item" data-tone="good" data-layout="split">
+      <span class="sr-feed-title">${escapeHtml(info.label)}</span>
+      <span class="sr-feed-value" data-tone="good">${info.value.toLocaleString()}</span>
     </div>`;
   }
   el.innerHTML = html;
@@ -3402,18 +4783,18 @@ async function loadSitroomSpecies() {
   let html = '';
   if (d.comebacks) {
     d.comebacks.forEach(s => {
-      const statusColor = s.status === 'Recovered' ? '#44dd88' : s.status === 'Recovering' ? '#88cc44' : '#ffaa00';
-      html += `<div class="sr-feed-item" style="border-left:3px solid ${statusColor}">
+      const tone = s.status === 'Recovered' ? 'good' : s.status === 'Recovering' ? 'accent' : 'warn';
+      html += `<div class="sr-feed-item" data-tone="${tone}">
         <span class="sr-feed-title">${escapeHtml(s.species)}</span>
-        <span class="sr-feed-badge" style="background:${statusColor};color:#000;font-size:8px;padding:1px 3px;border-radius:2px">${escapeHtml(s.status)}</span>
+        ${_srFeedBadge(s.status, tone)}
         <span class="sr-feed-source">${escapeHtml(s.change)}</span>
       </div>`;
     });
   }
   if (d.news && d.news.length) {
-    html += '<div class="sr-mini-label" style="margin-top:8px">Conservation News</div>';
+    html += '<div class="sr-mini-label sr-mini-label-spaced">Conservation News</div>';
     d.news.slice(0, 5).forEach(n => {
-      html += `<div class="sr-feed-item"><a href="${escapeHtml(n.link || '#')}" target="_blank" class="sr-feed-title">${escapeHtml(n.title)}</a></div>`;
+      html += `<div class="sr-feed-item"><a href="${escapeAttr(n.link || '#')}" target="_blank" class="sr-feed-title">${escapeHtml(n.title)}</a></div>`;
     });
   }
   el.innerHTML = html || '<div class="sitroom-empty">No species data</div>';
@@ -3425,20 +4806,18 @@ async function loadSitroomTechReadiness() {
   if (!el) return;
   const d = await safeFetch('/api/sitroom/tech-readiness', {}, null);
   if (!d) { el.innerHTML = '<div class="sitroom-empty">No data</div>'; return; }
-  const c = d.overall >= 7 ? '#44dd88' : d.overall >= 4 ? '#ffaa00' : '#ff4444';
-  let html = `<div style="text-align:center;padding:12px 0">
-    <div style="font-size:28px;font-weight:bold;color:${c}">${d.overall}/10</div>
-    <div style="font-size:10px;color:#888;margin-top:2px">Tech Readiness Score</div>
-  </div><div style="display:flex;gap:4px;padding:0 8px 8px">`;
+  const overallTone = d.overall >= 7 ? 'good' : d.overall >= 4 ? 'warn' : 'danger';
+  let html = `<div class="sr-runtime-hero">
+    <div class="sr-runtime-hero-value" data-tone="${overallTone}">${d.overall}/10</div>
+    <div class="sr-runtime-hero-label">Tech Readiness Score</div>
+  </div><div class="sr-metric-list">`;
   for (const [name, val] of Object.entries(d.dimensions || {})) {
-    const w = val * 10;
-    const bc = val >= 7 ? '#44dd88' : val >= 4 ? '#ffaa00' : '#ff4444';
-    html += `<div style="flex:1;text-align:center"><div style="font-size:9px;color:#666;text-transform:uppercase">${name}</div>
-      <div style="background:#111;height:6px;border-radius:3px;margin-top:2px"><div style="width:${w}%;height:100%;background:${bc};border-radius:3px"></div></div>
-      <div style="font-size:10px;color:#aaa;margin-top:1px">${val}</div></div>`;
+    const tone = val >= 7 ? 'good' : val >= 4 ? 'warn' : 'danger';
+    html += _srMetricRow(name, val, val * 10, tone);
   }
   html += '</div>';
   el.innerHTML = html;
+  _hydrateSitroomRuntimeVars(el);
 }
 
 /* ─── P5: Today's Hero Card ─── */
@@ -3447,9 +4826,9 @@ async function loadSitroomTodaysHero() {
   if (!el) return;
   const d = await safeFetch('/api/sitroom/todays-hero', {}, null);
   if (!d || !d.hero) { el.innerHTML = '<div class="sitroom-empty">No hero story found today</div>'; return; }
-  el.innerHTML = `<div style="padding:12px;border-left:3px solid #44dd88">
-    <a href="${escapeHtml(d.hero.link || '#')}" target="_blank" style="color:#4aedc4;font-size:12px;text-decoration:none">${escapeHtml(d.hero.title)}</a>
-    <div style="font-size:10px;color:#666;margin-top:4px">${escapeHtml(d.hero.source_name || '')} | Positivity: ${d.score}/10</div>
+  el.innerHTML = `<div class="sr-feature-story">
+    <a href="${escapeAttr(d.hero.link || '#')}" target="_blank" class="sr-feature-story-title">${escapeHtml(d.hero.title)}</a>
+    <div class="sr-feature-story-meta">${escapeHtml(d.hero.source_name || '')} | Positivity: ${d.score}/10</div>
   </div>`;
 }
 
@@ -3461,9 +4840,9 @@ async function loadSitroomGoodThings() {
   if (!d || !d.good_things || !d.good_things.length) { el.innerHTML = '<div class="sitroom-empty">No good news found</div>'; return; }
   let html = '';
   d.good_things.forEach((g, i) => {
-    html += `<div class="sr-feed-item" style="border-left:3px solid #44dd88">
-      <span style="color:#44dd88;font-weight:bold;margin-right:4px">${i + 1}.</span>
-      <a href="${escapeHtml(g.link || '#')}" target="_blank" class="sr-feed-title">${escapeHtml(g.title)}</a>
+    html += `<div class="sr-feed-item" data-tone="good">
+      <span class="sr-feed-index">${i + 1}.</span>
+      <a href="${escapeAttr(g.link || '#')}" target="_blank" class="sr-feed-title">${escapeHtml(g.title)}</a>
       <span class="sr-feed-source">${escapeHtml(g.source_name || '')}</span>
     </div>`;
   });
@@ -3482,7 +4861,7 @@ async function loadSitroomCbCalendar() {
   });
   html += '</table>';
   if (d.news && d.news.length) {
-    html += '<div class="sr-mini-label" style="margin-top:8px">Rate Decision News</div>';
+    html += '<div class="sr-mini-label sr-mini-label-spaced">Rate Decision News</div>';
     d.news.slice(0, 5).forEach(n => {
       html += `<div class="sr-feed-item"><span class="sr-feed-title">${escapeHtml(n.title)}</span></div>`;
     });
@@ -3498,12 +4877,12 @@ async function loadSitroomAptGroups() {
   if (!d || !d.groups) { el.innerHTML = '<div class="sitroom-empty">No data</div>'; return; }
   let html = `<div class="sr-mini-label">${d.active_count} Active Groups</div>`;
   d.groups.forEach(g => {
-    const color = g.active ? '#ff4444' : '#666';
+    const tone = g.active ? 'danger' : 'neutral';
     const badge = g.active ? '<span class="sr-badge-live">ACTIVE</span>' : '';
-    html += `<div class="sr-feed-item" style="border-left:3px solid ${color}">
+    html += `<div class="sr-feed-item" data-tone="${tone}">
       <div><span class="sr-feed-title">${escapeHtml(g.name)}</span> ${badge}</div>
-      <div style="font-size:9px;color:#666">${escapeHtml(g.origin)} | ${escapeHtml(g.targets)}</div>
-      <div style="font-size:9px;color:#555">${escapeHtml(g.notable)}</div>
+      <div class="sr-apt-meta">${escapeHtml(g.origin)} | ${escapeHtml(g.targets)}</div>
+      <div class="sr-apt-note">${escapeHtml(g.notable)}</div>
     </div>`;
   });
   el.innerHTML = html;
@@ -3516,26 +4895,26 @@ async function loadSitroomSnapshot() {
   const d = await safeFetch('/api/sitroom/situation-snapshot', {}, null);
   if (!d) { el.innerHTML = '<div class="sitroom-empty">No data</div>'; return; }
   const stats = [
-    {label: 'Articles', value: d.total_articles || 0, color: '#4aedc4'},
-    {label: 'Events', value: d.total_events || 0, color: '#44aaff'},
-    {label: 'Earthquakes', value: d.earthquakes || 0, color: '#ff4444'},
-    {label: 'Fires', value: d.active_fires || 0, color: '#ff8800'},
-    {label: 'Conflicts', value: d.conflicts || 0, color: '#ff6600'},
-    {label: 'Cyber', value: d.cyber_threats || 0, color: '#aa66ff'},
-    {label: 'OREF', value: d.oref_alerts || 0, color: '#ff2222'},
-    {label: 'Markets', value: d.market_symbols || 0, color: '#44dd88'},
-    {label: 'Sources', value: d.live_sources || 0, color: '#4aedc4'},
+    {label: 'Articles', value: d.total_articles || 0, tone: 'accent'},
+    {label: 'Events', value: d.total_events || 0, tone: 'info'},
+    {label: 'Earthquakes', value: d.earthquakes || 0, tone: 'danger'},
+    {label: 'Fires', value: d.active_fires || 0, tone: 'warn'},
+    {label: 'Conflicts', value: d.conflicts || 0, tone: 'warn'},
+    {label: 'Cyber', value: d.cyber_threats || 0, tone: 'violet'},
+    {label: 'OREF', value: d.oref_alerts || 0, tone: 'danger'},
+    {label: 'Markets', value: d.market_symbols || 0, tone: 'good'},
+    {label: 'Sources', value: d.live_sources || 0, tone: 'accent'},
   ];
-  let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px">';
+  let html = '<div class="sr-snapshot-grid">';
   stats.forEach(s => {
-    html += `<div style="text-align:center;padding:4px;background:#0a0a0a;border-radius:4px">
-      <div style="font-size:16px;font-weight:bold;color:${s.color}">${s.value.toLocaleString()}</div>
-      <div style="font-size:8px;color:#555;text-transform:uppercase">${s.label}</div>
+    html += `<div class="sr-snapshot-stat">
+      <div class="sr-snapshot-value" data-tone="${s.tone}">${s.value.toLocaleString()}</div>
+      <div class="sr-snapshot-label">${s.label}</div>
     </div>`;
   });
   html += '</div>';
   if (d.max_magnitude) {
-    html += `<div style="text-align:center;font-size:10px;color:#888;padding:4px">Max quake: M${d.max_magnitude} | ${d.is_refreshing ? 'Refreshing...' : 'Idle'}</div>`;
+    html += `<div class="sr-snapshot-footer">Max quake: M${d.max_magnitude} | ${d.is_refreshing ? 'Refreshing...' : 'Idle'}</div>`;
   }
   el.innerHTML = html;
 }
@@ -3597,7 +4976,7 @@ function _initCardResize() {
     if (size) {
       card.dataset.cardSize = size;
       // Persist to localStorage
-      const cardId = card.querySelector('.sr-card-head')?.textContent?.trim()?.substring(0, 30);
+      const cardId = _getSitroomPanelId(card);
       if (cardId) {
         const sizes = JSON.parse(localStorage.getItem('sitroom-card-sizes') || '{}');
         sizes[cardId] = size;
@@ -3608,7 +4987,7 @@ function _initCardResize() {
   // Restore saved sizes
   const sizes = JSON.parse(localStorage.getItem('sitroom-card-sizes') || '{}');
   document.querySelectorAll('.sr-card').forEach(card => {
-    const cardId = card.querySelector('.sr-card-head')?.textContent?.trim()?.substring(0, 30);
+    const cardId = _getSitroomPanelId(card);
     if (cardId && sizes[cardId]) {
       card.dataset.cardSize = sizes[cardId];
     }
@@ -3624,17 +5003,24 @@ function _initVirtualScroll(containerId, items, renderFn, rowHeight) {
   let scrollTop = 0;
 
   const totalHeight = items.length * rowHeight;
-  container.innerHTML = `<div style="height:${totalHeight}px;position:relative" class="sr-virtual-wrapper"></div>`;
-  const wrapper = container.querySelector('.sr-virtual-wrapper');
+  const wrapper = document.createElement('div');
+  wrapper.className = 'sr-virtual-wrapper';
+  wrapper.style.setProperty('--sr-virtual-height', `${totalHeight}px`);
+  container.replaceChildren(wrapper);
 
   function render() {
     const startIdx = Math.floor(scrollTop / rowHeight);
     const endIdx = Math.min(startIdx + visibleCount, items.length);
-    let html = '';
+    const fragment = document.createDocumentFragment();
     for (let i = startIdx; i < endIdx; i++) {
-      html += `<div style="position:absolute;top:${i * rowHeight}px;left:0;right:0;height:${rowHeight}px">${renderFn(items[i], i)}</div>`;
+      const row = document.createElement('div');
+      row.className = 'sr-virtual-row';
+      row.style.setProperty('--sr-virtual-top', `${i * rowHeight}px`);
+      row.style.setProperty('--sr-virtual-row-height', `${rowHeight}px`);
+      row.innerHTML = renderFn(items[i], i);
+      fragment.appendChild(row);
     }
-    wrapper.innerHTML = `<div style="height:${totalHeight}px;position:relative">${html}</div>`;
+    wrapper.replaceChildren(fragment);
   }
 
   container.addEventListener('scroll', () => {
@@ -3711,8 +5097,8 @@ function _renderWorkerClusters(clusters) {
   let html = '';
   clusters.forEach(c => {
     const sources = (c.sources || []).join(', ');
-    html += `<div class="sr-feed-item" style="border-left:3px solid #4aedc4">
-      <span class="sr-feed-badge" style="background:#4aedc4;color:#000;font-size:9px;padding:1px 4px;border-radius:2px">${c.count}x</span>
+    html += `<div class="sr-feed-item" data-tone="good">
+      <span class="sr-feed-badge sr-feed-badge-compact" data-tone="good">${c.count}x</span>
       <span class="sr-feed-title">${escapeHtml(c.label)}</span>
       <span class="sr-feed-source">${escapeHtml(sources)}</span>
     </div>`;
@@ -3799,21 +5185,21 @@ async function _updateDataFreshness() {
   });
   // Map source keys to card header text patterns
   const mapping = {
-    'rss': 'LIVE NEWS', 'earthquakes': 'SEISMIC', 'markets': 'MARKETS',
+    'rss': 'NEWS WIRE', 'earthquakes': 'SEISMIC', 'markets': 'MARKETS',
     'aviation': 'AIRCRAFT', 'fires': 'FIRES', 'radiation': 'RADIATION',
     'oref_alerts': 'OREF', 'ais_ships': 'SHIP TRAFFIC',
   };
   for (const [key, pattern] of Object.entries(mapping)) {
     const status = d.freshness[key];
     if (!status) continue;
-    const colors = { LIVE: '#44dd88', CACHED: '#ffaa00', STALE: '#ff8800', UNAVAILABLE: '#ff4444' };
-    const color = colors[status] || '#888';
+    const freshnessMeta = _getSitroomFreshnessMeta(status);
     document.querySelectorAll('.sr-card-head').forEach(head => {
       if (head.textContent.includes(pattern)) {
         const badge = document.createElement('span');
-        badge.className = 'sr-freshness-badge';
-        badge.style.cssText = `float:right;font-size:8px;padding:1px 4px;border-radius:2px;background:${color};color:#000;margin-left:6px`;
-        badge.textContent = status;
+        badge.className = 'sr-feed-badge sr-freshness-badge';
+        badge.dataset.tone = freshnessMeta.tone;
+        badge.textContent = freshnessMeta.label;
+        badge.title = freshnessMeta.title;
         head.appendChild(badge);
       }
     });
@@ -3847,9 +5233,10 @@ async function loadSitroomOrefAlerts() {
   }
   let html = '';
   d.alerts.forEach(a => {
-    const detail = JSON.parse(a.detail_json || '{}');
-    html += `<div class="sr-feed-item" style="border-left:3px solid #ff2222">
-      <span class="sr-feed-source" style="color:#ff4444">OREF</span>
+    let detail = {};
+    try { detail = JSON.parse(a.detail_json || '{}'); } catch(e) {}
+    html += `<div class="sr-feed-item" data-tone="danger">
+      ${_srFeedBadge('OREF', 'danger')}
       <span class="sr-feed-title">${escapeHtml(a.title)}</span>
       <span class="sr-feed-time">${escapeHtml(detail.date || '')}</span>
     </div>`;
@@ -3873,7 +5260,7 @@ async function loadSitroomGdeltFull() {
       const max = Math.max(...vals, 1);
       vals.forEach(v => {
         const h = Math.max(2, (v / max) * 30);
-        html += `<div class="sr-spark-bar" style="height:${h}px" title="${v}"></div>`;
+        html += `<div class="sr-spark-bar" data-sr-spark-height="${h}" title="${v}"></div>`;
       });
       html += '</div>';
     }
@@ -3885,22 +5272,23 @@ async function loadSitroomGdeltFull() {
       const recent = points.slice(-12);
       const avg = recent.reduce((s, p) => s + (p.value || 0), 0) / (recent.length || 1);
       const sentiment = avg > 0 ? 'Positive' : avg < -2 ? 'Negative' : 'Neutral';
-      const color = avg > 0 ? '#44dd88' : avg < -2 ? '#ff4444' : '#888';
-      html += `<div class="sr-mini-label">72h Tone: <span style="color:${color}">${sentiment} (${avg.toFixed(1)})</span></div>`;
+      const tone = avg > 0 ? 'good' : avg < -2 ? 'danger' : 'neutral';
+      html += `<div class="sr-mini-label">72h Tone: <span class="sr-feed-value" data-tone="${tone}">${sentiment} (${avg.toFixed(1)})</span></div>`;
     }
   }
   if (d.hotspots) {
-    html += '<div class="sr-mini-label" style="margin-top:8px">Top Hotspots</div>';
+    html += '<div class="sr-mini-label sr-mini-label-spaced">Top Hotspots</div>';
     const pts = (d.hotspots.features || d.hotspots || []).slice(0, 5);
     pts.forEach(p => {
       const name = (p.properties && p.properties.name) || p.name || 'Location';
       const count = (p.properties && p.properties.count) || p.count || '';
       html += `<div class="sr-feed-item"><span class="sr-feed-title">${escapeHtml(name)}</span>`;
-      if (count) html += `<span class="sr-feed-badge">${count}</span>`;
+      if (count) html += _srFeedBadge(count, 'neutral');
       html += '</div>';
     });
   }
   el.innerHTML = html || '<div class="sitroom-empty">No GDELT data</div>';
+  _hydrateSitroomRuntimeVars(el);
 }
 
 /* ─── P3: COT Positioning Card ─── */
@@ -3921,10 +5309,10 @@ async function loadSitroomCot() {
   let html = '<table class="sr-table"><tr><th>Market</th><th>Net</th><th>Long</th><th>Short</th></tr>';
   Object.entries(byMarket).slice(0, 10).forEach(([name, p]) => {
     const net = p.net_positions || 0;
-    const color = net > 0 ? '#44dd88' : '#ff4444';
+    const tone = net > 0 ? 'good' : 'danger';
     const shortName = name.length > 25 ? name.substring(0, 22) + '...' : name;
     html += `<tr><td title="${escapeHtml(name)}">${escapeHtml(shortName)}</td>
-      <td style="color:${color}">${net > 0 ? '+' : ''}${Math.round(net).toLocaleString()}</td>
+      <td class="sr-table-value" data-tone="${tone}">${net > 0 ? '+' : ''}${Math.round(net).toLocaleString()}</td>
       <td>${Math.round(p.long_positions).toLocaleString()}</td>
       <td>${Math.round(p.short_positions).toLocaleString()}</td></tr>`;
   });
@@ -3944,11 +5332,11 @@ async function loadSitroomBreakingDetection() {
   let html = '';
   d.breaking.forEach(b => {
     const urgency = b.urgency_score || 0;
-    const color = urgency >= 8 ? '#ff2222' : urgency >= 5 ? '#ff8800' : '#ffcc00';
+    const tone = urgency >= 8 ? 'danger' : urgency >= 5 ? 'warn' : 'neutral';
     const badge = urgency >= 8 ? 'CRITICAL' : urgency >= 5 ? 'HIGH' : 'MEDIUM';
-    html += `<div class="sr-feed-item" style="border-left:3px solid ${color}">
-      <span class="sr-feed-badge" style="background:${color};color:#000;font-size:9px;padding:1px 4px;border-radius:2px">${badge}</span>
-      <a href="${escapeHtml(b.link || '#')}" target="_blank" class="sr-feed-title">${escapeHtml(b.title)}</a>
+    html += `<div class="sr-feed-item" data-tone="${tone}">
+      ${_srFeedBadge(badge, tone)}
+      <a href="${escapeAttr(b.link || '#')}" target="_blank" class="sr-feed-title">${escapeHtml(b.title)}</a>
       <span class="sr-feed-source">${escapeHtml(b.source_name || '')}</span>
     </div>`;
   });
@@ -3967,8 +5355,8 @@ async function loadSitroomNewsClusters() {
   let html = '';
   d.clusters.forEach(c => {
     const sources = (c.sources || []).filter(Boolean).join(', ');
-    html += `<div class="sr-feed-item" style="border-left:3px solid #4aedc4">
-      <span class="sr-feed-badge" style="background:#4aedc4;color:#000;font-size:9px;padding:1px 4px;border-radius:2px">${c.count}x</span>
+    html += `<div class="sr-feed-item" data-tone="accent">
+      ${_srFeedBadge(`${c.count}x`, 'accent')}
       <span class="sr-feed-title">${escapeHtml(c.label)}</span>
       <span class="sr-feed-source">${escapeHtml(sources)}</span>
     </div>`;
@@ -3989,7 +5377,7 @@ async function runSitroomDeduction() {
   } else {
     html += '<div class="sitroom-empty">AI not available — install Ollama for deduction analysis</div>';
   }
-  html += `<div class="sr-mini-label" style="margin-top:8px">${d.data_points || 0} data points analyzed</div>`;
+  html += `<div class="sr-mini-label sr-mini-label-spaced">${d.data_points || 0} data points analyzed</div>`;
   el.innerHTML = html;
 }
 
@@ -4000,23 +5388,24 @@ async function loadSitroomSourceHealth() {
   const d = await safeFetch('/api/sitroom/source-health', {}, null);
   if (!d || !d.sources) { el.innerHTML = '<div class="sitroom-empty">No health data</div>'; return; }
   const s = d.summary || {};
-  let html = `<div style="display:flex;gap:8px;margin-bottom:8px">
-    <span class="sr-feed-badge" style="background:#44dd88;color:#000">${s.live || 0} LIVE</span>
-    <span class="sr-feed-badge" style="background:#ffaa00;color:#000">${s.stale || 0} STALE</span>
-    <span class="sr-feed-badge" style="background:#ff4444;color:#000">${s.unavailable || 0} DOWN</span>
+  let html = `<div class="sr-summary-chip-row">
+    ${_srSummaryChip(`${s.live || 0} live`, 'good')}
+    ${_srSummaryChip(`${s.stale || 0} stale`, 'warn')}
+    ${_srSummaryChip(`${s.unavailable || 0} down`, 'danger')}
   </div>`;
   // Show problematic sources only
   const problems = d.sources.filter(src => src.status !== 'live').slice(0, 10);
   if (problems.length) {
     problems.forEach(src => {
-      const color = src.status === 'stale' ? '#ffaa00' : '#ff4444';
-      const age = src.age_seconds ? Math.round(src.age_seconds / 60) + 'm ago' : 'never';
-      html += `<div class="sr-feed-item"><span style="color:${color};font-size:10px;width:10px;display:inline-block">&#9679;</span>
+      const freshnessMeta = _getSitroomFreshnessMeta(src.status);
+      const ageLabel = _getSitroomSourceAgeLabel(src.age_seconds);
+      html += `<div class="sr-feed-item" data-tone="${freshnessMeta.tone}">${_srFeedIcon('&#9679;', freshnessMeta.tone)}
         <span class="sr-feed-title">${escapeHtml(src.source)}</span>
-        <span class="sr-feed-time">${age}</span></div>`;
+        ${_srFeedBadge(freshnessMeta.label, freshnessMeta.tone)}
+        <span class="sr-feed-time" title="${escapeHtml(freshnessMeta.title)}">${escapeHtml(ageLabel)}</span></div>`;
     });
   } else {
-    html += '<div class="sr-feed-item" style="color:#44dd88">All sources healthy</div>';
+    html += '<div class="sr-feed-item" data-tone="good">All sources healthy</div>';
   }
   el.innerHTML = html;
 }
@@ -4029,16 +5418,16 @@ async function loadSitroomCountryBrief(country) {
   const d = await safeFetch(`/api/sitroom/country-brief/${encodeURIComponent(country)}`, {}, null);
   if (!d) { el.innerHTML = '<div class="sitroom-empty">Failed to load</div>'; return; }
   let html = `<div class="sr-mini-label">${escapeHtml(d.country)} Intelligence Brief</div>`;
-  html += `<div style="display:flex;gap:12px;margin:8px 0">
-    <span class="sr-feed-badge">${d.news_count} articles</span>
-    <span class="sr-feed-badge">${d.event_count} events</span>
-    <span class="sr-feed-badge">${d.categories ? d.categories.length : 0} categories</span>
+  html += `<div class="sr-summary-chip-row">
+    ${_srSummaryChip(`${d.news_count} articles`, 'accent')}
+    ${_srSummaryChip(`${d.event_count} events`, 'warn')}
+    ${_srSummaryChip(`${d.categories ? d.categories.length : 0} categories`, 'neutral')}
   </div>`;
   if (d.ai_summary) {
     html += `<div class="sr-ai-brief">${escapeHtml(d.ai_summary).replace(/\n/g, '<br>')}</div>`;
   }
   if (d.recent_news && d.recent_news.length) {
-    html += '<div class="sr-mini-label" style="margin-top:8px">Recent Headlines</div>';
+    html += '<div class="sr-mini-label sr-mini-label-spaced">Recent Headlines</div>';
     d.recent_news.slice(0, 5).forEach(n => {
       html += `<div class="sr-feed-item"><span class="sr-feed-source">${escapeHtml(n.source_name || '')}</span>
         <span class="sr-feed-title">${escapeHtml(n.title)}</span></div>`;

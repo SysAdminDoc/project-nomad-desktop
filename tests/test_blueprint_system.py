@@ -1,5 +1,7 @@
 """Tests for system-level routes: settings, i18n, system info, etc."""
 
+import json
+
 
 class TestSettingsEndpoint:
     def test_get_settings(self, client):
@@ -14,6 +16,13 @@ class TestSettingsEndpoint:
         client.put('/api/settings', json={'dashboard_mode': 'compact'})
         resp = client.get('/api/settings')
         assert resp.status_code == 200
+
+    def test_save_and_read_workspace_memory(self, client):
+        payload = {'current': {'key': 'preparedness:checklists', 'tab': 'preparedness'}, 'recent': [], 'pinned': []}
+        resp = client.put('/api/settings', json={'workspace_memory': json.dumps(payload)})
+        assert resp.status_code == 200
+        data = client.get('/api/settings').get_json()
+        assert 'workspace_memory' in data
 
 
 class TestOllamaHostSettings:

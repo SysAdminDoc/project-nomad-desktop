@@ -212,27 +212,28 @@ def api_kb_upload():
 
     # Start embedding in background
     def do_embed():
-        global _embed_state
-        _embed_state = {'status': 'processing', 'doc_id': doc_id, 'progress': 0, 'detail': f'Processing {filename}...'}
+        import web.state as _ws
+        _ws._embed_state.clear()
+        _ws._embed_state.update({'status': 'processing', 'doc_id': doc_id, 'progress': 0, 'detail': f'Processing {filename}...'})
         db2 = get_db()
         try:
-            _embed_state['detail'] = 'Checking embedding model...'
+            _ws._embed_state['detail'] = 'Checking embedding model...'
             models = ollama.list_models()
             model_names = [m['name'] for m in models]
             if EMBED_MODEL not in model_names and EMBED_MODEL.split(':')[0] not in [m.split(':')[0] for m in model_names]:
-                _embed_state['detail'] = f'Pulling {EMBED_MODEL}...'
+                _ws._embed_state['detail'] = f'Pulling {EMBED_MODEL}...'
                 ollama.pull_model(EMBED_MODEL)
 
-            _embed_state.update({'progress': 20, 'detail': 'Extracting text...'})
+            _ws._embed_state.update({'progress': 20, 'detail': 'Extracting text...'})
             text = extract_text_from_file(filepath, content_type)
             if not text.strip():
                 raise ValueError('No text could be extracted from file')
 
-            _embed_state.update({'progress': 30, 'detail': 'Chunking text...'})
+            _ws._embed_state.update({'progress': 30, 'detail': 'Chunking text...'})
             chunks = chunk_text(text)
             total = len(chunks)
 
-            _embed_state.update({'progress': 40, 'detail': f'Embedding {total} chunks...'})
+            _ws._embed_state.update({'progress': 40, 'detail': f'Embedding {total} chunks...'})
             batch_size = 8
             all_points = []
             import hashlib
@@ -252,14 +253,15 @@ def api_kb_upload():
                         }
                     })
                 pct = 40 + int(60 * min(i + batch_size, total) / total)
-                _embed_state.update({'progress': pct, 'detail': f'Embedded {min(i+batch_size, total)}/{total} chunks'})
+                _ws._embed_state.update({'progress': pct, 'detail': f'Embedded {min(i+batch_size, total)}/{total} chunks'})
 
             qdrant.upsert_vectors(all_points)
 
             db2.execute('UPDATE documents SET status = ?, chunks_count = ? WHERE id = ?',
                         ('ready', total, doc_id))
             db2.commit()
-            _embed_state = {'status': 'complete', 'doc_id': doc_id, 'progress': 100, 'detail': f'{filename}: {total} chunks embedded'}
+            _ws._embed_state.clear()
+            _ws._embed_state.update({'status': 'complete', 'doc_id': doc_id, 'progress': 100, 'detail': f'{filename}: {total} chunks embedded'})
 
             threading.Thread(target=_analyze_document, args=(doc_id, text, filename), daemon=True).start()
 
@@ -267,7 +269,8 @@ def api_kb_upload():
             log.error(f'Embedding failed for doc {doc_id}: {e}')
             db2.execute('UPDATE documents SET status = ?, error = ? WHERE id = ?', ('error', str(e), doc_id))
             db2.commit()
-            _embed_state = {'status': 'error', 'doc_id': doc_id, 'progress': 0, 'detail': str(e)}
+            _ws._embed_state.clear()
+            _ws._embed_state.update({'status': 'error', 'doc_id': doc_id, 'progress': 0, 'detail': str(e)})
         finally:
             db2.close()
 

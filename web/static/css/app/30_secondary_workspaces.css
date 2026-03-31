@@ -19,9 +19,9 @@
 }
 .map-search input {
   background: var(--surface); color: var(--text); border: 1px solid var(--border);
-  padding: 6px 12px; border-radius: var(--radius-sm); font-size: 12px; width: 240px; outline: none;
+  padding: 6px 12px; border-radius: var(--radius-sm); font-size: 12px; width: 240px;
 }
-.map-search input:focus {
+.map-search input:focus-visible {
   border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim);
 }
 .map-search button {
@@ -192,7 +192,7 @@
 .welcome-banner p { color: var(--text-dim); font-size: 13px; margin-bottom: 16px; }
 
 /* ─── Inline Rename ─── */
-.convo-rename-input { background: var(--surface2); border: 1px solid var(--accent); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 12px; width: 100%; outline: none; }
+.convo-rename-input { background: var(--surface2); border: 1px solid var(--accent); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 12px; width: 100%; }
 
 /* ─── Markdown Tables ─── */
 .message .content table, .notes-preview table { border-collapse: collapse; margin: 8px 0; width: 100%; font-size: 12px; }
@@ -359,7 +359,6 @@
   padding: 6px 10px;
   border-radius: 6px;
   font-size: 12px;
-  outline: none;
 }
 .map-zone-actions {
   display: flex;
@@ -414,10 +413,10 @@
 .whatif-prompt-overlay textarea {
   flex: 1; background: var(--surface2); color: var(--text);
   border: 1px solid var(--border); padding: 8px 10px;
-  border-radius: var(--radius-sm); font-size: 12px; outline: none;
+  border-radius: var(--radius-sm); font-size: 12px;
   resize: none; min-height: 36px;
 }
-.whatif-prompt-overlay textarea:focus { border-color: var(--orange, #e08020); }
+.whatif-prompt-overlay textarea:focus-visible { border-color: var(--orange, #e08020); }
 
 /* ─── Stop Button ─── */
 .btn-stop { background: var(--red-dim); color: var(--red); border-color: var(--red); }
@@ -451,7 +450,7 @@
 
 /* ─── Notes Search ─── */
 .notes-search { padding: 6px 8px; border-bottom: 1px solid var(--border); }
-.notes-search input { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; border-radius: 6px; font-size: 11px; outline: none; }
-.notes-search input:focus { border-color: var(--accent); }
+.notes-search input { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; border-radius: 6px; font-size: 11px; }
+.notes-search input:focus-visible { border-color: var(--accent); }
 
 @keyframes spin { to { transform: rotate(360deg); } }

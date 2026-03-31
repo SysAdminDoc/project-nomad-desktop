@@ -19,7 +19,7 @@ from services.manager import (
     get_download_progress, get_dir_size, format_size,
     get_services_dir, ensure_dependencies,
 )
-from web.state import _wizard_state, _auto_backup_timer, _update_state
+from web.state import _wizard_state, _auto_backup_timer, _update_state, broadcast_event
 import web.state as _state
 
 log = logging.getLogger('nomad.web')
@@ -78,7 +78,7 @@ SETTINGS_WHITELIST = {
     'dashboard_mode', 'node_name', 'node_id', 'theme', 'sidebar_collapsed',
     'map_style', 'map_center', 'map_zoom', 'ai_model', 'ai_system_prompt',
     'ai_memory_enabled', 'ai_memory', 'wizard_tier', 'first_run_complete',
-    'lan_name', 'lan_sharing', 'lan_password_enabled',
+    'lan_name', 'lan_sharing', 'lan_password_enabled', 'workspace_memory',
 }
 
 @system_bp.route('/api/settings', methods=['PUT'])
@@ -552,7 +552,7 @@ def api_activity():
 
 @system_bp.route('/api/gpu')
 def api_gpu():
-    return jsonify(detect_gpu())
+    return jsonify(_detect_gpu())
 
 # ─── Health ────────────────────────────────────────────────────────
 
@@ -1272,8 +1272,24 @@ def api_backup_create():
     if encrypt and password:
         try:
             from cryptography.fernet import Fernet
+            from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+            from cryptography.hazmat.primitives import hashes
             import hashlib, base64
-            key = base64.urlsafe_b64encode(hashlib.sha256(password.encode()).digest())
+            # Use PBKDF2 key derivation (must match restore path)
+            db_cfg = get_db()
+            try:
+                cfg_row = db_cfg.execute("SELECT value FROM settings WHERE key = 'auto_backup_config'").fetchone()
+            finally:
+                db_cfg.close()
+            salt = ''
+            if cfg_row and cfg_row['value']:
+                cfg_data = json.loads(cfg_row['value'])
+                salt = cfg_data.get('_salt', '')
+            if not salt:
+                import secrets
+                salt = secrets.token_hex(16)
+            kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt.encode(), iterations=100000)
+            key = base64.urlsafe_b64encode(kdf.derive(password.encode()))
             f = Fernet(key)
             with open(backup_path, 'rb') as fp:
                 raw = fp.read()
@@ -1450,7 +1466,10 @@ def api_backup_configure():
         db.commit()
     finally:
         db.close()
-    _schedule_auto_backup()
+    from flask import current_app
+    schedule_fn = current_app.config.get('_schedule_auto_backup')
+    if schedule_fn:
+        schedule_fn()
     log_activity('backup_configured', detail=f"enabled={config['enabled']}, interval={config['interval']}")
     return jsonify({'status': 'configured', 'config': config})
 
@@ -1476,8 +1495,6 @@ def api_backup_config_get():
 
 
 # ─── Emergency Broadcast ──────────────────────────────────────────
-
-@system_bp.route('/api/broadcast')
 
 @system_bp.route('/api/system/shutdown', methods=['POST'])
 def api_system_shutdown():

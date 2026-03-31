@@ -1,5 +1,5 @@
   <!-- Kiwix Library Tab -->
-  <div id="tab-kiwix-library" class="tab-content workspace-stack">
+  <div id="tab-kiwix-library" class="tab-content workspace-stack{% if active_tab == 'kiwix-library' %} active{% endif %}">
     <div class="library-command-deck workspace-panel">
       <div class="library-command-deck-head">
         <div class="library-command-copy">
@@ -11,6 +11,7 @@
           <button type="button" class="btn btn-sm btn-primary" data-zim-tier="essential">Get Essentials</button>
           <button type="button" class="btn btn-sm" data-library-action="check-content-updates">Check Updates</button>
           <button type="button" class="btn btn-sm" data-click-target="pdf-upload">Add Documents</button>
+          <button type="button" class="btn btn-sm btn-ghost" data-workspace-guide-target="kiwix-library" aria-controls="workspace-inspector" aria-expanded="false">Workspace Guide</button>
         </div>
       </div>
       <div class="library-command-pills">

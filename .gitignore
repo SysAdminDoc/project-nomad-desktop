@@ -21,3 +21,5 @@ venv/
 .pytest_tmp/
 test_runtime/
 test_runtime_probe/
+playwright-report/
+test-results/
