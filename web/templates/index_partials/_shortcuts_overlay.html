@@ -1,3 +1,40 @@
+<div id="command-palette-overlay" class="command-palette-overlay" role="dialog" aria-modal="true" aria-labelledby="command-palette-title" hidden>
+  <div class="command-palette-dialog" data-stop-propagation>
+    <div class="command-palette-header">
+      <div class="command-palette-copy">
+        <div class="command-palette-kicker">GLOBAL FIND</div>
+        <h3 id="command-palette-title" class="command-palette-title">Command Palette</h3>
+        <p class="command-palette-text">Find workspaces, jump into a lane, or open the right record without backing out to Home first.</p>
+      </div>
+      <button class="btn btn-sm btn-ghost command-palette-close" type="button" data-shell-action="toggle-command-palette" aria-label="Close command palette">x</button>
+    </div>
+    <div class="command-palette-input-shell">
+      <span class="command-palette-input-icon" aria-hidden="true">&#128269;</span>
+      <input id="command-palette-input" class="command-palette-input" type="search" name="command_palette_query" autocomplete="off" aria-label="Search commands and records" placeholder="Search commands, notes, supplies, contacts…">
+      <button class="btn btn-sm btn-ghost command-palette-shortcuts-btn" type="button" data-shell-action="toggle-shortcuts" aria-label="Open keyboard shortcuts help">?</button>
+    </div>
+    <div class="command-palette-meta">
+      <span>Enter to open</span>
+      <span>&uarr;&darr; to move</span>
+      <span>Esc to close</span>
+    </div>
+    <div id="command-palette-preview" class="command-palette-preview" aria-live="polite">
+      <div class="command-palette-preview-card">
+        <div class="command-palette-preview-kicker">Current Desk</div>
+        <div class="command-palette-preview-title">Situation Room · Topline</div>
+        <div class="command-palette-preview-text">Resume live posture, open the right lane, or branch into a faster next move without backing out first.</div>
+      </div>
+      <div class="command-palette-preview-rail">
+        <div class="command-palette-preview-block">
+          <span class="command-palette-preview-label">Quick Moves</span>
+          <span class="command-palette-preview-value">Pinned desks, launch posture, and suggested next actions will appear here.</span>
+        </div>
+      </div>
+    </div>
+    <div id="command-palette-results" class="command-palette-results" role="listbox" aria-label="Command palette results"></div>
+  </div>
+</div>
+
 <div id="shortcuts-overlay" class="shortcuts-overlay" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title" hidden>
   <div class="shortcuts-dialog">
     <div class="shortcuts-header">
@@ -6,7 +43,7 @@
     </div>
     <div class="shortcuts-grid">
       <kbd class="shortcuts-key">Alt+1-9</kbd><span>Switch tabs</span>
-      <kbd class="shortcuts-key">Ctrl+K</kbd><span>Global search</span>
+      <kbd class="shortcuts-key">Ctrl+K</kbd><span>Open command palette</span>
       <kbd class="shortcuts-key">Alt+N</kbd><span>New note</span>
       <kbd class="shortcuts-key">Alt+T</kbd><span>Toggle timer</span>
       <kbd class="shortcuts-key">Alt+C</kbd><span>Toggle LAN chat</span>

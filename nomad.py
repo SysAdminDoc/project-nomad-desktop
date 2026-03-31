@@ -101,7 +101,10 @@ def tray_quit(icon, item):
     """Graceful shutdown: ordered service stop, DB flush, then exit."""
     global _window
     log.info('Graceful shutdown initiated...')
-    log_activity('app_shutdown', detail='User requested quit')
+    try:
+        log_activity('app_shutdown', detail='User requested quit')
+    except Exception:
+        pass
 
     mods = _get_service_modules()
     from services.manager import get_shutdown_order

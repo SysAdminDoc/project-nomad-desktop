@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="manifest" href="/static/manifest.json">
 <meta name="theme-color" content="#4f9cf7">
-<title>NOMAD Field Desk v{{ version }}</title>
+<title>{{ page_title }} · NOMAD Field Desk v{{ version }}</title>
 <link rel="stylesheet" href="/static/maplibre-gl.css">
 {% if bundle_css %}
 <link rel="stylesheet" href="/static/dist/{{ bundle_css }}">
@@ -17,12 +17,10 @@
 <script src="/static/pmtiles.js"></script>
 <script src="/static/js/epub.min.js"></script>
 </head>
-<body>
+<body data-workspace-page="{{ active_tab }}">
 
-<!-- Skip to Content Link (WCAG 2.1 AA) -->
 <a href="#main-content" class="skip-link">Skip to main content</a>
 
-<!-- In-App Frame Modal -->
 <div id="app-frame-overlay" class="app-frame-overlay-shell" role="dialog" aria-modal="true" aria-labelledby="app-frame-title" aria-label="Application viewer">
   <div class="app-frame-head">
     <span id="app-frame-title" class="app-frame-title"></span>
@@ -34,38 +32,14 @@
   <iframe id="app-frame-iframe" title="Application content frame"></iframe>
 </div>
 
-
 {% include 'index_partials/_shell.html' %}
 
-  {% include 'index_partials/_tab_situation_room.html' %}
-
-  {% include 'index_partials/_tab_services.html' %}
-
-  {% include 'index_partials/_tab_ai_chat.html' %}
-
-  {% include 'index_partials/_tab_library.html' %}
-
-  {% include 'index_partials/_tab_maps.html' %}
-
-  {% include 'index_partials/_tab_notes.html' %}
-
-  {% include 'index_partials/_tab_readiness.html' %}
-
-  {% include 'index_partials/_tab_benchmark.html' %}
-
-  {% include 'index_partials/_tab_tools.html' %}
-
-  {% include 'index_partials/_tab_media.html' %}
-
-  {% include 'index_partials/_tab_preparedness.html' %}
-
-  {% include 'index_partials/_tab_settings.html' %}
+{% include workspace_partial %}
 
 {% include 'index_partials/_utility_overlays.html' %}
 
 {% include 'index_partials/_shortcuts_overlay.html' %}
 
-<!-- ─── Extracted JS Modules (Phase 3: Frontend Modularization) ─── -->
 {% if bundle_js %}
 <script src="/static/dist/{{ bundle_js }}"></script>
 {% else %}
@@ -78,7 +52,11 @@
 <script src="/static/js/events.js"></script>
 {% endif %}
 
-
+<script>
+window.NOMAD_ACTIVE_TAB = {{ active_tab|tojson }};
+window.NOMAD_WORKSPACE_ROUTES = {{ workspace_routes|tojson }};
+window.NOMAD_ALLOW_LAUNCH_RESTORE = {{ allow_launch_restore|tojson }};
+</script>
 <script>
 {% include 'index_partials/_app_inline.js' %}
 </script>

@@ -1,6 +1,6 @@
 <!-- Sidebar Navigation -->
 <nav class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
-  <a class="sidebar-header" id="sidebar-home-link" href="#main-content" data-tab-target="situation-room">
+  <a class="sidebar-header" id="sidebar-home-link" href="{{ workspace_routes['services'] }}" data-tab-target="services">
     <img src="/static/nomad-mark.svg" alt="NOMAD logo" class="sidebar-brand-mark">
     <div class="sidebar-brand-copy">
       <span class="sidebar-brand-kicker">Desktop Operations Workspace</span>
@@ -16,7 +16,7 @@
       <span class="sidebar-group-copy">Orient, assess, and decide what matters now.</span>
     </div>
     <!-- Situation Room -->
-    <button class="tab active" data-tab="situation-room">
+    <button class="tab{% if active_tab == 'situation-room' %} active{% endif %}" data-tab="situation-room">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
       <span data-i18n="nav.sitroom">Sit Room</span>
     </button>
@@ -26,7 +26,7 @@
     </div>
 
     <!-- Home -->
-    <button class="tab" data-tab="services">
+    <button class="tab{% if active_tab == 'services' %} active{% endif %}" data-tab="services">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
       <span data-i18n="nav.dashboard">Home</span>
     </button>
@@ -37,7 +37,7 @@
     </div>
 
     <!-- Readiness -->
-    <button class="tab" data-tab="readiness">
+    <button class="tab{% if active_tab == 'readiness' %} active{% endif %}" data-tab="readiness">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
       <span data-i18n="dashboard.status">Readiness</span>
     </button>
@@ -48,7 +48,7 @@
     </div>
 
     <!-- Preparedness -->
-    <button class="tab" data-tab="preparedness">
+    <button class="tab{% if active_tab == 'preparedness' %} active{% endif %}" data-tab="preparedness">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
       <span data-i18n="nav.inventory">Preparedness</span>
       <span id="badge-preparedness" class="tab-badge is-hidden"></span>
@@ -61,14 +61,14 @@
       <a class="sidebar-sub-item" href="#tab-preparedness" data-tab-target="preparedness" data-prep-sub="guides">Reference &amp; Planning</a>
     </div>
     <!-- Maps -->
-    <button class="tab" data-tab="maps">
+    <button class="tab{% if active_tab == 'maps' %} active{% endif %}" data-tab="maps">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg></span>
       <span data-i18n="nav.maps">Maps</span>
       <span id="badge-maps" class="tab-badge green is-hidden"></span>
     </button>
 
     <!-- Tools -->
-    <button class="tab" data-tab="tools">
+    <button class="tab{% if active_tab == 'tools' %} active{% endif %}" data-tab="tools">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
       <span data-i18n="nav.tools">Tools</span>
     </button>
@@ -78,7 +78,7 @@
       <span class="sidebar-group-copy">Reference material, media, and your local working memory.</span>
     </div>
     <!-- Library -->
-    <button class="tab" data-tab="kiwix-library">
+    <button class="tab{% if active_tab == 'kiwix-library' %} active{% endif %}" data-tab="kiwix-library">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
       <span data-i18n="nav.skills">Library</span>
     </button>
@@ -89,13 +89,13 @@
     </div>
 
     <!-- Notes -->
-    <button class="tab" data-tab="notes">
+    <button class="tab{% if active_tab == 'notes' %} active{% endif %}" data-tab="notes">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
       <span data-i18n="nav.notes">Notes</span>
     </button>
 
     <!-- Media -->
-    <button class="tab" data-tab="media">
+    <button class="tab{% if active_tab == 'media' %} active{% endif %}" data-tab="media">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>
       <span data-i18n="nav.incidents">Media</span>
       <span id="badge-media" class="tab-badge green is-hidden"></span>
@@ -113,7 +113,7 @@
       <span class="sidebar-group-copy">Context-aware help, drafting, and operational copiloting.</span>
     </div>
     <!-- AI Assistant -->
-    <button class="tab" data-tab="ai-chat">
+    <button class="tab{% if active_tab == 'ai-chat' %} active{% endif %}" data-tab="ai-chat">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
       <span data-i18n="nav.comms">Copilot</span>
       <span id="badge-ai-chat" class="tab-badge is-hidden"></span>
@@ -124,12 +124,12 @@
       <span class="sidebar-group-copy">Tune the workspace, verify health, and manage the platform.</span>
     </div>
     <!-- Diagnostics -->
-    <button class="tab" data-tab="benchmark">
+    <button class="tab{% if active_tab == 'benchmark' %} active{% endif %}" data-tab="benchmark">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg></span>
       <span data-i18n="dashboard.overview">Diagnostics</span>
     </button>
     <!-- Settings -->
-    <button class="tab" data-tab="settings">
+    <button class="tab{% if active_tab == 'settings' %} active{% endif %}" data-tab="settings">
       <span class="tab-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
       <span data-i18n="nav.settings">Settings</span>
     </button>
@@ -141,12 +141,36 @@
       <a class="sidebar-sub-item" href="#backup-restore-panel" data-tab-target="settings" data-scroll-target="backup-restore-panel">Backups</a>
     </div>
   </div>
+  <div class="sidebar-context-hub" id="sidebar-context-hub" aria-label="Quick return contexts">
+    <div class="sidebar-context-head">
+      <div class="sidebar-context-copy">
+        <span class="sidebar-context-kicker">Quick Return</span>
+        <span class="sidebar-context-text">Keep your active desk and pinned contexts within reach from any workspace.</span>
+      </div>
+      <button class="btn btn-sm btn-ghost sidebar-context-home-btn" type="button" data-tab-target="services" data-scroll-target="home-continue-panel">Home Shelf</button>
+    </div>
+    <div class="sidebar-context-section">
+      <span class="sidebar-context-label">Current</span>
+      <div id="sidebar-context-current" class="sidebar-context-current">
+        <div class="sidebar-empty-state">Your current desk will appear here once you start moving through the workspace.</div>
+      </div>
+    </div>
+    <div class="sidebar-context-section">
+      <span class="sidebar-context-label">Pinned</span>
+      <div id="sidebar-context-pinned" class="sidebar-context-list">
+        <div class="sidebar-empty-state">Pin contexts from Home to keep them parked here.</div>
+      </div>
+    </div>
+  </div>
   <div class="sidebar-footer" role="contentinfo">
     <div class="sidebar-footer-meta">
       <div class="sidebar-footer-actions">
         <button class="btn btn-sm btn-ghost shell-icon-btn shell-alert-btn" data-shell-action="toggle-alert-bar" title="Situation Alerts" aria-label="Situation Alerts" id="alert-bell-btn">
           <span aria-hidden="true" class="shell-alert-icon">&#9888;</span>
           <span id="alert-badge" class="shell-alert-badge is-hidden" aria-live="polite"></span>
+        </button>
+        <button class="btn btn-sm btn-ghost shell-icon-btn shell-command-btn" data-shell-action="toggle-command-palette" title="Command Palette (Ctrl+K)" aria-label="Open command palette">
+          <span aria-hidden="true" class="shell-command-icon">&#8984;</span>
         </button>
         <button class="btn btn-sm btn-ghost shell-icon-btn" data-help="" title="Help & Guide" aria-label="Help and Guide">?</button>
         <a id="update-banner" class="shell-update-banner is-hidden" href="#">Update</a>
@@ -334,5 +358,48 @@
   <span class="status-strip-spacer"></span>
   <span id="ss-time" class="status-strip-time"></span>
 </div>
+
+<div id="workspace-context-bar" class="workspace-context-bar">
+  <div class="workspace-context-copy">
+    <div class="workspace-context-topline">
+      <span id="workspace-context-group" class="workspace-context-group">Briefing</span>
+      <span id="workspace-context-detail" class="workspace-context-detail">Situation Room · Topline</span>
+      <button id="workspace-context-previous-btn" type="button" class="workspace-context-previous-btn" data-workspace-context-action="resume-previous" hidden>Back to Previous Context</button>
+    </div>
+    <div id="workspace-context-state" class="workspace-context-state"></div>
+    <div id="workspace-context-title" class="workspace-context-title">Situation Room</div>
+    <div id="workspace-context-summary" class="workspace-context-summary">Global briefing, map, watchlists, and analyst posture.</div>
+  </div>
+  <div class="workspace-context-actions">
+    <div class="workspace-context-actions-copy">
+      <span class="workspace-context-actions-kicker">Suggested Next Moves</span>
+      <span class="workspace-context-actions-text">Keep moving from the desk you are already in instead of re-scanning the whole workspace.</span>
+    </div>
+    <div id="workspace-context-quick-actions" class="workspace-context-quick-actions"></div>
+    <div class="workspace-context-meta-actions">
+      <button id="workspace-context-guide-btn" type="button" class="btn btn-sm btn-ghost" data-workspace-context-action="open-guide" aria-controls="workspace-inspector" aria-expanded="false">Workspace Guide</button>
+      <button id="workspace-context-launch-btn" type="button" class="btn btn-sm" data-workspace-context-action="set-launch">Set Launch Context</button>
+      <button id="workspace-context-pin-btn" type="button" class="btn btn-sm btn-primary" data-workspace-context-action="toggle-pin">Pin Current Context</button>
+      <button type="button" class="btn btn-sm" data-tab-target="services" data-scroll-target="home-continue-panel">Open Home Shelf</button>
+      <button type="button" class="btn btn-sm btn-ghost" data-shell-action="toggle-command-palette">Command Palette</button>
+    </div>
+  </div>
+</div>
+
+<aside id="workspace-inspector" class="workspace-inspector" aria-labelledby="workspace-inspector-title" hidden>
+  <div class="workspace-inspector-head">
+    <div class="workspace-inspector-copy">
+      <span id="workspace-inspector-kicker" class="workspace-inspector-kicker">Workspace Guide</span>
+      <h3 id="workspace-inspector-title" class="workspace-inspector-title">Use this desk with less guesswork.</h3>
+      <div id="workspace-inspector-meta" class="workspace-inspector-meta">Docked guidance that stays visible while you keep working.</div>
+      <p id="workspace-inspector-summary" class="workspace-inspector-summary">Open a workspace guide to understand what this surface is best for, what to do first, and which next moves are worth taking.</p>
+    </div>
+    <div class="workspace-inspector-head-actions">
+      <button type="button" class="btn btn-sm btn-ghost workspace-inspector-close-btn" data-workspace-guide-action="close" aria-label="Close workspace guide">Close</button>
+    </div>
+  </div>
+  <div id="workspace-inspector-body" class="workspace-inspector-body"></div>
+  <div id="workspace-inspector-actions" class="workspace-inspector-actions"></div>
+</aside>
 
 <div class="container">

@@ -1,7 +1,9 @@
 """Service management routes (install, start, stop, restart, uninstall)."""
 
 import os
+import sys
 import time
+import platform
 import threading
 import logging
 
@@ -17,6 +19,12 @@ from web.state import _installing, _installing_lock, _update_state
 import web.state as _state
 
 log = logging.getLogger('nomad.web')
+
+SVC_FRIENDLY = {
+    'ollama': 'AI Chat', 'kiwix': 'Offline Encyclopedia', 'cyberchef': 'Data Toolkit',
+    'kolibri': 'Education Platform', 'qdrant': 'Document Search', 'stirling': 'PDF Tools',
+    'flatnotes': 'Notes App',
+}
 
 SERVICE_MODULES = {
     'ollama': ollama,

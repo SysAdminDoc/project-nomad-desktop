@@ -237,6 +237,23 @@
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
+[role="button"]:focus-visible,
+[tabindex]:focus-visible,
+summary:focus-visible,
+.theme-btn:focus-visible,
+.mode-btn:focus-visible,
+.note-template-item:focus-visible,
+.command-palette-item:focus-visible,
+.command-palette-input:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.shortcuts-dialog :focus-visible,
+.command-palette-dialog :focus-visible {
+  scroll-margin-top: 24px;
+}
 
 /* === Battery Saver Mode === */
 .battery-saver *, .battery-saver *::before, .battery-saver *::after {

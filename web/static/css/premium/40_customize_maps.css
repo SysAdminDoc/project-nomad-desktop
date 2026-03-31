@@ -449,10 +449,9 @@
   background: var(--surface2);
   color: var(--text);
   font-size: 12px;
-  outline: none;
 }
 
-.map-waypoint-input:focus {
+.map-waypoint-input:focus-visible {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-dim);
 }
@@ -811,7 +810,6 @@
   padding: 5px 10px;
   border-radius: 6px;
   font-size: 11px;
-  outline: none;
 }
 
 #map-bookmarks-list,
