@@ -2,8 +2,11 @@
 // Critical: load immediately
 loadServices();
 loadReadiness();
-// Situation Room — initialize on startup since it's the default landing tab
-requestAnimationFrame(() => { initSituationRoom(); });
+// Situation Room is heavy; only boot it on routes where it is actually active.
+const _startupWorkspaceTab = window.NOMAD_ACTIVE_TAB || document.querySelector('.tab.active')?.dataset.tab || '';
+if (_startupWorkspaceTab === 'situation-room') {
+  requestAnimationFrame(() => { initSituationRoom(); });
+}
 // Defer non-critical by 500ms to avoid 11 concurrent fetches on startup
 setTimeout(() => { loadWidgetConfig().then(() => startLiveDashPolling()); loadSuggestedActions(); loadNeedsOverview(); loadGettingStarted(); loadCmdDashboard(); loadServiceQuickLinks(); loadCmdChecklists(); }, 500);
 setTimeout(() => { loadActivity(); loadContentSummary(); updateStatusStrip(); updateTabBadges(); }, 1000);
@@ -563,6 +566,8 @@ const _forageData = {
        {cat:'Nuts (stored)',items:['Acorns','Hickory','Walnut (from storage)']}],
 };
 function showForageMonth(m) {
+  const outputEl = document.getElementById('forage-output');
+  if (!outputEl) return;
   document.querySelectorAll('[id^="forage-btn-"]').forEach(b => {
     const isActive = b.id === `forage-btn-${m}`;
     b.className = isActive ? 'btn btn-sm btn-primary' : 'btn btn-sm';
@@ -570,7 +575,7 @@ function showForageMonth(m) {
   });
   const months = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
   const data = _forageData[m] || [];
-  document.getElementById('forage-output').innerHTML = data.map(group =>
+  outputEl.innerHTML = data.map(group =>
     `<div class="prep-reference-forage-card">
       <div class="prep-reference-forage-title">${group.cat}</div>
       ${group.items.map(i => `<div class="prep-reference-forage-item">• ${i}</div>`).join('')}
@@ -2147,11 +2152,14 @@ function calcBurnArea() {
 
 // --- IV Drip Rate ---
 function calcIVDrip() {
-  const vol = parseFloat(document.getElementById('iv-vol').value) || 1000;
-  const time = parseFloat(document.getElementById('iv-time').value) || 60;
-  const drops = parseInt(document.getElementById('iv-drops').value) || 20;
+  const volInput = document.getElementById('iv-vol');
+  const timeInput = document.getElementById('iv-time');
+  const dropsInput = document.getElementById('iv-drops');
   const el = document.getElementById('iv-result');
-  if (!el) return;
+  if (!volInput || !timeInput || !dropsInput || !el) return;
+  const vol = parseFloat(volInput.value) || 1000;
+  const time = parseFloat(timeInput.value) || 60;
+  const drops = parseInt(dropsInput.value) || 20;
   const dropsPerMin = (vol * drops / time).toFixed(1);
   const mlPerHr = (vol / (time / 60)).toFixed(1);
   el.innerHTML = `<div class="utility-summary-result utility-summary-grid">
@@ -3023,24 +3031,31 @@ function calcVitals() {
 }
 
 (function initCalcDefaults() {
+  const safeInit = (label, fn) => {
+    try {
+      fn();
+    } catch (error) {
+      console.warn(`Skipping ${label} defaults:`, error);
+    }
+  };
   // Render KI with default 1 adult
   setTimeout(() => {
-    renderKIPersons();
-    calcIVDrip();
-    calcBurnArea();
-    calcDeadReckoning();
-    calcNVIS();
-    calcWeightDose();
-    renderShelterLayers();
-    calcCropCalories();
-    calcHypothermia();
-    calcORT();
-    calcAbxInventory();
-    calcRadDose();
-    calcWaterNeeds();
-    calcGenerator();
-    calcDehydration();
-    calcVitals();
+    safeInit('KI persons', renderKIPersons);
+    safeInit('IV drip', calcIVDrip);
+    safeInit('Burn area', calcBurnArea);
+    safeInit('Dead reckoning', calcDeadReckoning);
+    safeInit('NVIS', calcNVIS);
+    safeInit('Weight-based dosing', calcWeightDose);
+    safeInit('Shelter layers', renderShelterLayers);
+    safeInit('Crop calories', calcCropCalories);
+    safeInit('Hypothermia', calcHypothermia);
+    safeInit('ORT', calcORT);
+    safeInit('Antibiotic inventory', calcAbxInventory);
+    safeInit('Radiation dose', calcRadDose);
+    safeInit('Water needs', calcWaterNeeds);
+    safeInit('Generator sizing', calcGenerator);
+    safeInit('Dehydration', calcDehydration);
+    safeInit('Vitals', calcVitals);
   }, 500);
 })();
 

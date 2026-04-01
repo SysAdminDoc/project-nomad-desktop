@@ -55,7 +55,11 @@ function humanizeWorkspaceSlug(value) {
 }
 
 function getPreparednessResumeMeta(sub) {
-  if (typeof getPrepWorkspaceMeta === 'function') return getPrepWorkspaceMeta(sub);
+  try {
+    if (typeof getPrepWorkspaceMeta === 'function') return getPrepWorkspaceMeta(sub);
+  } catch (error) {
+    // Preparedness metadata may still be initializing later in the shared bundle.
+  }
   return {
     id: sub,
     laneLabel: 'Preparedness',
@@ -2206,11 +2210,12 @@ async function loadReadiness() {
 
 /* ─── Activity Feed ─── */
 async function loadActivity() {
+  const el = document.getElementById('activity-feed');
+  if (!el) return;
   try {
     const filter = document.getElementById('activity-filter')?.value || '';
     const url = filter ? `/api/activity?limit=30&filter=${encodeURIComponent(filter)}` : '/api/activity?limit=30';
     const items = await (await fetch(url)).json();
-    const el = document.getElementById('activity-feed');
     if (!items.length) { el.innerHTML = '<span class="text-muted">No activity yet.</span>'; return; }
     el.innerHTML = items.map(a => {
       const t = new Date(a.created_at);
@@ -2226,7 +2231,7 @@ async function loadActivity() {
       </div>`;
     }).join('');
   } catch(e) {
-    document.getElementById('activity-feed').innerHTML = '<span class="text-muted">Activity unavailable</span>';
+    el.innerHTML = '<span class="text-muted">Activity unavailable</span>';
   }
 }
 

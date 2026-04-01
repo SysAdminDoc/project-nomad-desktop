@@ -664,7 +664,7 @@ async function importVisionItems() {
 
 /* ─── Barcode / UPC Scanner ─── */
 let _barcodeDetector = null;
-let _barcodeStream = null;
+let _inventoryBarcodeStream = null;
 let _recentScans = [];
 let _barcodeScanLoop = null;
 
@@ -734,10 +734,10 @@ function openBarcodeScanner() {
 
 async function startBarcodeCamera() {
   try {
-    _barcodeStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment', width: {ideal: 1280}, height: {ideal: 720}}});
+    _inventoryBarcodeStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment', width: {ideal: 1280}, height: {ideal: 720}}});
     const video = document.getElementById('barcode-video');
     if (!video) { stopBarcodeCamera(); return; }
-    video.srcObject = _barcodeStream;
+    video.srcObject = _inventoryBarcodeStream;
     const statusEl = document.getElementById('barcode-camera-status');
     if (statusEl) statusEl.textContent = 'Scanning... point camera at barcode';
     const stopBtn = document.getElementById('barcode-stop-cam-btn');
@@ -748,7 +748,7 @@ async function startBarcodeCamera() {
     _barcodeDetector = new BarcodeDetector({formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128']});
 
     function scanFrame() {
-      if (!_barcodeStream) return;
+      if (!_inventoryBarcodeStream) return;
       if (_barcodeScanLoop) cancelAnimationFrame(_barcodeScanLoop);
       _barcodeDetector.detect(video).then(function(barcodes) {
         if (barcodes.length > 0) {
@@ -777,9 +777,9 @@ async function startBarcodeCamera() {
 
 function stopBarcodeCamera() {
   if (_barcodeScanLoop) { cancelAnimationFrame(_barcodeScanLoop); _barcodeScanLoop = null; }
-  if (_barcodeStream) {
-    _barcodeStream.getTracks().forEach(function(t) { t.stop(); });
-    _barcodeStream = null;
+  if (_inventoryBarcodeStream) {
+    _inventoryBarcodeStream.getTracks().forEach(function(t) { t.stop(); });
+    _inventoryBarcodeStream = null;
   }
   _barcodeDetector = null;
   var video = document.getElementById('barcode-video');
