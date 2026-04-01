@@ -9,6 +9,7 @@ import subprocess
 import signal
 import time
 import threading
+import socket
 import requests
 import zipfile
 import shutil
@@ -27,18 +28,18 @@ _lock = threading.Lock()
 
 # Service dependency graph: service -> list of services it requires
 DEPENDENCIES = {
-    'qdrant': [],
     'ollama': [],
     'kiwix': [],
     'cyberchef': [],
     'kolibri': [],
+    'qdrant': ['ollama'],      # Qdrant needs Ollama for embeddings
     'stirling': [],
+    'flatnotes': [],
 }
 
 # Reverse: which services depend on this one (for ordered shutdown)
 DEPENDENTS = {
-    'ollama': ['qdrant'],  # If ollama stops, qdrant's embeddings won't work but it can stay up
-    'qdrant': [],
+    'ollama': ['qdrant'],      # Stopping Ollama affects Qdrant
 }
 
 # Restart policy: max restart attempts within a window
@@ -98,17 +99,15 @@ def download_file(url: str, dest: str, service_id: str = '') -> str:
 
         resp = requests.get(url, stream=True, timeout=30, headers=headers)
 
-        # If server doesn't support resume (no 206), start fresh
-        if partial_size > 0 and resp.status_code != 206:
-            partial_size = 0
-
         if resp.status_code == 416:
-            # Range not satisfiable — file already complete
             _download_progress[service_id] = {
                 'percent': 100, 'status': 'complete', 'error': None,
                 'speed': '', 'downloaded': partial_size, 'total': partial_size,
             }
             return dest
+
+        if partial_size > 0 and resp.status_code != 206:
+            partial_size = 0
 
         resp.raise_for_status()
 
@@ -356,6 +355,46 @@ def get_shutdown_order() -> list[str]:
     return order
 
 
+# ─── Resource Monitoring ──────────────────────────────────────────
+
+
+def get_service_resources(service_id):
+    """Get CPU and memory usage for a running service."""
+    try:
+        import psutil
+    except ImportError:
+        return {}
+    with _lock:
+        entry = _processes.get(service_id)
+    if not entry:
+        return None
+    pid = entry.get('pid') if isinstance(entry, dict) else (entry.pid if hasattr(entry, 'pid') else None)
+    if not pid:
+        return None
+    try:
+        proc = psutil.Process(pid)
+        mem = proc.memory_info()
+        return {
+            'pid': pid,
+            'cpu_percent': proc.cpu_percent(interval=0.1),
+            'memory_mb': round(mem.rss / (1024 * 1024), 1),
+            'memory_rss': mem.rss,
+            'num_threads': proc.num_threads(),
+        }
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return None
+
+
+def warn_dependents(service_id):
+    """Return list of running services that depend on this service."""
+    deps = DEPENDENTS.get(service_id, [])
+    affected = []
+    for dep_id in deps:
+        if is_running(dep_id):
+            affected.append(dep_id)
+    return affected
+
+
 # ─── Utilities ─────────────────────────────────────────────────────────
 
 def register_process(service_id: str, proc: subprocess.Popen):
@@ -379,7 +418,6 @@ def get_download_progress(service_id: str) -> dict:
 
 def check_port(port: int) -> bool:
     """Check if a port is responding."""
-    import socket
     try:
         with socket.create_connection(('127.0.0.1', port), timeout=2):
             return True

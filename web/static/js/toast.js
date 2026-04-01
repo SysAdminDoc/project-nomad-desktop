@@ -13,6 +13,10 @@ function toast(msg, type='info') {
   el.setAttribute('aria-live', 'polite');
   el.innerHTML = `<span class="toast-icon">${_toastIcons[type]||_toastIcons.info}</span>${escapeHtml(msg)}`;
   document.body.appendChild(el);
+  if (_toastStack.length >= 5) {
+    const oldest = _toastStack.shift();
+    oldest.remove();
+  }
   _toastStack.push(el);
   _toastStack.forEach((t, i) => { t.style.bottom = (20 + i * 52) + 'px'; });
   requestAnimationFrame(() => el.classList.add('show'));

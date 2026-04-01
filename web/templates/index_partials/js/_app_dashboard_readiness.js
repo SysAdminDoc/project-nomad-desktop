@@ -688,6 +688,7 @@ function startLiveDashPolling() {
   if (_liveDashTimer) clearInterval(_liveDashTimer);
   loadLiveDashboard();
   _liveDashTimer = setInterval(() => {
+    if (!document.getElementById('dash-workspace')?.classList.contains('active')) return;
     if (!document.hidden) loadLiveDashboard();
   }, 30000);
 }
@@ -738,7 +739,7 @@ async function loadCmdDashboard() {
     if (crit.critical_burn.length) critHtml += `<div class="cmd-dashboard-note-line text-danger">Running low: ${crit.critical_burn.map(i => `${i.name} (${i.days_left}d)`).join(', ')}</div>`;
     if (crit.expiring_items.length) critHtml += `<div class="cmd-dashboard-note-line text-orange">Expiring: ${crit.expiring_items.map(i => `${i.name} (${i.expiration})`).join(', ')}</div>`;
     if (critHtml) el.innerHTML += `<div class="cmd-dashboard-note">${critHtml}</div>`;
-  } catch(e) {}
+  } catch(e) { console.warn('loadCmdDashboard failed:', e); }
 }
 
 /* ─── Readiness Score ─── */
@@ -746,16 +747,19 @@ async function loadReadinessScore() {
   try {
     const d = await (await fetch('/api/readiness-score')).json();
       const gradeColors = {A:'var(--green)',B:'var(--green)',C:'var(--warning)',D:'var(--orange)',F:'var(--red)'};
-    document.getElementById('rs-grade').textContent = d.grade;
-    document.getElementById('rs-grade').style.color = gradeColors[d.grade] || 'var(--text)';
-    document.getElementById('rs-total').textContent = `${d.total}/100`;
+    const gradeEl = document.getElementById('rs-grade');
+    const totalEl = document.getElementById('rs-total');
     const fill = document.getElementById('rs-bar-fill');
+    const cats = document.getElementById('rs-categories');
+    if (!gradeEl || !totalEl || !fill || !cats) return;
+    gradeEl.textContent = d.grade;
+    gradeEl.style.color = gradeColors[d.grade] || 'var(--text)';
+    totalEl.textContent = `${d.total}/100`;
     fill.style.width = `${d.total}%`;
     fill.style.background = d.total >= 80 ? 'var(--green)' : d.total >= 50 ? 'var(--orange)' : 'var(--red)';
     const catLabels = {water:'Water',food:'Food',medical:'Medical',security:'Security',comms:'Communications',shelter:'Power & Land',planning:'Plans & Knowledge'};
     const catMax = {water:20,food:20,medical:15,security:10,comms:10,shelter:10,planning:15};
     const catLinks = {water:'inventory',food:'inventory',medical:'medical',security:'security',comms:'contacts',shelter:'power',planning:'checklists'};
-    const cats = document.getElementById('rs-categories');
     cats.innerHTML = Object.entries(d.categories).map(([k, v]) => {
       const pct = Math.round(v.score / catMax[k] * 100);
       const color = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--orange)' : 'var(--red)';
@@ -934,7 +938,7 @@ async function viewVaultEntry(id) {
 async function editVaultEntry(id) { await viewVaultEntry(id); }
 
 function deleteVaultEntry(id, btn) {
-  if (!btn) { btn = event.target; }
+  if (!btn) return;
   if (!btn.dataset.confirm) {
     btn.dataset.confirm = '1';
     btn.textContent = 'Confirm?';
@@ -1052,7 +1056,7 @@ async function loadPressureGraph() {
   ctx.lineWidth = 2;
   ctx.beginPath();
   readings.forEach((r, i) => {
-    const x = 40 + (i / (readings.length - 1)) * (dw - 50);
+    const x = readings.length <= 1 ? (dw / 2) : 40 + (i / (readings.length - 1)) * (dw - 50);
     const y = 10 + ((maxP - r.pressure_hpa) / rangeP) * (dh - 30);
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   });
@@ -1061,7 +1065,7 @@ async function loadPressureGraph() {
   // Dots
   ctx.fillStyle = accentColor;
   readings.forEach((r, i) => {
-    const x = 40 + (i / (readings.length - 1)) * (dw - 50);
+    const x = readings.length <= 1 ? (dw / 2) : 40 + (i / (readings.length - 1)) * (dw - 50);
     const y = 10 + ((maxP - r.pressure_hpa) / rangeP) * (dh - 30);
     ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fill();
   });
@@ -1093,9 +1097,9 @@ async function loadWeatherRules() {
     const rules = await (await fetch('/api/weather/action-rules')).json();
     // Seed defaults if empty
     if (rules.length === 0) {
-      for (const def of _wxRuleDefaults) {
-        await fetch('/api/weather/action-rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) });
-      }
+      await Promise.all(_wxRuleDefaults.map(def =>
+        fetch('/api/weather/action-rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) })
+      ));
       return loadWeatherRules();
     }
     if (!rules.length) { el.innerHTML = '<div class="text-muted">No weather action rules defined.</div>'; return; }
@@ -1184,7 +1188,7 @@ let _signalSchedule = [];
 
 function loadSignalSchedule() {
   const saved = localStorage.getItem('nomad-signal-schedule');
-  _signalSchedule = saved ? JSON.parse(saved) : [];
+  try { _signalSchedule = saved ? JSON.parse(saved) : []; } catch(e) { _signalSchedule = []; }
   renderSignalSchedule();
 }
 
@@ -1285,13 +1289,16 @@ function startCompass() {
     errEl.textContent = 'Device orientation not supported on this device';
   }
 }
+let _compassHandler = null;
 function _attachCompassListener() {
   _compassActive = true;
   document.getElementById('compass-start-btn').textContent = 'Compass Active';
   document.getElementById('compass-start-btn').disabled = true;
-  document.getElementById('compass-error').textContent = '';
+  const compassErrEl = document.getElementById('compass-error');
+  if (compassErrEl) compassErrEl.textContent = '';
 
-  window.addEventListener('deviceorientation', (e) => {
+  if (_compassHandler) window.removeEventListener('deviceorientation', _compassHandler);
+  _compassHandler = function(e) {
     // Use webkitCompassHeading on iOS, or derive from alpha on Android
     let heading = e.webkitCompassHeading ?? (e.alpha != null ? (360 - e.alpha) % 360 : null);
     let pitch = e.beta != null ? Math.round(e.beta) : null;
@@ -1299,19 +1306,25 @@ function _attachCompassListener() {
 
     if (heading != null) {
       heading = Math.round(heading);
-      document.getElementById('compass-heading').textContent = heading + '\u00B0';
-      document.getElementById('compass-needle').style.transform = `rotate(${heading}deg)`;
+      const headingEl = document.getElementById('compass-heading');
+      if (headingEl) headingEl.textContent = heading + '\u00B0';
+      const needleEl = document.getElementById('compass-needle');
+      if (needleEl) needleEl.style.transform = `rotate(${heading}deg)`;
       const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-      document.getElementById('compass-cardinal').textContent = dirs[Math.round(heading / 22.5) % 16];
+      const cardinalEl = document.getElementById('compass-cardinal');
+      if (cardinalEl) cardinalEl.textContent = dirs[Math.round(heading / 22.5) % 16];
     }
-    if (pitch != null) document.getElementById('inclinometer-pitch').textContent = pitch + '\u00B0';
-    if (roll != null) document.getElementById('inclinometer-roll').textContent = roll + '\u00B0';
-  }, true);
+    if (pitch != null) { const el = document.getElementById('inclinometer-pitch'); if (el) el.textContent = pitch + '\u00B0'; }
+    if (roll != null) { const el = document.getElementById('inclinometer-roll'); if (el) el.textContent = roll + '\u00B0'; }
+  };
+  window.addEventListener('deviceorientation', _compassHandler, true);
 
   // Fallback: if no events fire in 3 seconds, show message
   setTimeout(() => {
-    if (document.getElementById('compass-heading').textContent === '---\u00B0') {
-      document.getElementById('compass-error').textContent = 'No sensor data received. Sensors may not be available on this device.';
+    const chkEl = document.getElementById('compass-heading');
+    if (chkEl && chkEl.textContent === '---\u00B0') {
+      const ceEl = document.getElementById('compass-error');
+      if (ceEl) ceEl.textContent = 'No sensor data received. Sensors may not be available on this device.';
     }
   }, 3000);
 }
@@ -1358,9 +1371,12 @@ function appendMeshLogEntry(message, tone = 'system') {
   log.scrollTop = log.scrollHeight;
 }
 
+let _meshReader = null;
 async function readMeshSerial() {
   if (!_meshPort || !_meshPort.readable) return;
+  if (_meshReader) { try { _meshReader.cancel(); } catch(e) {} }
   const reader = _meshPort.readable.getReader();
+  _meshReader = reader;
   const decoder = new TextDecoder();
   try {
     while (true) {
@@ -1745,6 +1761,7 @@ function finishGardenDraw() {
 }
 
 /* ─── Barcode Scanner ─── */
+let _barcodeStream = null;
 async function startBarcodeScanner() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}});
@@ -1762,6 +1779,7 @@ async function startBarcodeScanner() {
             const code = barcodes[0].rawValue;
             document.getElementById('barcode-result').innerHTML = `<div class="scan-result-title">Scanned: ${escapeHtml(code)}</div><div class="scan-results-actions"><button type="button" class="btn btn-sm btn-primary" data-shell-action="barcode-to-inventory" data-barcode-code="${escapeAttr(code)}">Add to Inventory</button></div>`;
             toast(`Barcode: ${code}`, 'success');
+            return;
           }
         } catch(e) {}
         if (_barcodeStream) requestAnimationFrame(scanLoop);
@@ -1780,7 +1798,7 @@ function stopBarcodeScanner() {
 
 function barcodeToInventory(code) {
   stopBarcodeScanner();
-  document.querySelector('[data-tab="preparedness"]').click();
+  document.querySelector('[data-tab="preparedness"]')?.click();
   setTimeout(() => { switchPrepSub('inventory'); showInvForm(); document.getElementById('inv-barcode').value = code; }, 300);
 }
 

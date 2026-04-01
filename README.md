@@ -1,7 +1,7 @@
 <div align="center">
 <img src="nomad-mark.png" width="140" height="140"/>
 
-# NOMAD Field Desk
+# NOMAD Field Desk v1.0.0
 
 ### Your Personal Intelligence & Preparedness Command Center
 
@@ -72,7 +72,7 @@ Generate a complete **operations binder, laminated wallet cards, signal operatin
 ## Get Started
 
 ### Windows
-Download **NOMADFieldDesk.exe** from [Releases](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest) and double-click. No install needed -runs from USB, desktop, anywhere.
+Download **NOMADFieldDesk-Windows.exe** (portable) or **NOMAD-Setup.exe** (installer) from [Releases](https://github.com/SysAdminDoc/project-nomad-desktop/releases/latest) and double-click. No install needed -runs from USB, desktop, anywhere.
 
 ### From source
 ```bash

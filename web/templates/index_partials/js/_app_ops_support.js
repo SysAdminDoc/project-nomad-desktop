@@ -1275,22 +1275,22 @@ function toggleQuickActions() {
 }
 function quickLogIncident() {
   toggleQuickActions();
-  document.querySelector('[data-tab="preparedness"]').click();
+  document.querySelector('[data-tab="preparedness"]')?.click();
   setTimeout(() => switchPrepSub('incidents'), 200);
 }
 function quickAddInventory() {
   toggleQuickActions();
-  document.querySelector('[data-tab="preparedness"]').click();
+  document.querySelector('[data-tab="preparedness"]')?.click();
   setTimeout(() => { switchPrepSub('inventory'); showInvForm(); }, 200);
 }
 function quickWeatherObs() {
   toggleQuickActions();
-  document.querySelector('[data-tab="preparedness"]').click();
+  document.querySelector('[data-tab="preparedness"]')?.click();
   setTimeout(() => switchPrepSub('weather'), 200);
 }
 function quickNewNote() {
   toggleQuickActions();
-  document.querySelector('[data-tab="notes"]').click();
+  document.querySelector('[data-tab="notes"]')?.click();
   setTimeout(createNote, 200);
 }
 
@@ -1300,7 +1300,7 @@ function generatePassword() {
   const arr = new Uint32Array(20);
   crypto.getRandomValues(arr);
   const pw = Array.from(arr).map(n => chars[n % chars.length]).join('');
-  navigator.clipboard.writeText(pw).then(() => toast('Password copied to clipboard: ' + pw.slice(0,8) + '...', 'success'));
+  navigator.clipboard.writeText(pw).then(() => toast('Password copied to clipboard: ' + pw.slice(0,8) + '...', 'success')).catch(()=>{});
   // Also put it in the vault content if form is open
   const content = document.getElementById('vault-content');
   if (content && document.getElementById('vault-form').style.display !== 'none') {
@@ -1379,10 +1379,10 @@ document.addEventListener('keydown', (e) => {
   if (e.altKey) {
       const shortcuts = {'1':'services','2':'readiness','3':'preparedness','4':'ai-chat','5':'kiwix-library','6':'maps','7':'notes','8':'media','9':'settings'};
     const tab = shortcuts[e.key];
-    if (tab) { e.preventDefault(); document.querySelector(`[data-tab="${tab}"]`).click(); }
+    if (tab) { e.preventDefault(); document.querySelector(`[data-tab="${tab}"]`)?.click(); }
     if (e.key === 't') { e.preventDefault(); toggleTimerPanel(); }
     if (e.key === 'c') { e.preventDefault(); toggleLanChat(); }
-    if (e.key === 'n') { e.preventDefault(); document.querySelector('[data-tab="notes"]').click(); setTimeout(createNote, 200); }
+    if (e.key === 'n') { e.preventDefault(); document.querySelector('[data-tab="notes"]')?.click(); setTimeout(createNote, 200); }
   }
   if (e.key === '?' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)) {
     toggleShortcutsHelp();
@@ -1515,7 +1515,7 @@ async function loadCameras() {
     el.innerHTML = cameras.map(c => {
       let feedHtml = '';
       if (c.stream_type === 'mjpeg') {
-        feedHtml = `<img id="cam-feed-${c.id}" class="prep-camera-feed" src="${escapeAttr(c.url)}" onerror="this.style.background='#1a1a1a';this.alt='Camera offline';" alt="Live feed">`;
+        feedHtml = `<img id="cam-feed-${c.id}" class="prep-camera-feed" src="${escapeAttr(c.url)}" onerror="this.style.background='var(--surface-solid)';this.alt='Camera offline';" alt="Live feed">`;
       } else if (c.stream_type === 'snapshot') {
         feedHtml = `<img id="cam-feed-${c.id}" class="prep-camera-feed" src="${escapeAttr(c.url)}?t=${Date.now()}" onerror="this.alt='Camera offline';" alt="Snapshot">`;
       } else {
@@ -2882,12 +2882,11 @@ async function addPatientFromContacts() {
   try {
     const contacts = await (await fetch('/api/contacts')).json();
     if (!contacts.length) { toast('No contacts found. Add contacts first.', 'warning'); return; }
-    for (const c of contacts) {
-      // Skip if already a patient with same name
-      if (_patients.some(p => p.name === c.name)) continue;
-      await fetch('/api/patients', {method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({name: c.name, contact_id: c.id, blood_type: c.blood_type || '', notes: c.medical_notes || ''})});
-    }
+    const newContacts = contacts.filter(c => !_patients.some(p => p.name === c.name));
+    await Promise.all(newContacts.map(c =>
+      fetch('/api/patients', {method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name: c.name, contact_id: c.id, blood_type: c.blood_type || '', notes: c.medical_notes || ''})})
+    ));
     toast('Contacts imported as patients', 'success');
     loadPatients();
   } catch(e) { toast('Import failed', 'error'); }
@@ -4287,7 +4286,7 @@ function guideAskAI() {
   const node = _currentGuide.nodes[_currentNode];
   const context = node.type === 'result' ? node.text : node.text;
   const msg = `I'm using the "${_currentGuide.title}" guide and I'm at this step: "${context.slice(0, 200)}..."\n\nGive me more detail and practical advice for this specific situation.`;
-  document.querySelector('[data-tab="ai-chat"]').click();
+  document.querySelector('[data-tab="ai-chat"]')?.click();
   setTimeout(() => {
     document.getElementById('chat-input').value = msg;
     sendChat();
@@ -4366,7 +4365,7 @@ sendNotification('NOMAD Alert', newest.title);
           <div class="alert-msg">${escapeHtml(a.message)}</div>
         </div>
         <button type="button" class="alert-dismiss alert-dismiss-link" data-shell-action="snooze-alert" data-alert-id="${a.id}" title="Snooze 1hr">snooze</button>
-        <button type="button" class="alert-dismiss" data-shell-action="dismiss-alert" data-alert-id="${a.id}" title="Dismiss">x</button>
+        <button type="button" class="alert-dismiss" data-shell-action="dismiss-alert" data-alert-id="${a.id}" title="Dismiss" aria-label="Dismiss alert">x</button>
       </div>
     `).join('');
     // Append predictive alerts
@@ -4451,14 +4450,14 @@ function renderGS(steps) {
   `).join('');
 }
 function gsGoAIModel() {
-  document.querySelector('[data-tab="ai-chat"]').click();
+  document.querySelector('[data-tab="ai-chat"]')?.click();
   setTimeout(() => toggleModelPicker(), 300);
 }
 function gsGoLibrary() {
-  document.querySelector('[data-tab="kiwix-library"]').click();
+  document.querySelector('[data-tab="kiwix-library"]')?.click();
 }
 function gsGoGuides() {
-  document.querySelector('[data-tab="preparedness"]').click();
+  document.querySelector('[data-tab="preparedness"]')?.click();
   setTimeout(() => switchPrepSub('guides'), 300);
 }
 function dismissGettingStarted() {

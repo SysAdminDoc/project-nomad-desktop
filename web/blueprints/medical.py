@@ -3,10 +3,11 @@
 import json
 import os
 import time
+from datetime import datetime, timedelta
 
 from flask import Blueprint, request, jsonify, Response
 
-from db import get_db, log_activity
+from db import db_session, log_activity
 from config import get_data_dir
 from web.print_templates import render_print_document
 
@@ -325,28 +326,35 @@ DRUG_INTERACTIONS = [
 DOSAGE_GUIDE = [
     {'drug': 'Ibuprofen', 'class': 'NSAID', 'adult_dose': '200-400mg every 4-6h', 'adult_max': '1200mg/day OTC, 3200mg/day Rx',
      'pedi_dose': '10mg/kg every 6-8h', 'pedi_max': '40mg/kg/day', 'min_age': 6, 'min_weight_kg': 5,
-     'contraindications': ['aspirin allergy', 'NSAID allergy', 'ibuprofen'], 'notes': 'Take with food. Avoid if kidney disease, GI bleed history, or 3rd trimester pregnancy.'},
+     'contraindications': ['aspirin allergy', 'NSAID allergy', 'ibuprofen'], 'notes': 'Take with food. Avoid if kidney disease, GI bleed history, or 3rd trimester pregnancy.',
+     'interval_hours': 6},
     {'drug': 'Acetaminophen', 'class': 'Analgesic', 'adult_dose': '500-1000mg every 4-6h', 'adult_max': '3000mg/day (healthy), 2000mg/day (liver disease)',
      'pedi_dose': '15mg/kg every 4-6h', 'pedi_max': '75mg/kg/day, max 4000mg', 'min_age': 0, 'min_weight_kg': 3,
-     'contraindications': ['acetaminophen', 'tylenol'], 'notes': 'Do NOT exceed max dose \u2014 liver failure risk. Avoid with alcohol (>3 drinks/day).'},
+     'contraindications': ['acetaminophen', 'tylenol'], 'interval_hours': 6, 'notes': 'Do NOT exceed max dose \u2014 liver failure risk. Avoid with alcohol (>3 drinks/day).'},
     {'drug': 'Diphenhydramine', 'class': 'Antihistamine', 'adult_dose': '25-50mg every 4-6h', 'adult_max': '300mg/day',
      'pedi_dose': '1.25mg/kg every 6h', 'pedi_max': '5mg/kg/day, max 300mg', 'min_age': 2, 'min_weight_kg': 10,
-     'contraindications': ['diphenhydramine', 'benadryl'], 'notes': 'Causes drowsiness. Do not operate machinery. Avoid in elderly (fall risk).'},
+     'contraindications': ['diphenhydramine', 'benadryl'], 'notes': 'Causes drowsiness. Do not operate machinery. Avoid in elderly (fall risk).',
+     'interval_hours': 6},
     {'drug': 'Amoxicillin', 'class': 'Antibiotic (Penicillin)', 'adult_dose': '500mg every 8h or 875mg every 12h', 'adult_max': '3000mg/day',
      'pedi_dose': '25mg/kg/day divided every 8h', 'pedi_max': '90mg/kg/day for severe', 'min_age': 0, 'min_weight_kg': 3,
-     'contraindications': ['penicillin allergy', 'amoxicillin', 'ampicillin'], 'notes': 'Complete full course. Cross-reacts with penicillin allergy (~10% with cephalosporins).'},
+     'contraindications': ['penicillin allergy', 'amoxicillin', 'ampicillin'], 'notes': 'Complete full course. Cross-reacts with penicillin allergy (~10% with cephalosporins).',
+     'interval_hours': 8},
     {'drug': 'Loperamide', 'class': 'Antidiarrheal', 'adult_dose': '4mg initial, then 2mg after each loose stool', 'adult_max': '16mg/day',
      'pedi_dose': 'Not recommended under 2 years; 2-5yo: 1mg 3x/day; 6-8yo: 2mg 2x/day; 9-11yo: 2mg 3x/day', 'pedi_max': '6mg/day (6-8yo), 8mg/day (9-11yo)', 'min_age': 2, 'min_weight_kg': 10,
-     'contraindications': ['loperamide', 'imodium'], 'notes': 'Do NOT use with bloody diarrhea or fever. Stay hydrated.'},
+     'contraindications': ['loperamide', 'imodium'], 'notes': 'Do NOT use with bloody diarrhea or fever. Stay hydrated.',
+     'interval_hours': 4},
     {'drug': 'Aspirin', 'class': 'NSAID/Antiplatelet', 'adult_dose': '325-650mg every 4h', 'adult_max': '4000mg/day',
      'pedi_dose': 'NOT recommended for children under 18 (Reye syndrome risk)', 'pedi_max': 'N/A', 'min_age': 18, 'min_weight_kg': 40,
-     'contraindications': ['aspirin', 'NSAID allergy', 'salicylate'], 'notes': 'Do NOT give to children/teens (Reye syndrome). Avoid with warfarin. Low-dose (81mg) for cardiac.'},
+     'contraindications': ['aspirin', 'NSAID allergy', 'salicylate'], 'notes': 'Do NOT give to children/teens (Reye syndrome). Avoid with warfarin. Low-dose (81mg) for cardiac.',
+     'interval_hours': 4},
     {'drug': 'Oral Rehydration Salts', 'class': 'Electrolyte', 'adult_dose': '200-400ml after each loose stool', 'adult_max': 'As needed',
      'pedi_dose': '50-100ml after each loose stool (under 2yo), 100-200ml (2-10yo)', 'pedi_max': 'As needed, maintain hydration', 'min_age': 0, 'min_weight_kg': 0,
-     'contraindications': [], 'notes': 'Mix per packet instructions. If vomiting, give small sips (5ml every 1-2 min).'},
+     'contraindications': [], 'notes': 'Mix per packet instructions. If vomiting, give small sips (5ml every 1-2 min).',
+     'interval_hours': None},
     {'drug': 'Prednisone', 'class': 'Corticosteroid', 'adult_dose': '5-60mg/day depending on condition', 'adult_max': '60mg/day short-term',
      'pedi_dose': '1-2mg/kg/day', 'pedi_max': '60mg/day', 'min_age': 0, 'min_weight_kg': 3,
-     'contraindications': ['prednisone'], 'notes': 'Taper if >7 days. Raises blood sugar. Weakens immune system. Take with food.'},
+     'contraindications': ['prednisone'], 'notes': 'Taper if >7 days. Raises blood sugar. Weakens immune system. Take with food.',
+     'interval_hours': 24},
 ]
 
 # ─── TCCC Protocol ───────────────────────────────────────────────────
@@ -364,12 +372,16 @@ TCCC_MARCH = [
 
 @medical_bp.route('/api/patients')
 def api_patients_list():
-    db = get_db()
-    rows = db.execute('SELECT * FROM patients ORDER BY name').fetchall()
-    db.close()
-    return jsonify([{**dict(r), 'allergies': json.loads(r['allergies'] or '[]'),
-                     'medications': json.loads(r['medications'] or '[]'),
-                     'conditions': json.loads(r['conditions'] or '[]')} for r in rows])
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM patients ORDER BY name LIMIT ? OFFSET ?', (limit, offset)).fetchall()
+    return jsonify([{**dict(r), 'allergies': _parse_json_list(r['allergies']),
+                     'medications': _parse_json_list(r['medications']),
+                     'conditions': _parse_json_list(r['conditions'])} for r in rows])
 
 
 @medical_bp.route('/api/patients', methods=['POST'])
@@ -377,44 +389,52 @@ def api_patients_create():
     data = request.get_json() or {}
     if not data.get('name'):
         return jsonify({'error': 'Name required'}), 400
-    db = get_db()
-    cur = db.execute(
-        'INSERT INTO patients (contact_id, name, age, weight_kg, sex, blood_type, allergies, medications, conditions, notes) VALUES (?,?,?,?,?,?,?,?,?,?)',
-        (data.get('contact_id'), data['name'], data.get('age'), data.get('weight_kg'),
-         data.get('sex', ''), data.get('blood_type', ''),
-         json.dumps(data.get('allergies', [])), json.dumps(data.get('medications', [])),
-         json.dumps(data.get('conditions', [])), data.get('notes', '')))
-    db.commit()
-    pid = cur.lastrowid
-    db.close()
+    with db_session() as db:
+        cur = db.execute(
+            'INSERT INTO patients (contact_id, name, age, weight_kg, sex, blood_type, allergies, medications, conditions, notes) VALUES (?,?,?,?,?,?,?,?,?,?)',
+            (data.get('contact_id'), data['name'], data.get('age'), data.get('weight_kg'),
+             data.get('sex', ''), data.get('blood_type', ''),
+             json.dumps(data.get('allergies', [])), json.dumps(data.get('medications', [])),
+             json.dumps(data.get('conditions', [])), data.get('notes', '')))
+        db.commit()
+        pid = cur.lastrowid
     return jsonify({'id': pid, 'status': 'created'}), 201
 
 
 @medical_bp.route('/api/patients/<int:pid>', methods=['PUT'])
 def api_patients_update(pid):
     data = request.get_json() or {}
-    db = get_db()
-    db.execute(
-        'UPDATE patients SET name=?, age=?, weight_kg=?, sex=?, blood_type=?, allergies=?, medications=?, conditions=?, notes=?, contact_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-        (data.get('name', ''), data.get('age'), data.get('weight_kg'),
-         data.get('sex', ''), data.get('blood_type', ''),
-         json.dumps(data.get('allergies', [])), json.dumps(data.get('medications', [])),
-         json.dumps(data.get('conditions', [])), data.get('notes', ''), data.get('contact_id'), pid))
-    db.commit()
-    db.close()
+    with db_session() as db:
+        existing = db.execute('SELECT * FROM patients WHERE id = ?', (pid,)).fetchone()
+        if not existing:
+            return jsonify({'error': 'Patient not found'}), 404
+        existing = dict(existing)
+        name = data.get('name', existing['name'])
+        age = data.get('age', existing['age'])
+        weight_kg = data.get('weight_kg', existing['weight_kg'])
+        sex = data.get('sex', existing['sex'])
+        blood_type = data.get('blood_type', existing['blood_type'])
+        allergies = json.dumps(data.get('allergies', json.loads(existing['allergies'] or '[]')))
+        medications = json.dumps(data.get('medications', json.loads(existing['medications'] or '[]')))
+        conditions = json.dumps(data.get('conditions', json.loads(existing['conditions'] or '[]')))
+        notes_val = data.get('notes', existing['notes'])
+        contact_id = data.get('contact_id', existing['contact_id'])
+        db.execute(
+            'UPDATE patients SET name=?, age=?, weight_kg=?, sex=?, blood_type=?, allergies=?, medications=?, conditions=?, notes=?, contact_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+            (name, age, weight_kg, sex, blood_type, allergies, medications, conditions, notes_val, contact_id, pid))
+        db.commit()
     return jsonify({'status': 'updated'})
 
 
 @medical_bp.route('/api/patients/<int:pid>', methods=['DELETE'])
 def api_patients_delete(pid):
-    db = get_db()
-    db.execute('DELETE FROM handoff_reports WHERE patient_id = ?', (pid,))
-    db.execute('DELETE FROM wound_photos WHERE wound_id IN (SELECT id FROM wound_log WHERE patient_id = ?)', (pid,))
-    db.execute('DELETE FROM vitals_log WHERE patient_id = ?', (pid,))
-    db.execute('DELETE FROM wound_log WHERE patient_id = ?', (pid,))
-    db.execute('DELETE FROM patients WHERE id = ?', (pid,))
-    db.commit()
-    db.close()
+    with db_session() as db:
+        db.execute('DELETE FROM handoff_reports WHERE patient_id = ?', (pid,))
+        db.execute('DELETE FROM wound_photos WHERE wound_id IN (SELECT id FROM wound_log WHERE patient_id = ?)', (pid,))
+        db.execute('DELETE FROM vitals_log WHERE patient_id = ?', (pid,))
+        db.execute('DELETE FROM wound_log WHERE patient_id = ?', (pid,))
+        db.execute('DELETE FROM patients WHERE id = ?', (pid,))
+        db.commit()
     return jsonify({'status': 'deleted'})
 
 
@@ -422,47 +442,106 @@ def api_patients_delete(pid):
 
 @medical_bp.route('/api/patients/<int:pid>/vitals')
 def api_vitals_list(pid):
-    db = get_db()
-    rows = db.execute('SELECT * FROM vitals_log WHERE patient_id = ? ORDER BY created_at DESC LIMIT 50', (pid,)).fetchall()
-    db.close()
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM vitals_log WHERE patient_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?', (pid, limit, offset)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 
 @medical_bp.route('/api/patients/<int:pid>/vitals', methods=['POST'])
 def api_vitals_create(pid):
     data = request.get_json() or {}
-    db = get_db()
-    db.execute(
-        'INSERT INTO vitals_log (patient_id, bp_systolic, bp_diastolic, pulse, resp_rate, temp_f, spo2, pain_level, gcs, notes) VALUES (?,?,?,?,?,?,?,?,?,?)',
-        (pid, data.get('bp_systolic'), data.get('bp_diastolic'), data.get('pulse'),
-         data.get('resp_rate'), data.get('temp_f'), data.get('spo2'),
-         data.get('pain_level'), data.get('gcs'), data.get('notes', '')))
-    db.commit()
-    db.close()
-    return jsonify({'status': 'logged'}), 201
+    with db_session() as db:
+        db.execute(
+            'INSERT INTO vitals_log (patient_id, bp_systolic, bp_diastolic, pulse, resp_rate, temp_f, spo2, pain_level, gcs, notes) VALUES (?,?,?,?,?,?,?,?,?,?)',
+            (pid, data.get('bp_systolic'), data.get('bp_diastolic'), data.get('pulse'),
+             data.get('resp_rate'), data.get('temp_f'), data.get('spo2'),
+             data.get('pain_level'), data.get('gcs'), data.get('notes', '')))
+        db.commit()
+
+    # Evaluate vitals against thresholds and build warnings
+    warnings = []
+    heart_rate = data.get('pulse')
+    if heart_rate is not None:
+        try:
+            hr = float(heart_rate)
+            if hr < 40 or hr > 150:
+                warnings.append({'vital': 'heart_rate', 'value': hr, 'severity': 'critical', 'message': f'Heart rate {hr} bpm is critically abnormal'})
+            elif hr < 50 or hr > 120:
+                warnings.append({'vital': 'heart_rate', 'value': hr, 'severity': 'concern', 'message': f'Heart rate {hr} bpm is outside normal range'})
+        except (ValueError, TypeError):
+            pass
+
+    bp_systolic = data.get('bp_systolic')
+    if bp_systolic is not None:
+        try:
+            sbp = float(bp_systolic)
+            if sbp < 80 or sbp > 200:
+                warnings.append({'vital': 'bp_systolic', 'value': sbp, 'severity': 'critical', 'message': f'Systolic BP {sbp} mmHg is critically abnormal'})
+            elif sbp < 90 or sbp > 160:
+                warnings.append({'vital': 'bp_systolic', 'value': sbp, 'severity': 'concern', 'message': f'Systolic BP {sbp} mmHg is outside normal range'})
+        except (ValueError, TypeError):
+            pass
+
+    spo2 = data.get('spo2')
+    if spo2 is not None:
+        try:
+            sp = float(spo2)
+            if sp < 85:
+                warnings.append({'vital': 'spo2', 'value': sp, 'severity': 'critical', 'message': f'SpO2 {sp}% is critically low'})
+            elif sp < 92:
+                warnings.append({'vital': 'spo2', 'value': sp, 'severity': 'concern', 'message': f'SpO2 {sp}% is below normal range'})
+        except (ValueError, TypeError):
+            pass
+
+    temp_f = data.get('temp_f')
+    if temp_f is not None:
+        try:
+            t = float(temp_f)
+            if t < 94 or t > 104:
+                warnings.append({'vital': 'temp_f', 'value': t, 'severity': 'critical', 'message': f'Temperature {t}\u00b0F is critically abnormal'})
+            elif t < 96 or t > 101:
+                warnings.append({'vital': 'temp_f', 'value': t, 'severity': 'concern', 'message': f'Temperature {t}\u00b0F is outside normal range'})
+        except (ValueError, TypeError):
+            pass
+
+    resp_rate = data.get('resp_rate')
+    if resp_rate is not None:
+        try:
+            rr = float(resp_rate)
+            if rr < 8 or rr > 35:
+                warnings.append({'vital': 'resp_rate', 'value': rr, 'severity': 'critical', 'message': f'Respiratory rate {rr}/min is critically abnormal'})
+            elif rr < 10 or rr > 25:
+                warnings.append({'vital': 'resp_rate', 'value': rr, 'severity': 'concern', 'message': f'Respiratory rate {rr}/min is outside normal range'})
+        except (ValueError, TypeError):
+            pass
+
+    return jsonify({'status': 'logged', 'warnings': warnings}), 201
 
 
 # ─── Wound CRUD + Photos ────────────────────────────────────────────
 
 @medical_bp.route('/api/patients/<int:pid>/wounds')
 def api_wounds_list(pid):
-    db = get_db()
-    rows = db.execute('SELECT * FROM wound_log WHERE patient_id = ? ORDER BY created_at DESC LIMIT 100', (pid,)).fetchall()
-    db.close()
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM wound_log WHERE patient_id = ? ORDER BY created_at DESC LIMIT 100', (pid,)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 
 @medical_bp.route('/api/patients/<int:pid>/wounds', methods=['POST'])
 def api_wounds_create(pid):
     data = request.get_json() or {}
-    db = get_db()
-    cur = db.execute(
-        'INSERT INTO wound_log (patient_id, location, wound_type, severity, description, treatment) VALUES (?,?,?,?,?,?)',
-        (pid, data.get('location', ''), data.get('wound_type', ''), data.get('severity', 'minor'),
-         data.get('description', ''), data.get('treatment', '')))
-    wid = cur.lastrowid
-    db.commit()
-    db.close()
+    with db_session() as db:
+        cur = db.execute(
+            'INSERT INTO wound_log (patient_id, location, wound_type, severity, description, treatment) VALUES (?,?,?,?,?,?)',
+            (pid, data.get('location', ''), data.get('wound_type', ''), data.get('severity', 'minor'),
+             data.get('description', ''), data.get('treatment', '')))
+        wid = cur.lastrowid
+        db.commit()
     return jsonify({'status': 'logged', 'id': wid}), 201
 
 
@@ -489,8 +568,7 @@ def api_wound_photo_upload(pid, wid):
     file.save(filepath)
 
     # Update wound record
-    db = get_db()
-    try:
+    with db_session() as db:
         # Append to existing photos (JSON array of paths)
         existing = db.execute('SELECT photo_path FROM wound_log WHERE id = ? AND patient_id = ?', (wid, pid)).fetchone()
         if not existing:
@@ -509,9 +587,6 @@ def api_wound_photo_upload(pid, wid):
         photos.append(safe_name)
         db.execute('UPDATE wound_log SET photo_path = ? WHERE id = ?', (json.dumps(photos), wid))
         db.commit()
-    finally:
-        db.close()
-
     return jsonify({'status': 'uploaded', 'filename': safe_name, 'photos': photos}), 201
 
 
@@ -531,8 +606,7 @@ def api_wound_photo_serve(filename):
 @medical_bp.route('/api/patients/<int:pid>/wounds/<int:wid>/photos')
 def api_wound_photos_list(pid, wid):
     """List photos for a wound record."""
-    db = get_db()
-    try:
+    with db_session() as db:
         row = db.execute('SELECT photo_path FROM wound_log WHERE id = ? AND patient_id = ?', (wid, pid)).fetchone()
         if not row:
             return jsonify({'error': 'Not found'}), 404
@@ -545,23 +619,17 @@ def api_wound_photos_list(pid, wid):
             except (ValueError, TypeError):
                 photos = [row['photo_path']] if row['photo_path'] else []
         return jsonify({'wound_id': wid, 'photos': photos})
-    finally:
-        db.close()
-
-
 # ─── Patient Care Card ──────────────────────────────────────────────
 
 @medical_bp.route('/api/patients/<int:pid>/card')
 def api_patient_card(pid):
     """Generate a printable patient care card."""
-    db = get_db()
-    patient = db.execute('SELECT * FROM patients WHERE id = ?', (pid,)).fetchone()
-    if not patient:
-        db.close()
-        return jsonify({'error': 'Not found'}), 404
-    vitals = [dict(r) for r in db.execute('SELECT * FROM vitals_log WHERE patient_id = ? ORDER BY created_at DESC LIMIT 20', (pid,)).fetchall()]
-    wounds = [dict(r) for r in db.execute('SELECT * FROM wound_log WHERE patient_id = ? ORDER BY created_at DESC LIMIT 100', (pid,)).fetchall()]
-    db.close()
+    with db_session() as db:
+        patient = db.execute('SELECT * FROM patients WHERE id = ?', (pid,)).fetchone()
+        if not patient:
+            return jsonify({'error': 'Not found'}), 404
+        vitals = [dict(r) for r in db.execute('SELECT * FROM vitals_log WHERE patient_id = ? ORDER BY created_at DESC LIMIT 20', (pid,)).fetchall()]
+        wounds = [dict(r) for r in db.execute('SELECT * FROM wound_log WHERE patient_id = ? ORDER BY created_at DESC LIMIT 100', (pid,)).fetchall()]
     html = _render_patient_card_html(dict(patient), vitals, wounds, pid)
     return Response(html, mimetype='text/html')
 
@@ -575,15 +643,21 @@ def api_drug_interactions():
     meds = [m.strip().lower() for m in data.get('medications', []) if m.strip()]
     if len(meds) < 2:
         return jsonify([])
+    meds_set = set(meds)
     found = []
+    seen = set()
     for drug1, drug2, severity, detail in DRUG_INTERACTIONS:
         d1, d2 = drug1.lower(), drug2.lower()
-        for m in meds:
-            for n in meds:
-                if m != n and ((d1 in m or m in d1) and (d2 in n or n in d2)):
-                    entry = {'drug1': drug1, 'drug2': drug2, 'severity': severity, 'detail': detail}
-                    if entry not in found:
-                        found.append(entry)
+        # Check if any med matches d1 and a *different* med matches d2
+        match_d1 = [m for m in meds_set if d1 in m or m in d1]
+        match_d2 = [m for m in meds_set if d2 in m or m in d2]
+        if match_d1 and match_d2:
+            # Ensure at least one pair involves two distinct meds
+            if set(match_d1) != set(match_d2) or len(match_d1) > 1:
+                key = (drug1, drug2, severity)
+                if key not in seen:
+                    seen.add(key)
+                    found.append({'drug1': drug1, 'drug2': drug2, 'severity': severity, 'detail': detail})
     return jsonify(found)
 
 
@@ -613,8 +687,7 @@ def api_dosage_calculator():
 
     # Check patient allergies if patient_id provided
     if patient_id:
-        db = get_db()
-        try:
+        with db_session() as db:
             patient = db.execute('SELECT allergies, medications, age, weight_kg, name FROM patients WHERE id = ?', (patient_id,)).fetchone()
             if patient:
                 # Use patient age/weight if not explicitly provided
@@ -650,9 +723,6 @@ def api_dosage_calculator():
                             warnings.append({'type': f'INTERACTION_{sev.upper()}', 'message': f'{drug["drug"]} + {med}: {detail}'})
                         elif (d2.lower() in drug_name.lower() or drug_name.lower() in d2.lower()) and (d1.lower() in med_lower or med_lower in d1.lower()):
                             warnings.append({'type': f'INTERACTION_{sev.upper()}', 'message': f'{drug["drug"]} + {med}: {detail}'})
-        finally:
-            db.close()
-
     # Age check
     if age is not None and age < drug['min_age']:
         warnings.append({'type': 'AGE_BLOCK', 'message': f'{drug["drug"]} is not recommended for patients under {drug["min_age"]} years old.'})
@@ -702,9 +772,8 @@ def api_dosage_drugs():
 @medical_bp.route('/api/medical/triage-board')
 def api_triage_board():
     """Returns all patients sorted by triage category for MCI management."""
-    db = get_db()
-    try:
-        patients = [dict(r) for r in db.execute('SELECT id, name, age, blood_type, triage_category, care_phase, allergies, conditions, medications FROM patients ORDER BY name').fetchall()]
+    with db_session() as db:
+        patients = [dict(r) for r in db.execute('SELECT id, name, age, blood_type, triage_category, care_phase, allergies, conditions, medications FROM patients ORDER BY name LIMIT 10000').fetchall()]
         # Group by triage category
         categories = {'immediate': [], 'delayed': [], 'minimal': [], 'expectant': [], 'unassigned': []}
         for p in patients:
@@ -718,24 +787,27 @@ def api_triage_board():
             'total': len(patients),
             'counts': {k: len(v) for k, v in categories.items()},
         })
-    finally:
-        db.close()
-
-
 @medical_bp.route('/api/medical/triage/<int:pid>', methods=['PUT'])
 def api_triage_update(pid):
     """Update a patient's triage category and care phase."""
     data = request.get_json() or {}
-    db = get_db()
-    try:
+    with db_session() as db:
         if 'triage_category' in data:
-            db.execute('UPDATE patients SET triage_category = ? WHERE id = ?', (data['triage_category'], pid))
+            # Fetch old category for history logging
+            old_row = db.execute('SELECT triage_category FROM patients WHERE id = ?', (pid,)).fetchone()
+            old_category = old_row['triage_category'] if old_row else ''
+            new_category = data['triage_category']
+            db.execute('UPDATE patients SET triage_category = ? WHERE id = ?', (new_category, pid))
+            # Log to triage_history
+            reason = data.get('reason', '')
+            changed_by = data.get('changed_by', '')
+            db.execute(
+                'INSERT INTO triage_history (patient_id, old_category, new_category, reason, changed_by) VALUES (?,?,?,?,?)',
+                (pid, old_category or '', new_category, reason, changed_by))
         if 'care_phase' in data:
             db.execute('UPDATE patients SET care_phase = ? WHERE id = ?', (data['care_phase'], pid))
         db.commit()
         return jsonify({'status': 'updated'})
-    finally:
-        db.close()
 
 
 # ─── SBAR Handoff Reports ───────────────────────────────────────────
@@ -743,8 +815,7 @@ def api_triage_update(pid):
 @medical_bp.route('/api/medical/handoff/<int:pid>', methods=['POST'])
 def api_medical_handoff(pid):
     """Generate an SBAR handoff report for a patient."""
-    db = get_db()
-    try:
+    with db_session() as db:
         patient = db.execute('SELECT * FROM patients WHERE id = ?', (pid,)).fetchone()
         if not patient:
             return jsonify({'error': 'Patient not found'}), 404
@@ -785,15 +856,10 @@ def api_medical_handoff(pid):
         rid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
 
         return jsonify({'status': 'created', 'id': rid, 'html': report_html})
-    finally:
-        db.close()
-
-
 @medical_bp.route('/api/medical/handoff/<int:rid>/print')
 def api_medical_handoff_print(rid):
-    db = get_db()
-    row = db.execute('SELECT report_html FROM handoff_reports WHERE id = ?', (rid,)).fetchone()
-    db.close()
+    with db_session() as db:
+        row = db.execute('SELECT report_html FROM handoff_reports WHERE id = ?', (rid,)).fetchone()
     if not row:
         return jsonify({'error': 'Report not found'}), 404
     return Response(row['report_html'], mimetype='text/html')
@@ -810,25 +876,19 @@ def api_tccc_protocol():
 def api_vitals_trend(patient_id):
     """Get vital signs history for trending chart."""
     limit = request.args.get('limit', 50, type=int)
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute(
             'SELECT bp_systolic, bp_diastolic, pulse, resp_rate, temp_f, spo2, pain_level, gcs, created_at FROM vitals_log WHERE patient_id = ? ORDER BY created_at DESC LIMIT ?',
             (patient_id, limit)
         ).fetchall()
         return jsonify(list(reversed([dict(r) for r in rows])))
-    finally:
-        db.close()
-
-
 # ─── Medication Expiry Cross-Reference ──────────────────────────────
 
 @medical_bp.route('/api/medical/expiring-meds')
 def api_expiring_meds():
     """Cross-reference medication inventory with expiry dates."""
     from datetime import datetime, timedelta
-    db = get_db()
-    try:
+    with db_session() as db:
         soon = (datetime.now() + timedelta(days=90)).strftime('%Y-%m-%d')
         rows = db.execute(
             "SELECT id, name, quantity, unit, expiration, category FROM inventory WHERE LOWER(category) IN ('medical', 'first aid', 'medicine', 'medications') AND expiration != '' AND expiration <= ? ORDER BY expiration ASC",
@@ -842,10 +902,6 @@ def api_expiring_meds():
             item['days_until'] = (datetime.strptime(r['expiration'], '%Y-%m-%d') - datetime.now()).days if r['expiration'] else None
             result.append(item)
         return jsonify(result)
-    finally:
-        db.close()
-
-
 # ─── Medical Reference ──────────────────────────────────────────────
 
 @medical_bp.route('/api/medical/reference')
@@ -1048,3 +1104,213 @@ def api_medical_reference_search():
                     'item': item,
                 })
     return jsonify(results)
+
+
+# ─── Medication Dose Scheduling & Tracking ─────────────────────────
+
+@medical_bp.route('/api/patients/<int:pid>/medication-log', methods=['GET'])
+def api_medication_log_list(pid):
+    """Return all medication log entries for patient, ordered by administered_at DESC."""
+    with db_session() as db:
+        rows = db.execute(
+            'SELECT * FROM medication_log WHERE patient_id = ? ORDER BY administered_at DESC',
+            (pid,)
+        ).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+
+@medical_bp.route('/api/patients/<int:pid>/medication-log', methods=['POST'])
+def api_medication_log_create(pid):
+    """Record a medication dose. Looks up drug in DOSAGE_GUIDE for interval to calculate next_dose_due."""
+    data = request.get_json() or {}
+    drug_name = data.get('drug_name', '').strip()
+    if not drug_name:
+        return jsonify({'error': 'drug_name is required'}), 400
+
+    dose = data.get('dose', '')
+    route = data.get('route', '')
+    administered_by = data.get('administered_by', '')
+    notes = data.get('notes', '')
+    now = datetime.utcnow()
+
+    # Look up interval from DOSAGE_GUIDE
+    next_dose_due = None
+    interval_hours = None
+    for d in DOSAGE_GUIDE:
+        if d['drug'].lower() == drug_name.lower():
+            interval_hours = d.get('interval_hours')
+            break
+    if interval_hours:
+        next_dose_due = (now + timedelta(hours=interval_hours)).strftime('%Y-%m-%d %H:%M:%S')
+
+    with db_session() as db:
+        cur = db.execute(
+            'INSERT INTO medication_log (patient_id, drug_name, dose, route, administered_by, notes, next_dose_due, administered_at) VALUES (?,?,?,?,?,?,?,?)',
+            (pid, drug_name, dose, route, administered_by, notes, next_dose_due,
+             now.strftime('%Y-%m-%d %H:%M:%S')))
+        db.commit()
+        entry_id = cur.lastrowid
+        return jsonify({
+            'id': entry_id,
+            'status': 'logged',
+            'drug_name': drug_name,
+            'dose': dose,
+            'route': route,
+            'administered_by': administered_by,
+            'administered_at': now.strftime('%Y-%m-%d %H:%M:%S'),
+            'next_dose_due': next_dose_due,
+            'interval_hours': interval_hours,
+        }), 201
+
+
+@medical_bp.route('/api/medical/overdue-doses', methods=['GET'])
+def api_overdue_doses():
+    """Query medication_log for entries where next_dose_due < now and no newer entry for same patient+drug."""
+    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    with db_session() as db:
+        rows = db.execute('''
+            SELECT ml.*, p.name AS patient_name, p.triage_category
+            FROM medication_log ml
+            JOIN patients p ON p.id = ml.patient_id
+            WHERE ml.next_dose_due IS NOT NULL
+              AND ml.next_dose_due < ?
+              AND ml.id = (
+                  SELECT ml2.id FROM medication_log ml2
+                  WHERE ml2.patient_id = ml.patient_id AND ml2.drug_name = ml.drug_name
+                  ORDER BY ml2.administered_at DESC LIMIT 1
+              )
+            ORDER BY ml.next_dose_due ASC
+        ''', (now,)).fetchall()
+
+        result = []
+        for r in rows:
+            entry = dict(r)
+            if entry.get('next_dose_due'):
+                try:
+                    due_dt = datetime.strptime(entry['next_dose_due'], '%Y-%m-%d %H:%M:%S')
+                    overdue_minutes = int((datetime.utcnow() - due_dt).total_seconds() / 60)
+                    entry['overdue_minutes'] = overdue_minutes
+                    entry['overdue_display'] = f'{overdue_minutes // 60}h {overdue_minutes % 60}m' if overdue_minutes >= 60 else f'{overdue_minutes}m'
+                except (ValueError, TypeError):
+                    entry['overdue_minutes'] = None
+                    entry['overdue_display'] = 'unknown'
+            result.append(entry)
+        return jsonify(result)
+
+
+# ─── Triage Reassessment Workflow ──────────────────────────────────
+
+@medical_bp.route('/api/patients/<int:pid>/triage-history', methods=['GET'])
+def api_triage_history(pid):
+    """Return all triage_history entries for patient."""
+    with db_session() as db:
+        rows = db.execute(
+            'SELECT * FROM triage_history WHERE patient_id = ? ORDER BY created_at DESC',
+            (pid,)
+        ).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+
+@medical_bp.route('/api/triage/reassessment-due', methods=['GET'])
+def api_triage_reassessment_due():
+    """Return patients overdue for triage reassessment based on their category."""
+    reassess_intervals = {
+        'immediate': 15,
+        'delayed': 60,
+        'minimal': 120,
+    }
+    now = datetime.utcnow()
+    with db_session() as db:
+        patients = db.execute(
+            "SELECT id, name, triage_category, age, blood_type FROM patients WHERE triage_category IN ('immediate', 'delayed', 'minimal')"
+        ).fetchall()
+
+        overdue = []
+        for p in patients:
+            patient = dict(p)
+            pid = patient['id']
+            category = patient['triage_category']
+            interval_min = reassess_intervals.get(category)
+            if not interval_min:
+                continue
+
+            # Check last triage_history entry first, then triage_events
+            last_assess = db.execute(
+                'SELECT created_at FROM triage_history WHERE patient_id = ? ORDER BY created_at DESC LIMIT 1',
+                (pid,)
+            ).fetchone()
+            if not last_assess:
+                last_assess = db.execute(
+                    'SELECT created_at FROM triage_events ORDER BY created_at DESC LIMIT 1'
+                ).fetchone()
+
+            if last_assess and last_assess['created_at']:
+                try:
+                    last_time = datetime.strptime(last_assess['created_at'], '%Y-%m-%d %H:%M:%S')
+                except (ValueError, TypeError):
+                    try:
+                        last_time = datetime.strptime(last_assess['created_at'][:19], '%Y-%m-%d %H:%M:%S')
+                    except (ValueError, TypeError):
+                        continue
+                deadline = last_time + timedelta(minutes=interval_min)
+                if now > deadline:
+                    overdue_min = int((now - deadline).total_seconds() / 60)
+                    patient['last_assessed'] = last_assess['created_at']
+                    patient['reassess_interval_min'] = interval_min
+                    patient['overdue_minutes'] = overdue_min
+                    patient['overdue_display'] = f'{overdue_min // 60}h {overdue_min % 60}m' if overdue_min >= 60 else f'{overdue_min}m'
+                    overdue.append(patient)
+
+        return jsonify(overdue)
+
+
+# ─── Wound Healing Timeline ───────────────────────────────────────
+
+@medical_bp.route('/api/patients/<int:pid>/wounds/<int:wid>/updates', methods=['GET'])
+def api_wound_updates_list(pid, wid):
+    """Return wound_updates for this wound."""
+    with db_session() as db:
+        rows = db.execute(
+            'SELECT * FROM wound_updates WHERE wound_id = ? AND patient_id = ? ORDER BY created_at DESC',
+            (wid, pid)
+        ).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+
+@medical_bp.route('/api/patients/<int:pid>/wounds/<int:wid>/updates', methods=['POST'])
+def api_wound_updates_create(pid, wid):
+    """Create a wound update entry. If status is 'closed', also updates the wound_log entry."""
+    data = request.get_json() or {}
+    status = data.get('status', '')
+    treatment = data.get('treatment', '')
+    size_cm = data.get('size_cm')
+    notes = data.get('notes', '')
+
+    with db_session() as db:
+        # Verify wound exists
+        wound = db.execute(
+            'SELECT id FROM wound_log WHERE id = ? AND patient_id = ?', (wid, pid)
+        ).fetchone()
+        if not wound:
+            return jsonify({'error': 'Wound not found'}), 404
+
+        cur = db.execute(
+            'INSERT INTO wound_updates (wound_id, patient_id, status, treatment, size_cm, notes) VALUES (?,?,?,?,?,?)',
+            (wid, pid, status, treatment, size_cm, notes))
+        update_id = cur.lastrowid
+
+        # If wound is closed, update the wound_log entry
+        if status == 'closed':
+            db.execute(
+                'UPDATE wound_log SET severity = ?, treatment = ? WHERE id = ? AND patient_id = ?',
+                ('closed', treatment or 'Wound closed', wid, pid))
+
+        db.commit()
+        return jsonify({
+            'id': update_id,
+            'status': 'logged',
+            'wound_id': wid,
+            'wound_status': status,
+            'treatment': treatment,
+            'size_cm': size_cm,
+        }), 201

@@ -112,6 +112,7 @@ def install(callback=None):
         except Exception as e:
             log.error(f'FlatNotes install failed: {e}')
             _download_progress[SERVICE_ID] = {'percent': 0, 'status': 'error', 'error': str(e)}
+            raise
 
     do_install()
 

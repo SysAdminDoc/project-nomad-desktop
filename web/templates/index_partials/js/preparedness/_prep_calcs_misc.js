@@ -114,7 +114,7 @@ function calcTravel() {
 }
 
 /* ─── Calorie Tracker ─── */
-let _calLog = JSON.parse(localStorage.getItem('nomad-cal-log') || '[]');
+let _calLog; try { _calLog = JSON.parse(localStorage.getItem('nomad-cal-log') || '[]'); } catch(e) { _calLog = []; }
 let _calLogDate = new Date().toISOString().slice(0,10);
 
 function addCalEntry() {

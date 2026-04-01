@@ -2,6 +2,7 @@
 /* Base vars duplicated in index.html inline <style> for FOUC prevention. Keep both in sync. */
 :root, [data-theme="nomad"] {
   color-scheme: light;
+  --bg-card: rgba(255,255,255,0.78);
   --bg: #ebe7de;
   --surface: rgba(255,255,255,0.62);
   --surface-solid: #f7f3ec;
@@ -12,7 +13,7 @@
   --border: rgba(50,38,24,0.10);
   --border-hover: rgba(108,78,38,0.24);
   --text: #17130f;
-  --text-dim: #615547;
+  --text-dim: #5a5548;
   --text-muted: #8c7e6a;
   --text-inverse: #ffffff;
   --accent: #8f6836;
@@ -31,8 +32,11 @@
   --info: #4f86d8;
   --info-dim: rgba(79,134,216,0.12);
   --purple: #7863d3;
+  --yellow: #b8a024;
   --radius: 16px;
   --radius-sm: 12px;
+  --radius-xs: 6px;
+  --radius-lg: 20px;
   --shadow: 0 18px 42px rgba(47,31,14,0.10);
   --shadow-sm: 0 6px 18px rgba(47,31,14,0.06);
   --shadow-lg: 0 28px 72px rgba(47,31,14,0.14);
@@ -58,6 +62,7 @@
 /* ─── Midnight ─────────────────────────────────────────────────────── */
 [data-theme="nightops"] {
   color-scheme: dark;
+  --bg-card: rgba(25,30,38,0.98);
   --bg: #0c1016;
   --surface: rgba(24,29,36,0.86);
   --surface-solid: #151a22;
@@ -68,7 +73,7 @@
   --border: rgba(255,255,255,0.08);
   --border-hover: rgba(216,178,111,0.28);
   --text: #edf2f7;
-  --text-dim: #a5b0bf;
+  --text-dim: #9e9eb8;
   --text-muted: #8e9aae;
   --text-inverse: #f7fbff;
   --accent: #d0a86d;
@@ -87,6 +92,7 @@
   --info: #8ab8ff;
   --info-dim: rgba(138,184,255,0.16);
   --purple: #8b78f2;
+  --yellow: #ddc160;
   --shadow: 0 20px 48px rgba(0,0,0,0.42);
   --shadow-sm: 0 8px 20px rgba(0,0,0,0.22);
   --shadow-lg: 0 36px 90px rgba(0,0,0,0.55);
@@ -111,6 +117,7 @@
 /* ─── Ember ────────────────────────────────────────────────────────── */
 [data-theme="redlight"] {
   color-scheme: dark;
+  --bg-card: rgba(32,20,20,0.98);
   --bg: #120d0d;
   --surface: rgba(29,18,18,0.86);
   --surface-solid: #1d1414;
@@ -121,7 +128,7 @@
   --border: rgba(255,255,255,0.07);
   --border-hover: rgba(223,133,92,0.28);
   --text: #f4e7e2;
-  --text-dim: #c39d92;
+  --text-dim: #b89898;
   --text-muted: #aa8b84;
   --text-inverse: #fff6f1;
   --accent: #df855c;
@@ -140,6 +147,7 @@
   --info: #f0a185;
   --info-dim: rgba(240,161,133,0.14);
   --purple: #b185ff;
+  --yellow: #f1c06a;
   --shadow: 0 22px 54px rgba(0,0,0,0.48);
   --shadow-sm: 0 9px 22px rgba(0,0,0,0.24);
   --shadow-lg: 0 38px 96px rgba(0,0,0,0.6);
@@ -164,6 +172,7 @@
 /* ─── Cobalt ───────────────────────────────────────────────────────── */
 [data-theme="cyber"] {
   color-scheme: dark;
+  --bg-card: rgba(21,29,42,0.98);
   --bg: #08101b;
   --surface: rgba(18,26,38,0.84);
   --surface-solid: #131c29;
@@ -174,7 +183,7 @@
   --border: rgba(255,255,255,0.075);
   --border-hover: rgba(108,163,255,0.28);
   --text: #edf4ff;
-  --text-dim: #9fb2d1;
+  --text-dim: #8eb8a0;
   --text-muted: #8ba2c4;
   --text-inverse: #f7fbff;
   --accent: #71a8ff;
@@ -193,6 +202,7 @@
   --info: #8ec5ff;
   --info-dim: rgba(142,197,255,0.16);
   --purple: #9d84ff;
+  --yellow: #e0c15a;
   --shadow: 0 22px 56px rgba(0,0,0,0.42);
   --shadow-sm: 0 8px 20px rgba(0,0,0,0.24);
   --shadow-lg: 0 38px 98px rgba(0,0,0,0.54);
@@ -216,6 +226,7 @@
 
 [data-theme="eink"] {
   color-scheme: light;
+  --bg-card: #ffffff;
   --bg: #ffffff;
   --surface: #ffffff;
   --surface-solid: #ffffff;
@@ -226,7 +237,7 @@
   --border: #999999;
   --border-hover: #666666;
   --text: #000000;
-  --text-dim: #333333;
+  --text-dim: #555555;
   --text-muted: #666666;
   --text-inverse: #ffffff;
   --accent: #000000;
@@ -245,6 +256,7 @@
   --info: #222222;
   --info-dim: rgba(0,0,0,0.08);
   --purple: #333333;
+  --yellow: #444444;
   --shadow: none;
   --shadow-sm: none;
   --shadow-lg: none;
@@ -264,6 +276,9 @@
   --overlay-scrim-strong: rgba(0,0,0,0.75);
   --thumb-surface: #d8d8d8;
   --topo-pattern: none;
+  --radius: 2px;
+  --radius-sm: 2px;
+  --font-data: 'Courier New', monospace;
 }
 
 [data-theme="eink"] * {
@@ -271,7 +286,15 @@
   transition: none !important;
   text-shadow: none !important;
   box-shadow: none !important;
+}
+[data-theme="eink"] *::before,
+[data-theme="eink"] *::after {
   background-image: none !important;
+}
+[data-theme="eink"] .btn-primary,
+[data-theme="eink"] .btn {
+  background: #000 !important;
+  color: #fff !important;
 }
 [data-theme="eink"] .card { border: 2px solid #000 !important; border-radius: 2px !important; }
 [data-theme="eink"] button, [data-theme="eink"] .btn { border: 1px solid #000 !important; border-radius: 2px !important; }
@@ -300,6 +323,14 @@
   --card-pad-sm: 12px;
   /* UI zoom factor (adjustable via Settings) */
   --ui-zoom: 1;
+  /* Spacing scale */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }

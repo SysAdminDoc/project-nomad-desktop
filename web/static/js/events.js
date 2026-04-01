@@ -37,7 +37,8 @@ const NomadEvents = {
         ['inventory_update', 'weather_update', 'alert', 'alert_check', 'task_update',
          'sync_update', 'backup_complete', 'power_update'].forEach(type => {
             this._source.addEventListener(type, (e) => {
-                const data = JSON.parse(e.data);
+                let data;
+                try { data = JSON.parse(e.data); } catch(err) { console.warn('[SSE] Bad JSON:', err); return; }
                 this._dispatch(type, data);
             });
         });

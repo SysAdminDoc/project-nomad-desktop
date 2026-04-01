@@ -20,6 +20,7 @@ const SVC = {
 let _servicesLoaded = false;
 async function loadServices() {
   const grid = document.getElementById('services-grid');
+  if (!grid) return;
   if (!_servicesLoaded) {
     grid.innerHTML = Array(6).fill('<div class="skeleton skeleton-card"></div>').join('');
   }
@@ -202,9 +203,17 @@ async function stopAllServices() {
 let _pollInt = null;
 let _lastServicesData = [];
 let _prevInstalling = new Set();
+let _pollCount = 0;
 function pollServices() {
   if (_pollInt) return;
+  _pollCount = 0;
   _pollInt = setInterval(async () => {
+    _pollCount++;
+    if (_pollCount > 1200) { // 30 min at 1.5s interval
+      clearInterval(_pollInt); _pollInt = null;
+      toast('Service install polling timed out after 30 minutes', 'warning');
+      return;
+    }
     await loadServices();
     const nowInstalling = new Set();
     const nowComplete = new Set();
@@ -277,9 +286,8 @@ function setChatReady(ready, reason) {
   _chatReady = ready;
   const btn = document.getElementById('send-btn');
   const input = document.getElementById('chat-input');
-  btn.disabled = !ready;
-  input.disabled = !ready;
-  input.placeholder = ready ? 'Type a message... (Enter to send, Shift+Enter for newline, drop files)' : (reason || 'AI service starting...');
+  if (btn) btn.disabled = !ready;
+  if (input) { input.disabled = !ready; input.placeholder = ready ? 'Type a message... (Enter to send, Shift+Enter for newline, drop files)' : (reason || 'AI service starting...'); }
   if (ready && _chatReadyPoll) { clearInterval(_chatReadyPoll); _chatReadyPoll = null; }
 }
 
@@ -302,9 +310,17 @@ function startChatReadyPoll() {
 /* managePullModel replaced by inline model picker */
 
 let _pullPoll = null;
+let _pullPollCount = 0;
 function pollPullProgress() {
   if (_pullPoll) return;
+  _pullPollCount = 0;
   _pullPoll = setInterval(async () => {
+    _pullPollCount++;
+    if (_pullPollCount > 1800) { // 30 min at 1s interval
+      clearInterval(_pullPoll); _pullPoll = null;
+      toast('Model pull polling timed out after 30 minutes', 'warning');
+      return;
+    }
     try {
     const p = await (await fetch('/api/ai/pull-progress')).json();
     const bar = document.getElementById('pull-progress-bar');
@@ -410,7 +426,10 @@ async function deleteAllConvos() {
     setTimeout(() => { btn.textContent = 'Delete All'; btn.style.background = ''; btn.style.color = ''; delete btn.dataset.confirm; }, 3000);
     return;
   }
-  await fetch('/api/conversations/all', {method:'DELETE'});
+  try {
+    const r = await fetch('/api/conversations/all', {method:'DELETE'});
+    if (!r.ok) { toast('Failed to delete conversations', 'error'); return; }
+  } catch(e) { toast('Failed to delete conversations', 'error'); return; }
   currentConvoId = null; chatMessages = []; allConvos = [];
   currentBranchId = null; parentConvoId = null; branchMsgIdx = null;
   renderChat(); renderConvoList();
@@ -470,9 +489,13 @@ async function sendChat() {
   document.getElementById('stop-btn').style.display = '';
 
   if (!currentConvoId) {
-    const c = await (await fetch('/api/conversations', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title: msg.slice(0,50), model})})).json();
-    currentConvoId = c.id;
-    await loadConversations();
+    try {
+      const resp = await fetch('/api/conversations', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title: msg.slice(0,50), model})});
+      if (!resp.ok) { toast('Failed to create conversation', 'error'); isSending = false; return; }
+      const c = await resp.json();
+      currentConvoId = c.id;
+      await loadConversations();
+    } catch(e) { toast('Failed to create conversation', 'error'); isSending = false; return; }
   }
 
   // Attach file context if present
@@ -485,6 +508,7 @@ async function sendChat() {
   chatMessages.push({role:'assistant', content:'', thinking: true, kb_used: kbEnabled});
   renderChat();
 
+  let _chatTimeout = null;
   try {
     const resp = await fetch('/api/ai/chat', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -496,6 +520,10 @@ async function sendChat() {
       throw new Error(err.error || `AI service error (${resp.status})`);
     }
     const reader = resp.body.getReader();
+    _chatTimeout = setTimeout(() => {
+        reader.cancel();
+        toast('Chat response timed out', 'warning');
+    }, 120000); // 2 min timeout
     const dec = new TextDecoder();
     let full = '';
     let streamBuf = '';
@@ -503,7 +531,7 @@ async function sendChat() {
     let lastMsgEl = null;
     while (true) {
       const {done, value} = await reader.read();
-      if (done) break;
+      if (done) { clearTimeout(_chatTimeout); break; }
       streamBuf += dec.decode(value, {stream: true});
       const lines = streamBuf.split('\n');
       streamBuf = lines.pop(); // keep incomplete last line in buffer
@@ -542,6 +570,7 @@ async function sendChat() {
     }
     renderChat();
   } catch(e) {
+    clearTimeout(_chatTimeout);
     if (e.name !== 'AbortError') {
       chatMessages[chatMessages.length-1].content = 'Could not reach the AI. Attempting to start the service automatically...';
       chatMessages[chatMessages.length-1].thinking = false;
@@ -576,7 +605,8 @@ function regenerateChat() {
   }
   if (chatMessages.length && chatMessages[chatMessages.length-1].role === 'user') {
     const lastUserMsg = chatMessages.pop();
-    document.getElementById('chat-input').value = lastUserMsg.content;
+    const originalContent = lastUserMsg.content.split('\n\n--- Attached File Content ---\n')[0];
+    document.getElementById('chat-input').value = originalContent;
     renderChat();
     sendChat();
   }
@@ -620,7 +650,7 @@ function formatRAGCitations(citations) {
     '</div></div>';
 }
 function viewKBDocument(docId) {
-  document.querySelector('[data-tab="kiwix-library"]').click();
+  document.querySelector('[data-tab="kiwix-library"]')?.click();
   setTimeout(() => {
     const section = document.getElementById('doc-library');
     if (section) section.scrollIntoView({behavior: 'smooth'});
@@ -802,7 +832,9 @@ function previewChatImage() {
   if (!input.files.length) { preview.style.display = 'none'; return; }
   preview.style.display = 'block';
   const file = input.files[0];
-  preview.innerHTML = '<div class="chat-image-preview-row"><img src="' + URL.createObjectURL(file) + '" class="chat-image-preview-thumb"> <span class="chat-image-preview-name">' + escapeHtml(file.name) + '</span> <span class="chat-image-preview-copy">Image will be sent with your next message using multimodal analysis.</span> <button class="btn btn-sm btn-ghost chat-image-preview-clear" type="button" data-chat-action="clear-chat-image">✕</button></div>';
+  if (window._chatImagePreviewUrl) URL.revokeObjectURL(window._chatImagePreviewUrl);
+  window._chatImagePreviewUrl = URL.createObjectURL(file);
+  preview.innerHTML = '<div class="chat-image-preview-row"><img src="' + window._chatImagePreviewUrl + '" class="chat-image-preview-thumb"> <span class="chat-image-preview-name">' + escapeHtml(file.name) + '</span> <span class="chat-image-preview-copy">Image will be sent with your next message using multimodal analysis.</span> <button class="btn btn-sm btn-ghost chat-image-preview-clear" type="button" data-chat-action="clear-chat-image" aria-label="Clear image">✕</button></div>';
 }
 
 function clearChatImage() {
@@ -940,10 +972,11 @@ function switchTier(ci, tier, btn) {
 
 async function downloadAllZimsByTier(tier) {
   try {
-    const r = await fetch('/api/kiwix/catalog'); if(!r.ok) throw new Error();
-    const catalog = _cachedCatalog || await r.json();
+    const [catalog, existing] = await Promise.all([
+      _cachedCatalog || fetch('/api/kiwix/catalog').then(r => { if(!r.ok) throw new Error(); return r.json(); }),
+      fetch('/api/kiwix/zims').then(r => r.json())
+    ]);
     _cachedCatalog = catalog;
-    const existing = await (await fetch('/api/kiwix/zims')).json();
     const existingNames = new Set(existing.map(z => z.filename));
     const toDownload = [];
     for (const cat of catalog) {
@@ -961,10 +994,10 @@ async function downloadAllZimsByTier(tier) {
     }
     if (!toDownload.length) { toast(`All ${tier} content packs are already downloaded!`, 'success'); return; }
     toast(`Starting ${toDownload.length} downloads (${tier} tier)...`, 'info');
-    for (const item of toDownload) {
-      _downloadingZims.add(item.filename);
-      await fetch('/api/kiwix/download-zim', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url: item.url, filename: item.filename})});
-    }
+    toDownload.forEach(item => _downloadingZims.add(item.filename));
+    await Promise.all(toDownload.map(item =>
+      fetch('/api/kiwix/download-zim', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url: item.url, filename: item.filename})})
+    ));
     renderFullCatalog(_cachedCatalog); // Update button states
     startZimQueuePoll();
   } catch(e) { toast('Failed to start bulk download', 'error'); }
