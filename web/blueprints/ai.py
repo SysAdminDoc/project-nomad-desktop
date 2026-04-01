@@ -5,11 +5,12 @@ import os
 import time
 import threading
 import logging
+from collections import defaultdict
 
 from flask import Blueprint, request, jsonify, Response, stream_with_context
 from werkzeug.utils import secure_filename
 
-from db import get_db, get_db_path, log_activity
+from db import db_session, get_db_path, log_activity
 from config import get_data_dir
 from services import ollama, qdrant
 from services.manager import format_size
@@ -21,6 +22,36 @@ import web.state as _state
 log = logging.getLogger('nomad.web')
 
 ai_bp = Blueprint('ai', __name__)
+
+# ─── Context Window Helpers ──────────────────────────────────────────
+
+def _estimate_tokens(text):
+    """Rough token estimate: ~4 chars per token."""
+    return len(text) // 4
+
+def _trim_messages_to_fit(messages, max_tokens=4096, system_tokens=0):
+    """Keep system message + most recent messages that fit within token budget."""
+    if not messages:
+        return messages
+    budget = max_tokens - system_tokens - 200  # Reserve 200 for response
+    result = []
+    total = 0
+    # Always keep the system message (first) and iterate from newest
+    for msg in reversed(messages):
+        msg_tokens = _estimate_tokens(msg.get('content', ''))
+        if total + msg_tokens > budget and result:
+            break
+        result.insert(0, msg)
+        total += msg_tokens
+    return result
+
+# ─── Copilot Session Memory ─────────────────────────────────────────
+
+# Intentionally in-memory only: copilot sessions are ephemeral and do not
+# need to survive restarts.  Memory is bounded (trimmed to last 5 entries
+# when exceeding 10) in the copilot endpoint handler.
+_copilot_sessions = defaultdict(list)  # session_id -> list of {q, a}
+_copilot_lock = threading.Lock()
 
 @ai_bp.route('/api/ai/models')
 def api_ai_models():
@@ -111,13 +142,15 @@ def _safe_json_list(val, default=None):
     except (json.JSONDecodeError, TypeError):
         return default
 
-def build_situation_context(db) -> list[str]:
+def build_situation_context(db, detail_level='full') -> list[str]:
     """Build rich situation context from DB for AI consumption.
+    detail_level: 'summary' for compact context (chat), 'full' for copilot queries.
     Returns a list of context section strings."""
     ctx_parts = []
+    limit = 10 if detail_level == 'summary' else 200
 
     # Inventory with burn rates
-    inv = db.execute('SELECT name, quantity, unit, category, daily_usage, min_quantity, expiration FROM inventory ORDER BY category, name LIMIT 200').fetchall()
+    inv = db.execute('SELECT name, quantity, unit, category, daily_usage, min_quantity, expiration FROM inventory ORDER BY category, name LIMIT ?', (limit,)).fetchall()
     if inv:
         inv_lines = []
         for r in inv:
@@ -133,7 +166,7 @@ def build_situation_context(db) -> list[str]:
         ctx_parts.append('INVENTORY:\n' + '\n'.join(inv_lines))
 
     # Contacts with skills and roles
-    contacts = db.execute('SELECT name, role, skills, phone, callsign, blood_type FROM contacts LIMIT 50').fetchall()
+    contacts = db.execute('SELECT name, role, skills, phone, callsign, blood_type FROM contacts LIMIT ?', (limit,)).fetchall()
     if contacts:
         c_lines = [f'{c["name"]} — {c["role"] or "unassigned"}' +
                    (f', skills: {c["skills"]}' if c.get('skills') else '') +
@@ -143,7 +176,7 @@ def build_situation_context(db) -> list[str]:
         ctx_parts.append('TEAM CONTACTS:\n' + '\n'.join(c_lines))
 
     # Patients with medical details
-    patients = db.execute('SELECT name, age, weight_kg, blood_type, allergies, conditions, medications FROM patients LIMIT 20').fetchall()
+    patients = db.execute('SELECT name, age, weight_kg, blood_type, allergies, conditions, medications FROM patients LIMIT ?', (limit,)).fetchall()
     if patients:
         p_lines = []
         for p in patients:
@@ -160,12 +193,12 @@ def build_situation_context(db) -> list[str]:
         ctx_parts.append('PATIENTS:\n' + '\n'.join(p_lines))
 
     # Fuel storage
-    fuel = db.execute('SELECT fuel_type, quantity, unit, location FROM fuel_storage LIMIT 100').fetchall()
+    fuel = db.execute('SELECT fuel_type, quantity, unit, location FROM fuel_storage LIMIT ?', (limit,)).fetchall()
     if fuel:
         ctx_parts.append('FUEL: ' + ', '.join(f'{f["fuel_type"]}: {f["quantity"]} {f["unit"]} at {f["location"]}' for f in fuel))
 
     # Ammo
-    ammo = db.execute('SELECT caliber, quantity, location FROM ammo_inventory LIMIT 100').fetchall()
+    ammo = db.execute('SELECT caliber, quantity, location FROM ammo_inventory LIMIT ?', (limit,)).fetchall()
     if ammo:
         ctx_parts.append('AMMO: ' + ', '.join(f'{a["caliber"]}: {a["quantity"]} rounds ({a["location"]})' for a in ammo))
 
@@ -199,11 +232,8 @@ def build_situation_context(db) -> list[str]:
 def get_ai_memory_text() -> str:
     """Load AI memory facts from settings, return formatted string or empty."""
     try:
-        mem_db = get_db()
-        try:
+        with db_session() as mem_db:
             mem_row = mem_db.execute("SELECT value FROM settings WHERE key = 'ai_memory'").fetchone()
-        finally:
-            mem_db.close()
         if mem_row and mem_row['value']:
             memories = json.loads(mem_row['value'])
             if memories:
@@ -225,74 +255,18 @@ def api_ai_chat():
     if not ollama.running():
         return jsonify({'error': 'Ollama is not running'}), 503
 
-    # Situation-aware context injection
+    # Situation-aware context injection (consolidated via build_situation_context)
     use_situation = data.get('situation_context', False)
     if use_situation:
-        db_ctx = None
         try:
-            db_ctx = get_db()
-            sit_parts = []
-            # Inventory summary
-            inv_rows = db_ctx.execute('SELECT category, SUM(quantity) as qty, COUNT(*) as cnt FROM inventory GROUP BY category').fetchall()
-            if inv_rows:
-                sit_parts.append('SUPPLY INVENTORY: ' + ', '.join(f'{r["category"]}: {r["cnt"]} items ({r["qty"]} total)' for r in inv_rows))
-            # Low stock
-            low = db_ctx.execute('SELECT name, quantity, unit, category FROM inventory WHERE quantity <= min_quantity AND min_quantity > 0 LIMIT 10').fetchall()
-            if low:
-                sit_parts.append('LOW STOCK ALERTS: ' + ', '.join(f'{r["name"]} ({r["quantity"]} {r["unit"]})' for r in low))
-            # Burn rate
-            burn = db_ctx.execute('SELECT name, quantity, daily_usage, category FROM inventory WHERE daily_usage > 0 LIMIT 10').fetchall()
-            if burn:
-                sit_parts.append('BURN RATES: ' + ', '.join(f'{r["name"]}: {round(r["quantity"]/max(r["daily_usage"],0.001),1)} days left' for r in burn))
-            # Contacts count
-            ct_count = db_ctx.execute('SELECT COUNT(*) as c FROM contacts').fetchone()['c']
-            if ct_count:
-                sit_parts.append(f'TEAM: {ct_count} contacts registered')
-            # Recent incidents
-            incidents = db_ctx.execute("SELECT severity, category, description FROM incidents WHERE created_at >= datetime('now', '-24 hours') ORDER BY created_at DESC LIMIT 5").fetchall()
-            if incidents:
-                sit_parts.append('RECENT INCIDENTS (24h): ' + ' | '.join(f'[{r["severity"]}] {r["category"]}: {r["description"][:60]}' for r in incidents))
-            # Situation board
-            settings_row = db_ctx.execute("SELECT value FROM settings WHERE key = 'sit_board'").fetchone()
-            if settings_row:
-                try:
-                    sit = json.loads(settings_row['value'] or '{}')
-                    sit_parts.append('SITUATION STATUS: ' + ', '.join(f'{k}: {v}' for k, v in sit.items()))
-                except (json.JSONDecodeError, TypeError): pass
-            # Weather
-            wx = db_ctx.execute('SELECT pressure_hpa, temp_f, created_at FROM weather_log WHERE pressure_hpa IS NOT NULL ORDER BY created_at DESC LIMIT 1').fetchone()
-            if wx:
-                sit_parts.append(f'WEATHER: {wx["pressure_hpa"]} hPa, {wx["temp_f"]}F (as of {wx["created_at"]})')
-            # Active alerts
-            alerts = db_ctx.execute('SELECT title, severity FROM alerts WHERE dismissed = 0 ORDER BY severity DESC LIMIT 5').fetchall()
-            if alerts:
-                sit_parts.append('ACTIVE ALERTS: ' + ' | '.join(f'[{a["severity"]}] {a["title"]}' for a in alerts))
-            # Power status
-            pwr = db_ctx.execute('SELECT battery_soc, solar_watts, load_watts FROM power_log ORDER BY created_at DESC LIMIT 1').fetchone()
-            if pwr:
-                sit_parts.append(f'POWER: Battery {pwr["battery_soc"] or "?"}%, Solar {pwr["solar_watts"] or 0}W, Load {pwr["load_watts"] or 0}W')
-            # Patients with conditions
-            patients = db_ctx.execute('SELECT name, allergies, conditions FROM patients LIMIT 5').fetchall()
-            if patients:
-                def _safe_json(val):
-                    try: return json.loads(val or '[]')
-                    except (json.JSONDecodeError, TypeError): return []
-                pt_str = ', '.join(f'{p["name"]} (allergies: {_safe_json(p["allergies"])}, conditions: {_safe_json(p["conditions"])})' for p in patients)
-                sit_parts.append(f'PATIENTS: {pt_str}')
-            # Garden/harvest
-            harvest_count = db_ctx.execute('SELECT COUNT(*) as c FROM harvest_log').fetchone()['c']
-            if harvest_count:
-                sit_parts.append(f'GARDEN: {harvest_count} harvests logged')
-            if sit_parts:
-                ctx = '\n'.join(sit_parts)
-                system_prompt = (system_prompt + '\n\n' if system_prompt else '') + \
-                    f'You have access to the user\'s current preparedness data. Use this to give specific, actionable advice based on their actual situation:\n\n--- Current Situation ---\n{ctx}\n--- End Situation ---'
+            with db_session() as db_ctx:
+                sit_parts = build_situation_context(db_ctx, detail_level='summary')
+                if sit_parts:
+                    ctx = '\n'.join(sit_parts)
+                    system_prompt = (system_prompt + '\n\n' if system_prompt else '') + \
+                        f'You have access to the user\'s current preparedness data. Use this to give specific, actionable advice based on their actual situation:\n\n--- Current Situation ---\n{ctx}\n--- End Situation ---'
         except Exception as e:
             log.warning(f'Situation context injection failed: {e}')
-        finally:
-            if db_ctx:
-                try: db_ctx.close()
-                except Exception: pass
 
     # RAG: inject knowledge base context if enabled, with source citations
     _rag_citations = []
@@ -333,11 +307,8 @@ def api_ai_chat():
 
     # AI Memory: inject persistent facts the user has stored
     try:
-        mem_db = get_db()
-        try:
+        with db_session() as mem_db:
             mem_row = mem_db.execute("SELECT value FROM settings WHERE key = 'ai_memory'").fetchone()
-        finally:
-            mem_db.close()
         if mem_row and mem_row['value']:
             memories = json.loads(mem_row['value'])
             if memories:
@@ -349,6 +320,10 @@ def api_ai_chat():
 
     if system_prompt:
         messages = [{'role': 'system', 'content': system_prompt}] + messages
+
+    # Trim messages to fit within context window
+    system_tokens = _estimate_tokens(system_prompt)
+    messages = _trim_messages_to_fit(messages, max_tokens=4096, system_tokens=system_tokens)
 
     def generate():
         try:
@@ -366,7 +341,7 @@ def api_ai_chat():
 @ai_bp.route('/api/ai/quick-query', methods=['POST'])
 def api_ai_quick_query():
     """Answer a focused question using real data without full chat context.
-    Designed for the dashboard copilot widget."""
+    Designed for the dashboard copilot widget with session memory."""
     data = request.get_json() or {}
     question = data.get('question', '').strip()
     if not question:
@@ -374,13 +349,11 @@ def api_ai_quick_query():
     if not ollama.running():
         return jsonify({'error': 'AI service not running'}), 503
 
-    # Build rich data context from DB using shared helper
-    db = get_db()
-    try:
-        ctx_parts = build_situation_context(db)
-    finally:
-        db.close()
+    session_id = data.get('session_id', 'default')
 
+    # Build rich data context from DB using shared helper
+    with db_session() as db:
+        ctx_parts = build_situation_context(db)
     context = '\n\n'.join(ctx_parts) if ctx_parts else 'No data has been entered yet.'
     memory_text = get_ai_memory_text()
 
@@ -398,10 +371,29 @@ RULES:
 {context}
 --- END DATA ---{memory_text}"""
 
+    # Include recent copilot session history for continuity
+    with _copilot_lock:
+        history = _copilot_sessions[session_id][-5:]
+    if history:
+        history_text = '\n'.join(f'Q: {h["q"]}\nA: {h["a"]}' for h in history)
+        system += f'\n\nRecent copilot conversation:\n{history_text}'
+
     try:
         model = data.get('model', ollama.DEFAULT_MODEL)
         result = ollama.chat(model, [{'role': 'system', 'content': system}, {'role': 'user', 'content': question}], stream=False)
         response_text = result.get('message', {}).get('content', '') if isinstance(result, dict) else ''
+
+        # Save to copilot session history
+        with _copilot_lock:
+            _copilot_sessions[session_id].append({'q': question, 'a': response_text.strip()})
+            if len(_copilot_sessions[session_id]) > 10:
+                _copilot_sessions[session_id] = _copilot_sessions[session_id][-5:]
+            # Evict oldest half of sessions if too many accumulate
+            if len(_copilot_sessions) > 100:
+                keys = list(_copilot_sessions.keys())
+                for k in keys[:len(keys) // 2]:
+                    del _copilot_sessions[k]
+
         return jsonify({'answer': response_text.strip(), 'data_sources': list(set(p.split(':')[0] for p in ctx_parts))})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -409,8 +401,7 @@ RULES:
 @ai_bp.route('/api/ai/suggested-actions')
 def api_ai_suggested_actions():
     """Generate suggested actions based on current alerts and data state."""
-    db = get_db()
-    try:
+    with db_session() as db:
         suggestions = []
         from datetime import datetime, timedelta
         today = datetime.now().strftime('%Y-%m-%d')
@@ -443,12 +434,42 @@ def api_ai_suggested_actions():
             suggestions.append({'type': 'warning', 'action': f'Rotate {r["fuel_type"]} fuel — expires {r["expires"]}', 'module': 'fuel'})
 
         return jsonify({'suggestions': suggestions[:8]})
-    finally:
-        db.close()
-
 @ai_bp.route('/api/ai/recommended')
 def api_ai_recommended():
     return jsonify(ollama.RECOMMENDED_MODELS)
+
+@ai_bp.route('/api/ai/context-usage', methods=['POST'])
+def api_context_usage():
+    """Estimate token usage for a set of messages against a model's context window."""
+    d = request.json or {}
+    messages = d.get('messages', [])
+    system_prompt = d.get('system_prompt', '')
+    total_tokens = _estimate_tokens(system_prompt)
+    for msg in messages:
+        total_tokens += _estimate_tokens(msg.get('content', ''))
+    max_ctx = 4096  # Default
+    # Try to get actual context size from model info
+    model = d.get('model', '')
+    if model:
+        try:
+            import requests as req
+            r = req.post('http://localhost:11434/api/show', json={'name': model}, timeout=5)
+            if r.ok:
+                info = r.json()
+                params = info.get('parameters', '')
+                if 'num_ctx' in params:
+                    import re
+                    m = re.search(r'num_ctx\s+(\d+)', params)
+                    if m:
+                        max_ctx = int(m.group(1))
+        except Exception:
+            pass
+    return jsonify({
+        'used_tokens': total_tokens,
+        'max_tokens': max_ctx,
+        'usage_pct': round((total_tokens / max_ctx) * 100, 1),
+        'remaining': max(0, max_ctx - total_tokens)
+    })
 
 # ─── Conversation Branching (v5.0 Phase 1) ──────────────────────
 
@@ -457,9 +478,8 @@ def api_conversation_branch(cid):
     """Fork a conversation from a specific message index."""
     d = request.json or {}
     msg_idx = d.get('message_index', 0)
-    db = get_db()
-    try:
-        convo = db.execute('SELECT * FROM conversations WHERE id = ?', (cid,)).fetchone()
+    with db_session() as db:
+        convo = db.execute('SELECT id, messages FROM conversations WHERE id = ?', (cid,)).fetchone()
         if not convo:
             return jsonify({'error': 'Conversation not found'}), 404
         messages = json.loads(convo['messages'] or '[]')
@@ -473,47 +493,32 @@ def api_conversation_branch(cid):
         db.execute('UPDATE conversations SET branch_count = branch_count + 1 WHERE id = ?', (cid,))
         db.commit()
         return jsonify({'branch_id': branch_id, 'messages': branched})
-    finally:
-        db.close()
-
 @ai_bp.route('/api/conversations/<int:cid>/branches')
 def api_conversation_branches(cid):
     """List all branches of a conversation."""
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute(
             'SELECT id, parent_message_idx, created_at FROM conversation_branches WHERE conversation_id = ? ORDER BY created_at DESC',
             (cid,)
         ).fetchall()
         return jsonify([dict(r) for r in rows])
-    finally:
-        db.close()
-
 @ai_bp.route('/api/conversations/branches/<int:bid>')
 def api_conversation_branch_get(bid):
     """Get a specific conversation branch."""
-    db = get_db()
-    try:
+    with db_session() as db:
         row = db.execute('SELECT * FROM conversation_branches WHERE id = ?', (bid,)).fetchone()
         if not row:
             return jsonify({'error': 'Branch not found'}), 404
         return jsonify(dict(row))
-    finally:
-        db.close()
-
 @ai_bp.route('/api/conversations/branches/<int:bid>', methods=['PUT'])
 def api_conversation_branch_update(bid):
     """Update branch messages (append new messages to branch)."""
     d = request.json or {}
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('UPDATE conversation_branches SET messages = ? WHERE id = ?',
                    (json.dumps(d.get('messages', [])), bid))
         db.commit()
         return jsonify({'status': 'ok'})
-    finally:
-        db.close()
-
 # ─── AI Image Input / Multimodal (v5.0 Phase 1) ─────────────────
 
 @ai_bp.route('/api/ai/chat-with-image', methods=['POST'])
@@ -557,34 +562,30 @@ def api_ai_chat_image():
 
 @ai_bp.route('/api/conversations')
 def api_conversations_list():
-    db = get_db()
     try:
-        convos = db.execute('SELECT id, title, model, created_at, updated_at, branch_count FROM conversations ORDER BY updated_at DESC').fetchall()
-    finally:
-        db.close()
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        convos = db.execute('SELECT id, title, model, created_at, updated_at, branch_count FROM conversations ORDER BY updated_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return jsonify([dict(c) for c in convos])
 
 @ai_bp.route('/api/conversations', methods=['POST'])
 def api_conversations_create():
     data = request.get_json() or {}
-    db = get_db()
-    try:
+    with db_session() as db:
         cur = db.execute('INSERT INTO conversations (title, model, messages) VALUES (?, ?, ?)',
                          (data.get('title', 'New Chat'), data.get('model', ''), '[]'))
         db.commit()
         cid = cur.lastrowid
         convo = db.execute('SELECT * FROM conversations WHERE id = ?', (cid,)).fetchone()
-    finally:
-        db.close()
     return jsonify(dict(convo)), 201
 
 @ai_bp.route('/api/conversations/<int:cid>')
 def api_conversations_get(cid):
-    db = get_db()
-    try:
+    with db_session() as db:
         convo = db.execute('SELECT * FROM conversations WHERE id = ?', (cid,)).fetchone()
-    finally:
-        db.close()
     if not convo:
         return jsonify({'error': 'Not found'}), 404
     return jsonify(dict(convo))
@@ -592,8 +593,7 @@ def api_conversations_get(cid):
 @ai_bp.route('/api/conversations/<int:cid>', methods=['PUT'])
 def api_conversations_update(cid):
     data = request.get_json() or {}
-    db = get_db()
-    try:
+    with db_session() as db:
         update_data = {}
         if 'title' in data:
             update_data['title'] = data['title']
@@ -608,8 +608,6 @@ def api_conversations_update(cid):
             vals.append(cid)
             db.execute(f'UPDATE conversations SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?', vals)
         db.commit()
-    finally:
-        db.close()
     return jsonify({'status': 'saved'})
 
 @ai_bp.route('/api/conversations/<int:cid>', methods=['PATCH'])
@@ -618,32 +616,24 @@ def api_conversation_rename(cid):
     title = data.get('title', '').strip()
     if not title:
         return jsonify({'error': 'Title required'}), 400
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('UPDATE conversations SET title = ? WHERE id = ?', (title, cid))
         db.commit()
-    finally:
-        db.close()
     return jsonify({'status': 'renamed'})
 
 @ai_bp.route('/api/conversations/<int:cid>', methods=['DELETE'])
 def api_conversations_delete(cid):
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('DELETE FROM conversations WHERE id = ?', (cid,))
         db.commit()
-    finally:
-        db.close()
     return jsonify({'status': 'deleted'})
 
 @ai_bp.route('/api/conversations/all', methods=['DELETE'])
 def api_conversations_delete_all():
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('DELETE FROM conversations')
         db.commit()
-    finally:
-        db.close()
+    log_activity('conversations_cleared', detail='Cleared all conversations')
     return jsonify({'status': 'deleted'})
 
 @ai_bp.route('/api/conversations/search')
@@ -653,23 +643,17 @@ def api_conversations_search():
         return jsonify([])
     # Escape LIKE wildcard characters to prevent unintended pattern matching
     q_escaped = q.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute(
             "SELECT id, title, model, created_at FROM conversations WHERE title LIKE ? ESCAPE '\\' OR messages LIKE ? ESCAPE '\\' ORDER BY updated_at DESC LIMIT 20",
             (f'%{q_escaped}%', f'%{q_escaped}%')
         ).fetchall()
-    finally:
-        db.close()
     return jsonify([dict(r) for r in rows])
 
 @ai_bp.route('/api/conversations/<int:cid>/export')
 def api_conversations_export(cid):
-    db = get_db()
-    try:
-        convo = db.execute('SELECT * FROM conversations WHERE id = ?', (cid,)).fetchone()
-    finally:
-        db.close()
+    with db_session() as db:
+        convo = db.execute('SELECT id, title, model, messages, created_at FROM conversations WHERE id = ?', (cid,)).fetchone()
     if not convo:
         return jsonify({'error': 'Not found'}), 404
     messages = json.loads(convo['messages'] or '[]')
@@ -783,7 +767,7 @@ def api_ai_model_info(model_name):
     """Get detailed model info for model cards."""
     try:
         import requests as _req
-        r = _req.get(f'http://localhost:11434/api/show', json={'name': model_name}, timeout=5)
+        r = _req.post(f'http://localhost:11434/api/show', json={'name': model_name}, timeout=5)
         if r.ok:
             data = r.json()
             details = data.get('details', {})
@@ -820,9 +804,13 @@ def api_ai_model_info(model_name):
 
 @ai_bp.route('/api/ai/training/datasets')
 def api_training_datasets():
-    db = get_db()
-    rows = db.execute('SELECT * FROM training_datasets ORDER BY created_at DESC LIMIT 50').fetchall()
-    db.close()
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM training_datasets ORDER BY created_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 @ai_bp.route('/api/ai/training/datasets', methods=['POST'])
@@ -833,43 +821,41 @@ def api_training_datasets_create():
     source = data.get('source', 'conversations')  # 'conversations' or 'upload'
     base_model = data.get('base_model', '')
 
-    db = get_db()
-    records = []
-    if source == 'conversations':
-        # Extract Q&A pairs from conversation history (messages stored as JSON array in conversations.messages)
-        convos = db.execute('SELECT messages FROM conversations ORDER BY updated_at DESC LIMIT 20').fetchall()
-        for c in convos:
-            try:
-                msgs = json.loads(c['messages'] or '[]')
-            except (json.JSONDecodeError, TypeError):
-                continue
-            for i in range(len(msgs) - 1):
-                if isinstance(msgs[i], dict) and isinstance(msgs[i+1], dict) and msgs[i].get('role') == 'user' and msgs[i+1].get('role') == 'assistant':
-                    records.append({'instruction': (msgs[i].get('content', '') or '')[:2000], 'output': (msgs[i+1].get('content', '') or '')[:2000]})
+    with db_session() as db:
+        records = []
+        if source == 'conversations':
+            # Extract Q&A pairs from conversation history (messages stored as JSON array in conversations.messages)
+            convos = db.execute('SELECT messages FROM conversations ORDER BY updated_at DESC LIMIT 20').fetchall()
+            for c in convos:
+                try:
+                    msgs = json.loads(c['messages'] or '[]')
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                for i in range(len(msgs) - 1):
+                    if isinstance(msgs[i], dict) and isinstance(msgs[i+1], dict) and msgs[i].get('role') == 'user' and msgs[i+1].get('role') == 'assistant':
+                        records.append({'instruction': (msgs[i].get('content', '') or '')[:2000], 'output': (msgs[i+1].get('content', '') or '')[:2000]})
 
-    # Save dataset file
-    ds_dir = os.path.join(get_data_dir(), 'training_datasets')
-    os.makedirs(ds_dir, exist_ok=True)
-    import re as _re
-    safe_name = _re.sub(r'[^a-z0-9_-]', '', name.replace(' ', '_').lower())[:100] or 'dataset'
-    ds_file = os.path.join(ds_dir, f'{safe_name}_{int(time.time())}.jsonl')
-    with open(ds_file, 'w') as f:
-        for rec in records:
-            f.write(json.dumps(rec) + '\n')
+        # Save dataset file
+        ds_dir = os.path.join(get_data_dir(), 'training_datasets')
+        os.makedirs(ds_dir, exist_ok=True)
+        import re as _re
+        safe_name = _re.sub(r'[^a-z0-9_-]', '', name.replace(' ', '_').lower())[:100] or 'dataset'
+        ds_file = os.path.join(ds_dir, f'{safe_name}_{int(time.time())}.jsonl')
+        with open(ds_file, 'w') as f:
+            for rec in records:
+                f.write(json.dumps(rec) + '\n')
 
-    db.execute('INSERT INTO training_datasets (name, description, format, record_count, file_path, base_model, status) VALUES (?,?,?,?,?,?,?)',
-               (name, data.get('description', ''), 'jsonl', len(records), ds_file, base_model, 'ready'))
-    db.commit()
-    did = db.execute('SELECT last_insert_rowid()').fetchone()[0]
-    db.close()
+        db.execute('INSERT INTO training_datasets (name, description, format, record_count, file_path, base_model, status) VALUES (?,?,?,?,?,?,?)',
+                   (name, data.get('description', ''), 'jsonl', len(records), ds_file, base_model, 'ready'))
+        db.commit()
+        did = db.execute('SELECT last_insert_rowid()').fetchone()[0]
     log_activity('training_dataset_created', 'ai', f'Dataset "{name}" with {len(records)} records')
     return jsonify({'id': did, 'records': len(records)}), 201
 
 @ai_bp.route('/api/ai/training/jobs')
 def api_training_jobs():
-    db = get_db()
-    rows = db.execute('SELECT j.*, d.name as dataset_name FROM training_jobs j LEFT JOIN training_datasets d ON j.dataset_id = d.id ORDER BY j.created_at DESC LIMIT 50').fetchall()
-    db.close()
+    with db_session() as db:
+        rows = db.execute('SELECT j.*, d.name as dataset_name FROM training_jobs j LEFT JOIN training_datasets d ON j.dataset_id = d.id ORDER BY j.created_at DESC LIMIT 50').fetchall()
     return jsonify([dict(r) for r in rows])
 
 @ai_bp.route('/api/ai/training/jobs', methods=['POST'])
@@ -883,54 +869,51 @@ def api_training_jobs_create():
     epochs = min(max(int(data.get('epochs', 3)), 1), 20)
     lr = float(data.get('learning_rate', 0.0002))
 
-    db = get_db()
-    ds = db.execute('SELECT * FROM training_datasets WHERE id = ?', (dataset_id,)).fetchone() if dataset_id else None
+    with db_session() as db:
+        ds = db.execute('SELECT id, name, file_path FROM training_datasets WHERE id = ?', (dataset_id,)).fetchone() if dataset_id else None
 
-    # Generate Ollama Modelfile
-    modelfile_dir = os.path.join(get_data_dir(), 'modelfiles')
-    os.makedirs(modelfile_dir, exist_ok=True)
-    modelfile_path = os.path.join(modelfile_dir, f'{output_model}.Modelfile')
+        # Generate Ollama Modelfile
+        modelfile_dir = os.path.join(get_data_dir(), 'modelfiles')
+        os.makedirs(modelfile_dir, exist_ok=True)
+        modelfile_path = os.path.join(modelfile_dir, f'{output_model}.Modelfile')
 
-    system_prompt = "You are NOMAD, a survival and preparedness AI assistant. You provide practical, actionable advice for emergency preparedness, off-grid living, and disaster response."
-    if ds:
-        # Read sample records for system prompt enhancement
-        try:
-            with open(ds['file_path'], 'r') as f:
-                samples = [json.loads(line) for line in f.readlines()[:5]]
-            if samples:
-                topics = ', '.join(set(s.get('instruction', '')[:50] for s in samples[:3]))
-                system_prompt += f" Your training focused on: {topics}."
-        except Exception as e:
-            log.warning(f'Could not read training dataset samples: {e}')
+        system_prompt = "You are NOMAD, a survival and preparedness AI assistant. You provide practical, actionable advice for emergency preparedness, off-grid living, and disaster response."
+        if ds:
+            # Read sample records for system prompt enhancement
+            try:
+                with open(ds['file_path'], 'r') as f:
+                    samples = [json.loads(line) for line in f.readlines()[:5]]
+                if samples:
+                    topics = ', '.join(set(s.get('instruction', '')[:50] for s in samples[:3]))
+                    system_prompt += f" Your training focused on: {topics}."
+            except Exception as e:
+                log.warning(f'Could not read training dataset samples: {e}')
 
-    with open(modelfile_path, 'w') as f:
-        f.write(f'FROM {base_model}\n')
-        f.write(f'SYSTEM """{system_prompt}"""\n')
-        f.write(f'PARAMETER temperature 0.7\n')
-        f.write(f'PARAMETER top_p 0.9\n')
-        f.write(f'PARAMETER num_ctx 4096\n')
+        with open(modelfile_path, 'w') as f:
+            f.write(f'FROM {base_model}\n')
+            f.write(f'SYSTEM """{system_prompt}"""\n')
+            f.write(f'PARAMETER temperature 0.7\n')
+            f.write(f'PARAMETER top_p 0.9\n')
+            f.write(f'PARAMETER num_ctx 4096\n')
 
-    db.execute('INSERT INTO training_jobs (dataset_id, base_model, output_model, method, epochs, learning_rate, status, log_text) VALUES (?,?,?,?,?,?,?,?)',
-               (dataset_id, base_model, output_model, 'modelfile', epochs, lr, 'ready',
-                f'Modelfile created at {modelfile_path}\nBase model: {base_model}\nRun: ollama create {output_model} -f {modelfile_path}'))
-    db.commit()
-    jid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
-    db.close()
+        db.execute('INSERT INTO training_jobs (dataset_id, base_model, output_model, method, epochs, learning_rate, status, log_text) VALUES (?,?,?,?,?,?,?,?)',
+                   (dataset_id, base_model, output_model, 'modelfile', epochs, lr, 'ready',
+                    f'Modelfile created at {modelfile_path}\nBase model: {base_model}\nRun: ollama create {output_model} -f {modelfile_path}'))
+        db.commit()
+        jid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
     log_activity('training_job_created', 'ai', f'Job for {output_model} from {base_model}')
     return jsonify({'id': jid, 'output_model': output_model}), 201
 
 @ai_bp.route('/api/ai/training/jobs/<int:jid>/run', methods=['POST'])
 def api_training_jobs_run(jid):
     """Execute training job — runs ollama create with the Modelfile."""
-    db = get_db()
-    job = db.execute('SELECT * FROM training_jobs WHERE id = ? AND status = ?', (jid, 'ready')).fetchone()
-    if not job:
-        db.close()
-        return jsonify({'error': 'Job not found or not in ready state'}), 404
+    with db_session() as db:
+        job = db.execute('SELECT id, output_model FROM training_jobs WHERE id = ? AND status = ?', (jid, 'ready')).fetchone()
+        if not job:
+            return jsonify({'error': 'Job not found or not in ready state'}), 404
 
-    db.execute("UPDATE training_jobs SET status = 'running', started_at = datetime('now') WHERE id = ?", (jid,))
-    db.commit()
-    db.close()
+        db.execute("UPDATE training_jobs SET status = 'running', started_at = datetime('now') WHERE id = ?", (jid,))
+        db.commit()
 
     def do_train():
         try:
@@ -942,22 +925,20 @@ def api_training_jobs_run(jid):
             resp = req.post(f'http://localhost:{ollama.OLLAMA_PORT}/api/create',
                            json={'name': job['output_model'], 'modelfile': modelfile_content},
                            timeout=300)
-            db2 = get_db()
-            if resp.status_code == 200:
-                db2.execute("UPDATE training_jobs SET status = 'completed', progress = 100, completed_at = datetime('now'), log_text = log_text || ? WHERE id = ?",
-                           (f'\nModel {job["output_model"]} created successfully!', jid))
-            else:
-                db2.execute("UPDATE training_jobs SET status = 'failed', log_text = log_text || ? WHERE id = ?",
-                           (f'\nFailed: {resp.text[:500]}', jid))
-            db2.commit()
-            db2.close()
+            with db_session() as db2:
+                if resp.status_code == 200:
+                    db2.execute("UPDATE training_jobs SET status = 'completed', progress = 100, completed_at = datetime('now'), log_text = log_text || ? WHERE id = ?",
+                               (f'\nModel {job["output_model"]} created successfully!', jid))
+                else:
+                    db2.execute("UPDATE training_jobs SET status = 'failed', log_text = log_text || ? WHERE id = ?",
+                               (f'\nFailed: {resp.text[:500]}', jid))
+                db2.commit()
         except Exception as e:
             try:
-                db2 = get_db()
-                db2.execute("UPDATE training_jobs SET status = 'failed', log_text = log_text || ? WHERE id = ?",
-                           (f'\nError: {str(e)[:500]}', jid))
-                db2.commit()
-                db2.close()
+                with db_session() as db2:
+                    db2.execute("UPDATE training_jobs SET status = 'failed', log_text = log_text || ? WHERE id = ?",
+                               (f'\nError: {str(e)[:500]}', jid))
+                    db2.commit()
             except Exception:
                 pass
 

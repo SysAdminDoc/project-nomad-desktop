@@ -10,6 +10,8 @@ import logging
 import shutil
 import subprocess
 import queue
+from datetime import datetime, timedelta
+from html import escape as _html_escape
 from flask import Flask, render_template, jsonify, request, Response, stream_with_context
 from werkzeug.utils import secure_filename
 from web.validation import validate_json, validate_file_upload
@@ -28,6 +30,8 @@ from web.state import (
     _mesh_state,
     MAX_SSE_CLIENTS, _sse_clients, _sse_lock,
     broadcast_event,
+    sse_register_client, sse_unregister_client, sse_touch_client,
+    sse_cleanup_stale_clients,
 )
 
 from config import get_data_dir, set_data_dir, Config
@@ -52,6 +56,11 @@ from services.manager import (
 
 log = logging.getLogger('nomad.web')
 _CREATION_FLAGS = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
+
+
+def _esc(s):
+    """Escape HTML for print/template output (None-safe wrapper around html.escape)."""
+    return _html_escape(str(s)) if s else ''
 
 # ─── Security Helpers ─────────────────────────────────────────────────
 
@@ -205,6 +214,22 @@ def create_app():
         app.extensions['limiter'] = limiter
     except ImportError:
         log.info('flask-limiter not installed — rate limiting disabled')
+
+    # ─── Simple TTL Cache ────────────────────────────────────────────
+    _api_cache = {}
+    _cache_lock = threading.Lock()
+
+    def _cached(key, ttl_seconds=30):
+        """Return cached value if fresh, else None."""
+        with _cache_lock:
+            entry = _api_cache.get(key)
+            if entry and (time.time() - entry['ts']) < ttl_seconds:
+                return entry['val']
+        return None
+
+    def _set_cache(key, val):
+        with _cache_lock:
+            _api_cache[key] = {'val': val, 'ts': time.time()}
 
     # ─── CSRF Protection ─────────────────────────────────────────────
     @app.after_request
@@ -562,28 +587,39 @@ def create_app():
     @app.route('/api/needs')
     def api_needs_overview():
         """Returns all survival need categories with item counts from each module."""
-        db = get_db()
-        try:
+        cached = _cached('needs', 60)
+        if cached:
+            return jsonify(cached)
+        with db_session() as db:
             result = {}
             for need_id, need in SURVIVAL_NEEDS.items():
                 kw = need['keywords']
                 # Count matching inventory items
-                inv_count = 0
-                for k in kw[:5]:  # Limit keyword searches for performance
-                    inv_count += db.execute('SELECT COUNT(*) as c FROM inventory WHERE name LIKE ? OR category LIKE ?',
-                                           (f'%{k}%', f'%{k}%')).fetchone()['c']
+                kw_inv = kw[:5]
+                if kw_inv:
+                    like_clauses = ' OR '.join(['name LIKE ? OR category LIKE ?' for _ in kw_inv])
+                    like_vals = [v for k in kw_inv for v in (f'%{k}%', f'%{k}%')]
+                    inv_count = db.execute(f'SELECT COUNT(*) as c FROM inventory WHERE {like_clauses}', like_vals).fetchone()['c']
+                else:
+                    inv_count = 0
 
                 # Count matching contacts by skills/role
-                contact_count = 0
-                for k in kw[:3]:
-                    contact_count += db.execute('SELECT COUNT(*) as c FROM contacts WHERE role LIKE ? OR skills LIKE ?',
-                                                (f'%{k}%', f'%{k}%')).fetchone()['c']
+                kw_con = kw[:3]
+                if kw_con:
+                    like_clauses = ' OR '.join(['role LIKE ? OR skills LIKE ?' for _ in kw_con])
+                    like_vals = [v for k in kw_con for v in (f'%{k}%', f'%{k}%')]
+                    contact_count = db.execute(f'SELECT COUNT(*) as c FROM contacts WHERE {like_clauses}', like_vals).fetchone()['c']
+                else:
+                    contact_count = 0
 
                 # Count matching books (from reference catalog)
-                book_count = 0
-                for k in kw[:3]:
-                    book_count += db.execute('SELECT COUNT(*) as c FROM books WHERE title LIKE ? OR category LIKE ?',
-                                            (f'%{k}%', f'%{k}%')).fetchone()['c']
+                kw_book = kw[:3]
+                if kw_book:
+                    like_clauses = ' OR '.join(['title LIKE ? OR category LIKE ?' for _ in kw_book])
+                    like_vals = [v for k in kw_book for v in (f'%{k}%', f'%{k}%')]
+                    book_count = db.execute(f'SELECT COUNT(*) as c FROM books WHERE {like_clauses}', like_vals).fetchone()['c']
+                else:
+                    book_count = 0
 
                 # Decision guides count
                 guide_count = len(need.get('guides', []))
@@ -594,9 +630,8 @@ def create_app():
                     'books': min(book_count, 99), 'guides': guide_count,
                     'total': min(inv_count + contact_count + book_count + guide_count, 9999),
                 }
+            _set_cache('needs', result)
             return jsonify(result)
-        finally:
-            db.close()
 
     @app.route('/api/needs/<need_id>')
     def api_need_detail(need_id):
@@ -604,41 +639,55 @@ def create_app():
         need = SURVIVAL_NEEDS.get(need_id)
         if not need:
             return jsonify({'error': 'Unknown need category'}), 404
-        db = get_db()
-        try:
+        with db_session() as db:
             kw = need['keywords']
             like_clauses = ' OR '.join(['name LIKE ?' for _ in kw[:5]])
             like_vals = [f'%{k}%' for k in kw[:5]]
 
             # Inventory items
-            inv_items = []
-            for k in kw[:5]:
-                rows = db.execute('SELECT id, name, quantity, unit, category FROM inventory WHERE name LIKE ? OR category LIKE ? LIMIT 20',
-                                  (f'%{k}%', f'%{k}%')).fetchall()
+            kw_inv = kw[:5]
+            if kw_inv:
+                like_clauses = ' OR '.join(['name LIKE ? OR category LIKE ?' for _ in kw_inv])
+                like_vals = [v for k in kw_inv for v in (f'%{k}%', f'%{k}%')]
+                rows = db.execute(f'SELECT id, name, quantity, unit, category FROM inventory WHERE {like_clauses} LIMIT 100', like_vals).fetchall()
+                seen_ids = set()
+                inv_items = []
                 for r in rows:
-                    item = dict(r)
-                    if item not in inv_items:
-                        inv_items.append(item)
+                    if r['id'] not in seen_ids:
+                        seen_ids.add(r['id'])
+                        inv_items.append(dict(r))
+            else:
+                inv_items = []
 
             # Contacts
-            contacts = []
-            for k in kw[:3]:
-                rows = db.execute('SELECT id, name, role, skills FROM contacts WHERE role LIKE ? OR skills LIKE ? LIMIT 10',
-                                  (f'%{k}%', f'%{k}%')).fetchall()
+            kw_con = kw[:3]
+            if kw_con:
+                like_clauses = ' OR '.join(['role LIKE ? OR skills LIKE ?' for _ in kw_con])
+                like_vals = [v for k in kw_con for v in (f'%{k}%', f'%{k}%')]
+                rows = db.execute(f'SELECT id, name, role, skills FROM contacts WHERE {like_clauses} LIMIT 30', like_vals).fetchall()
+                seen_ids = set()
+                contacts = []
                 for r in rows:
-                    item = dict(r)
-                    if item not in contacts:
-                        contacts.append(item)
+                    if r['id'] not in seen_ids:
+                        seen_ids.add(r['id'])
+                        contacts.append(dict(r))
+            else:
+                contacts = []
 
             # Books
-            books = []
-            for k in kw[:3]:
-                rows = db.execute('SELECT id, title, author, category FROM books WHERE title LIKE ? OR category LIKE ? LIMIT 10',
-                                  (f'%{k}%', f'%{k}%')).fetchall()
+            kw_book = kw[:3]
+            if kw_book:
+                like_clauses = ' OR '.join(['title LIKE ? OR category LIKE ?' for _ in kw_book])
+                like_vals = [v for k in kw_book for v in (f'%{k}%', f'%{k}%')]
+                rows = db.execute(f'SELECT id, title, author, category FROM books WHERE {like_clauses} LIMIT 30', like_vals).fetchall()
+                seen_ids = set()
+                books = []
                 for r in rows:
-                    item = dict(r)
-                    if item not in books:
-                        books.append(item)
+                    if r['id'] not in seen_ids:
+                        seen_ids.add(r['id'])
+                        books.append(dict(r))
+            else:
+                books = []
 
             # Decision guides (from hardcoded list)
             guides = [{'id': gid, 'title': gid.replace('_', ' ').title()} for gid in need.get('guides', [])]
@@ -650,8 +699,6 @@ def create_app():
                 'books': books[:15],
                 'guides': guides,
             })
-        finally:
-            db.close()
 
     # ─── Kiwix ZIM API ─────────────────────────────────────────────────
 
@@ -872,8 +919,7 @@ def create_app():
                 results['nomad_score'] = round(nomad_score, 1)
 
                 # Save to DB
-                db = get_db()
-                try:
+                with db_session() as db:
                     db.execute('''INSERT INTO benchmarks
                         (cpu_score, memory_score, disk_read_score, disk_write_score, ai_tps, ai_ttft, nomad_score, hardware, details)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
@@ -882,8 +928,6 @@ def create_app():
                          results.get('ai_tps', 0), results.get('ai_ttft', 0),
                          results.get('nomad_score', 0), json.dumps(hw), json.dumps(results)))
                     db.commit()
-                finally:
-                    db.close()
 
                 _benchmark_state = {'status': 'complete', 'progress': 100, 'stage': 'Done', 'results': results, 'hardware': hw}
 
@@ -900,11 +944,8 @@ def create_app():
 
     @app.route('/api/benchmark/history')
     def api_benchmark_history():
-        db = get_db()
-        try:
+        with db_session() as db:
             rows = db.execute('SELECT * FROM benchmarks ORDER BY created_at DESC LIMIT 20').fetchall()
-        finally:
-            db.close()
         return jsonify([dict(r) for r in rows])
 
     # ─── Benchmark Enhancements (v5.0 Phase 12) ─────────────────────
@@ -926,16 +967,14 @@ def create_app():
             tps = round(tokens / elapsed, 1) if elapsed > 0 else 0
             ttft = round(elapsed, 2)
 
-            db = get_db()
-            try:
+            with db_session() as db:
                 db.execute(
                     'INSERT INTO benchmark_results (test_type, scores, details) VALUES (?, ?, ?)',
                     ('ai_inference', json.dumps({'tps': tps, 'ttft': ttft, 'model': model}),
                      json.dumps({'tokens': tokens, 'elapsed': elapsed, 'text_length': len(text)}))
                 )
+                db.execute('DELETE FROM benchmark_results WHERE id NOT IN (SELECT id FROM benchmark_results ORDER BY created_at DESC LIMIT 100)')
                 db.commit()
-            finally:
-                db.close()
 
             return jsonify({'model': model, 'tokens_per_sec': tps, 'time_to_complete': ttft, 'tokens': tokens})
         except Exception as e:
@@ -971,15 +1010,13 @@ def create_app():
 
             os.remove(test_file)
 
-            db = get_db()
-            try:
+            with db_session() as db:
                 db.execute(
                     'INSERT INTO benchmark_results (test_type, scores) VALUES (?, ?)',
                     ('storage', json.dumps({'read_mbps': read_mbps, 'write_mbps': write_mbps}))
                 )
+                db.execute('DELETE FROM benchmark_results WHERE id NOT IN (SELECT id FROM benchmark_results ORDER BY created_at DESC LIMIT 100)')
                 db.commit()
-            finally:
-                db.close()
 
             return jsonify({'read_mbps': read_mbps, 'write_mbps': write_mbps})
         except Exception as e:
@@ -995,15 +1032,12 @@ def create_app():
         """Get benchmark results history for charting."""
         test_type = request.args.get('type', '')
         limit = min(request.args.get('limit', 20, type=int), 500)
-        db = get_db()
-        try:
+        with db_session() as db:
             if test_type:
                 rows = db.execute('SELECT * FROM benchmark_results WHERE test_type = ? ORDER BY created_at DESC LIMIT ?', (test_type, limit)).fetchall()
             else:
                 rows = db.execute('SELECT * FROM benchmark_results ORDER BY created_at DESC LIMIT ?', (limit,)).fetchall()
             return jsonify([dict(r) for r in rows])
-        finally:
-            db.close()
 
     # [EXTRACTED to blueprint]
 
@@ -1014,375 +1048,20 @@ def create_app():
 
     # ─── Checklists API ──────────────────────────────────────────────
 
-    CHECKLIST_TEMPLATES = {
-        '72hour': {
-            'name': '72-Hour Emergency Kit',
-            'items': [
-                {'text': 'Water — 1 gallon per person per day (3-day supply)', 'checked': False, 'cat': 'water'},
-                {'text': 'Water purification tablets or filter', 'checked': False, 'cat': 'water'},
-                {'text': 'Collapsible water container', 'checked': False, 'cat': 'water'},
-                {'text': 'Non-perishable food (3-day supply)', 'checked': False, 'cat': 'food'},
-                {'text': 'Manual can opener', 'checked': False, 'cat': 'food'},
-                {'text': 'Eating utensils, plates, cups', 'checked': False, 'cat': 'food'},
-                {'text': 'First aid kit (comprehensive)', 'checked': False, 'cat': 'medical'},
-                {'text': 'Prescription medications (7-day supply)', 'checked': False, 'cat': 'medical'},
-                {'text': 'Flashlight + extra batteries', 'checked': False, 'cat': 'gear'},
-                {'text': 'Battery-powered or hand-crank radio (NOAA)', 'checked': False, 'cat': 'comms'},
-                {'text': 'Cell phone charger (solar/hand-crank)', 'checked': False, 'cat': 'comms'},
-                {'text': 'Whistle (signal for help)', 'checked': False, 'cat': 'gear'},
-                {'text': 'Dust masks / N95 respirators', 'checked': False, 'cat': 'safety'},
-                {'text': 'Plastic sheeting and duct tape (shelter-in-place)', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Wrench / pliers (turn off utilities)', 'checked': False, 'cat': 'tools'},
-                {'text': 'Local maps (paper copies)', 'checked': False, 'cat': 'nav'},
-                {'text': 'Cash in small denominations', 'checked': False, 'cat': 'docs'},
-                {'text': 'Important documents (copies in waterproof bag)', 'checked': False, 'cat': 'docs'},
-                {'text': 'Change of clothes per person', 'checked': False, 'cat': 'clothing'},
-                {'text': 'Sturdy shoes per person', 'checked': False, 'cat': 'clothing'},
-                {'text': 'Sleeping bag or warm blanket per person', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Rain poncho', 'checked': False, 'cat': 'clothing'},
-                {'text': 'Fire extinguisher (small, portable)', 'checked': False, 'cat': 'safety'},
-                {'text': 'Matches/lighter in waterproof container', 'checked': False, 'cat': 'fire'},
-                {'text': 'Feminine supplies / personal hygiene items', 'checked': False, 'cat': 'hygiene'},
-                {'text': 'Garbage bags and plastic ties', 'checked': False, 'cat': 'sanitation'},
-                {'text': 'Paper towels, moist towelettes', 'checked': False, 'cat': 'hygiene'},
-                {'text': 'Infant formula / diapers (if needed)', 'checked': False, 'cat': 'special'},
-                {'text': 'Pet food and supplies (if needed)', 'checked': False, 'cat': 'special'},
-                {'text': 'Books, games, puzzles (morale)', 'checked': False, 'cat': 'morale'},
-            ],
-        },
-        'bugout': {
-            'name': 'Bug-Out Bag (Go Bag)',
-            'items': [
-                {'text': 'Backpack (50-70L, sturdy, waterproof)', 'checked': False, 'cat': 'gear'},
-                {'text': 'Water bottle + filter (Sawyer/LifeStraw)', 'checked': False, 'cat': 'water'},
-                {'text': 'Water purification tablets (backup)', 'checked': False, 'cat': 'water'},
-                {'text': 'Food: MREs or freeze-dried meals (3 days)', 'checked': False, 'cat': 'food'},
-                {'text': 'Energy bars / trail mix', 'checked': False, 'cat': 'food'},
-                {'text': 'Compact stove + fuel canister', 'checked': False, 'cat': 'food'},
-                {'text': 'Metal cup / pot for boiling', 'checked': False, 'cat': 'food'},
-                {'text': 'Fixed-blade knife (full tang)', 'checked': False, 'cat': 'tools'},
-                {'text': 'Multi-tool (Leatherman/Gerber)', 'checked': False, 'cat': 'tools'},
-                {'text': 'Ferro rod + waterproof matches', 'checked': False, 'cat': 'fire'},
-                {'text': 'Tinder (cotton balls w/ vaseline)', 'checked': False, 'cat': 'fire'},
-                {'text': 'Headlamp + extra batteries', 'checked': False, 'cat': 'gear'},
-                {'text': 'Tarp / emergency bivvy', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Paracord (100 ft minimum)', 'checked': False, 'cat': 'gear'},
-                {'text': 'Compass + topographic map', 'checked': False, 'cat': 'nav'},
-                {'text': 'First aid kit (IFAK level)', 'checked': False, 'cat': 'medical'},
-                {'text': 'Tourniquet (CAT or SOFTT-W)', 'checked': False, 'cat': 'medical'},
-                {'text': 'Prescription meds (7-day supply)', 'checked': False, 'cat': 'medical'},
-                {'text': 'Hand-crank / solar radio', 'checked': False, 'cat': 'comms'},
-                {'text': 'FRS/GMRS radio (charged)', 'checked': False, 'cat': 'comms'},
-                {'text': 'Cash + coins', 'checked': False, 'cat': 'docs'},
-                {'text': 'ID / passport copies (laminated)', 'checked': False, 'cat': 'docs'},
-                {'text': 'USB drive with scanned documents', 'checked': False, 'cat': 'docs'},
-                {'text': 'Change of clothes (layerable)', 'checked': False, 'cat': 'clothing'},
-                {'text': 'Rain gear', 'checked': False, 'cat': 'clothing'},
-                {'text': 'Work gloves', 'checked': False, 'cat': 'clothing'},
-                {'text': 'Bandana / shemagh', 'checked': False, 'cat': 'clothing'},
-                {'text': 'Duct tape (small roll)', 'checked': False, 'cat': 'gear'},
-                {'text': 'Zip ties (assorted)', 'checked': False, 'cat': 'gear'},
-                {'text': 'Notepad + pencil', 'checked': False, 'cat': 'gear'},
-            ],
-        },
-        'medical': {
-            'name': 'Medical / First Aid Kit',
-            'items': [
-                {'text': 'Adhesive bandages (assorted sizes)', 'checked': False, 'cat': 'wound'},
-                {'text': 'Sterile gauze pads (4x4)', 'checked': False, 'cat': 'wound'},
-                {'text': 'Roller bandage / gauze rolls', 'checked': False, 'cat': 'wound'},
-                {'text': 'Medical tape', 'checked': False, 'cat': 'wound'},
-                {'text': 'Butterfly closures / steri-strips', 'checked': False, 'cat': 'wound'},
-                {'text': 'Tourniquet (CAT gen 7)', 'checked': False, 'cat': 'trauma'},
-                {'text': 'Hemostatic gauze (QuikClot/Celox)', 'checked': False, 'cat': 'trauma'},
-                {'text': 'Israeli bandage (pressure dressing)', 'checked': False, 'cat': 'trauma'},
-                {'text': 'Chest seal (vented, 2-pack)', 'checked': False, 'cat': 'trauma'},
-                {'text': 'NPA airway (28Fr with lube)', 'checked': False, 'cat': 'trauma'},
-                {'text': 'SAM splint', 'checked': False, 'cat': 'ortho'},
-                {'text': 'ACE wrap / elastic bandage', 'checked': False, 'cat': 'ortho'},
-                {'text': 'Triangle bandage / sling', 'checked': False, 'cat': 'ortho'},
-                {'text': 'Nitrile gloves (multiple pairs)', 'checked': False, 'cat': 'ppe'},
-                {'text': 'CPR pocket mask', 'checked': False, 'cat': 'ppe'},
-                {'text': 'Trauma shears', 'checked': False, 'cat': 'tools'},
-                {'text': 'Tweezers (fine point)', 'checked': False, 'cat': 'tools'},
-                {'text': 'Thermometer', 'checked': False, 'cat': 'tools'},
-                {'text': 'Ibuprofen / acetaminophen', 'checked': False, 'cat': 'meds'},
-                {'text': 'Antihistamine (Benadryl)', 'checked': False, 'cat': 'meds'},
-                {'text': 'Anti-diarrheal (Imodium)', 'checked': False, 'cat': 'meds'},
-                {'text': 'Electrolyte packets (ORS)', 'checked': False, 'cat': 'meds'},
-                {'text': 'Antibiotic ointment (Neosporin)', 'checked': False, 'cat': 'meds'},
-                {'text': 'Hydrocortisone cream', 'checked': False, 'cat': 'meds'},
-                {'text': 'Eye wash solution', 'checked': False, 'cat': 'meds'},
-                {'text': 'Burn gel packets', 'checked': False, 'cat': 'meds'},
-                {'text': 'Prescription medications log', 'checked': False, 'cat': 'docs'},
-                {'text': 'Emergency medical info cards', 'checked': False, 'cat': 'docs'},
-                {'text': 'First aid reference guide', 'checked': False, 'cat': 'docs'},
-            ],
-        },
-        'comms': {
-            'name': 'Communications Kit',
-            'items': [
-                {'text': 'NOAA weather radio (battery + crank)', 'checked': False, 'cat': 'receive'},
-                {'text': 'FRS/GMRS handheld radio (pair)', 'checked': False, 'cat': 'twoway'},
-                {'text': 'Extra batteries for all radios', 'checked': False, 'cat': 'power'},
-                {'text': 'Solar charger panel (foldable)', 'checked': False, 'cat': 'power'},
-                {'text': 'Power bank (20,000+ mAh)', 'checked': False, 'cat': 'power'},
-                {'text': 'USB cables (multi-type)', 'checked': False, 'cat': 'power'},
-                {'text': 'HAM radio (Baofeng UV-5R or better)', 'checked': False, 'cat': 'twoway'},
-                {'text': 'HAM radio license study guide', 'checked': False, 'cat': 'docs'},
-                {'text': 'Frequency list (laminated card)', 'checked': False, 'cat': 'docs'},
-                {'text': 'CB radio (mobile or handheld)', 'checked': False, 'cat': 'twoway'},
-                {'text': 'Signal mirror', 'checked': False, 'cat': 'visual'},
-                {'text': 'Whistle (pealess, storm-proof)', 'checked': False, 'cat': 'visual'},
-                {'text': 'Glow sticks / chem lights', 'checked': False, 'cat': 'visual'},
-                {'text': 'Pen flares or road flares', 'checked': False, 'cat': 'visual'},
-                {'text': 'Written comms plan (rally points, contacts)', 'checked': False, 'cat': 'docs'},
-                {'text': 'Out-of-area emergency contact designated', 'checked': False, 'cat': 'docs'},
-                {'text': 'Family meeting point established', 'checked': False, 'cat': 'docs'},
-                {'text': 'Paper maps of local area + routes', 'checked': False, 'cat': 'nav'},
-                {'text': 'Shortwave radio (for international news)', 'checked': False, 'cat': 'receive'},
-                {'text': 'Faraday bag (EMP protection for electronics)', 'checked': False, 'cat': 'protect'},
-            ],
-        },
-        'vehicle': {
-            'name': 'Vehicle Emergency Kit',
-            'items': [
-                {'text': 'Jumper cables / jump starter pack', 'checked': False, 'cat': 'auto'},
-                {'text': 'Tire repair kit + inflator', 'checked': False, 'cat': 'auto'},
-                {'text': 'Spare tire (confirmed inflated)', 'checked': False, 'cat': 'auto'},
-                {'text': 'Lug wrench + jack', 'checked': False, 'cat': 'auto'},
-                {'text': 'Tow strap / recovery strap', 'checked': False, 'cat': 'auto'},
-                {'text': 'Quart of oil + coolant', 'checked': False, 'cat': 'auto'},
-                {'text': 'Fuses (assorted, matching vehicle)', 'checked': False, 'cat': 'auto'},
-                {'text': 'Flashlight + spare batteries', 'checked': False, 'cat': 'gear'},
-                {'text': 'Road flares / reflective triangles', 'checked': False, 'cat': 'safety'},
-                {'text': 'Hi-vis vest', 'checked': False, 'cat': 'safety'},
-                {'text': 'Fire extinguisher (small, mounted)', 'checked': False, 'cat': 'safety'},
-                {'text': 'Basic tool kit (wrenches, screwdrivers, pliers)', 'checked': False, 'cat': 'tools'},
-                {'text': 'Duct tape + zip ties + wire', 'checked': False, 'cat': 'tools'},
-                {'text': 'Water (1 gallon minimum)', 'checked': False, 'cat': 'survival'},
-                {'text': 'Non-perishable snacks', 'checked': False, 'cat': 'survival'},
-                {'text': 'Emergency blanket / sleeping bag', 'checked': False, 'cat': 'survival'},
-                {'text': 'Rain poncho', 'checked': False, 'cat': 'survival'},
-                {'text': 'First aid kit', 'checked': False, 'cat': 'medical'},
-                {'text': 'Paper maps / atlas', 'checked': False, 'cat': 'nav'},
-                {'text': 'Pen + paper', 'checked': False, 'cat': 'gear'},
-                {'text': 'Cash (small bills)', 'checked': False, 'cat': 'docs'},
-                {'text': 'Phone charger (12V adapter)', 'checked': False, 'cat': 'power'},
-                {'text': 'Seatbelt cutter + window breaker', 'checked': False, 'cat': 'safety'},
-                {'text': 'Siphon pump', 'checked': False, 'cat': 'tools'},
-            ],
-        },
-        'home': {
-            'name': 'Home Emergency Supplies',
-            'items': [
-                {'text': 'Water storage — 1 gal/person/day for 14 days', 'checked': False, 'cat': 'water'},
-                {'text': 'Water purification (filter, tablets, bleach)', 'checked': False, 'cat': 'water'},
-                {'text': 'WaterBOB or bathtub bladder', 'checked': False, 'cat': 'water'},
-                {'text': 'Food storage — 14-day supply per person', 'checked': False, 'cat': 'food'},
-                {'text': 'Manual can opener (2+)', 'checked': False, 'cat': 'food'},
-                {'text': 'Camp stove + fuel (outdoor use only)', 'checked': False, 'cat': 'food'},
-                {'text': 'Cooler + ice plan for fridge items', 'checked': False, 'cat': 'food'},
-                {'text': 'Generator + fuel (stored safely)', 'checked': False, 'cat': 'power'},
-                {'text': 'Extension cords (heavy duty)', 'checked': False, 'cat': 'power'},
-                {'text': 'Flashlights + lanterns (LED)', 'checked': False, 'cat': 'power'},
-                {'text': 'Batteries (D, AA, AAA — bulk)', 'checked': False, 'cat': 'power'},
-                {'text': 'Solar panel charger', 'checked': False, 'cat': 'power'},
-                {'text': 'Propane heater (indoor-safe Mr Buddy)', 'checked': False, 'cat': 'heat'},
-                {'text': 'Extra propane tanks', 'checked': False, 'cat': 'heat'},
-                {'text': 'Warm blankets / sleeping bags', 'checked': False, 'cat': 'heat'},
-                {'text': 'Plastic sheeting + duct tape (windows)', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Plywood for window boarding', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Sandbags (if flood zone)', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Comprehensive first aid kit', 'checked': False, 'cat': 'medical'},
-                {'text': 'Prescription meds (30-day supply)', 'checked': False, 'cat': 'medical'},
-                {'text': 'Bucket toilet + bags + kitty litter', 'checked': False, 'cat': 'sanitation'},
-                {'text': 'Trash bags (heavy duty, lots)', 'checked': False, 'cat': 'sanitation'},
-                {'text': 'Bleach (unscented, for sanitation)', 'checked': False, 'cat': 'sanitation'},
-                {'text': 'Hand soap, sanitizer, disinfectant', 'checked': False, 'cat': 'hygiene'},
-                {'text': 'Toilet paper (extra supply)', 'checked': False, 'cat': 'hygiene'},
-                {'text': 'NOAA weather radio', 'checked': False, 'cat': 'comms'},
-                {'text': 'Fire extinguishers (kitchen + garage)', 'checked': False, 'cat': 'safety'},
-                {'text': 'Smoke + CO detectors (fresh batteries)', 'checked': False, 'cat': 'safety'},
-                {'text': 'Important docs in fireproof safe', 'checked': False, 'cat': 'docs'},
-                {'text': 'Cash on hand ($500+ in small bills)', 'checked': False, 'cat': 'docs'},
-                {'text': 'Utility shut-off tools + knowledge', 'checked': False, 'cat': 'tools'},
-                {'text': 'Axe / hatchet / pry bar', 'checked': False, 'cat': 'tools'},
-            ],
-        },
-        'earthquake': {
-            'name': 'Scenario: Earthquake',
-            'items': [
-                {'text': 'Check for injuries — self, then others', 'checked': False, 'cat': 'immediate'},
-                {'text': 'Move to safe area away from damaged structures', 'checked': False, 'cat': 'immediate'},
-                {'text': 'Check for gas leaks (smell, hissing) — shut off if suspected', 'checked': False, 'cat': 'immediate'},
-                {'text': 'Check water supply — fill tubs/containers before pressure drops', 'checked': False, 'cat': 'water'},
-                {'text': 'Check structural damage — do NOT enter if walls cracked/leaning', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Turn on NOAA weather radio for aftershock warnings', 'checked': False, 'cat': 'comms'},
-                {'text': 'Wear sturdy shoes — broken glass and debris everywhere', 'checked': False, 'cat': 'safety'},
-                {'text': 'Check on neighbors, especially elderly/disabled', 'checked': False, 'cat': 'community'},
-                {'text': 'Photograph damage for insurance before cleanup', 'checked': False, 'cat': 'docs'},
-                {'text': 'Prepare for aftershocks — stay away from chimneys and tall furniture', 'checked': False, 'cat': 'safety'},
-                {'text': 'Set up alternative shelter if home is unsafe (tent, vehicle, tarp)', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Conserve phone battery — text instead of call', 'checked': False, 'cat': 'comms'},
-            ],
-        },
-        'hurricane': {
-            'name': 'Scenario: Hurricane/Major Storm',
-            'items': [
-                {'text': 'Board windows with plywood or close hurricane shutters', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Fill bathtub(s) with water for flushing/cleaning', 'checked': False, 'cat': 'water'},
-                {'text': 'Charge all devices, battery packs, and radios', 'checked': False, 'cat': 'power'},
-                {'text': 'Move vehicles to highest ground available', 'checked': False, 'cat': 'vehicle'},
-                {'text': 'Secure or bring inside all outdoor furniture/objects', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Fill vehicle fuel tanks completely', 'checked': False, 'cat': 'fuel'},
-                {'text': 'Withdraw cash ($500+ small bills)', 'checked': False, 'cat': 'docs'},
-                {'text': 'Set fridge/freezer to coldest — food lasts longer in power outage', 'checked': False, 'cat': 'food'},
-                {'text': 'Know your evacuation zone and route', 'checked': False, 'cat': 'evac'},
-                {'text': 'Stage go-bags at door if evacuation may be needed', 'checked': False, 'cat': 'evac'},
-                {'text': 'Move to interior room during storm (no windows)', 'checked': False, 'cat': 'safety'},
-                {'text': 'After storm: avoid downed power lines and standing water', 'checked': False, 'cat': 'safety'},
-            ],
-        },
-        'pandemic': {
-            'name': 'Scenario: Pandemic/Quarantine',
-            'items': [
-                {'text': 'Stock 30+ days of food and water per person', 'checked': False, 'cat': 'food'},
-                {'text': 'Stock 90-day supply of prescription medications', 'checked': False, 'cat': 'medical'},
-                {'text': 'N95/KN95 masks — minimum 50 per person', 'checked': False, 'cat': 'medical'},
-                {'text': 'Nitrile gloves, hand sanitizer, disinfectant', 'checked': False, 'cat': 'hygiene'},
-                {'text': 'Thermometer and pulse oximeter', 'checked': False, 'cat': 'medical'},
-                {'text': 'Establish quarantine room/area if household member gets sick', 'checked': False, 'cat': 'medical'},
-                {'text': 'Set up contactless delivery/pickup protocols', 'checked': False, 'cat': 'supply'},
-                {'text': 'Home school/education materials for children', 'checked': False, 'cat': 'morale'},
-                {'text': 'Entertainment/morale supplies for extended isolation', 'checked': False, 'cat': 'morale'},
-                {'text': 'Establish check-in schedule with family/neighbors', 'checked': False, 'cat': 'comms'},
-                {'text': 'Disinfect all incoming packages/deliveries', 'checked': False, 'cat': 'hygiene'},
-                {'text': 'Backup internet/comms plan if ISP fails', 'checked': False, 'cat': 'comms'},
-            ],
-        },
-        'wildfire': {
-            'name': 'Scenario: Wildfire Evacuation',
-            'items': [
-                {'text': 'Monitor fire maps and evacuation orders continuously', 'checked': False, 'cat': 'intel'},
-                {'text': 'Load go-bags in vehicle NOW — do not wait for mandatory evac', 'checked': False, 'cat': 'evac'},
-                {'text': 'Important documents, photos, irreplaceable items in car first', 'checked': False, 'cat': 'docs'},
-                {'text': 'Close all windows, doors, and vents to slow ember entry', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Connect garden hoses, fill pools/tubs/trash cans with water', 'checked': False, 'cat': 'defense'},
-                {'text': 'Move flammable furniture away from windows', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Remove flammable items from around house (30ft clearance)', 'checked': False, 'cat': 'defense'},
-                {'text': 'N95 masks for smoke — limit outdoor exposure', 'checked': False, 'cat': 'medical'},
-                {'text': 'Know 2+ evacuation routes — primary route may be blocked', 'checked': False, 'cat': 'evac'},
-                {'text': 'Livestock/pets loaded and ready', 'checked': False, 'cat': 'evac'},
-                {'text': 'Leave lights on and a note on door with destination info', 'checked': False, 'cat': 'comms'},
-                {'text': 'DO NOT return until authorities give all-clear', 'checked': False, 'cat': 'safety'},
-            ],
-        },
-        'civil_unrest': {
-            'name': 'Scenario: Civil Unrest',
-            'items': [
-                {'text': 'Stay home — avoid protest/riot areas entirely', 'checked': False, 'cat': 'safety'},
-                {'text': 'Lock and secure all entry points', 'checked': False, 'cat': 'security'},
-                {'text': 'Close blinds/curtains — do not attract attention', 'checked': False, 'cat': 'security'},
-                {'text': 'Park vehicles in garage or away from street', 'checked': False, 'cat': 'security'},
-                {'text': 'Verify food/water supply for 2+ weeks sheltering in place', 'checked': False, 'cat': 'supply'},
-                {'text': 'Keep all devices charged — power disruptions possible', 'checked': False, 'cat': 'power'},
-                {'text': 'Monitor multiple news/radio sources for situational awareness', 'checked': False, 'cat': 'intel'},
-                {'text': 'Establish neighborhood watch communication with trusted neighbors', 'checked': False, 'cat': 'comms'},
-                {'text': 'Have fire extinguishers accessible (arson risk)', 'checked': False, 'cat': 'safety'},
-                {'text': 'Know alternate routes to hospital/pharmacy if primary roads blocked', 'checked': False, 'cat': 'medical'},
-                {'text': 'Cash on hand — ATMs and card systems may go down', 'checked': False, 'cat': 'docs'},
-                {'text': 'Gray man principles — do not display wealth, supplies, or opinions', 'checked': False, 'cat': 'opsec'},
-            ],
-        },
-        'winter_storm': {
-            'name': 'Scenario: Winter Storm / Ice Storm',
-            'items': [
-                {'text': 'Stock firewood / fuel for 7+ days of heating', 'checked': False, 'cat': 'heating'},
-                {'text': 'Insulate windows with plastic film or heavy curtains', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Pipe insulation or heat tape on exposed plumbing', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Water stored in case pipes freeze (1 gal/person/day x 7 days)', 'checked': False, 'cat': 'water'},
-                {'text': 'Non-perishable food (no cooking required) for 7 days', 'checked': False, 'cat': 'food'},
-                {'text': 'Extra blankets, sleeping bags, thermal underwear', 'checked': False, 'cat': 'warmth'},
-                {'text': 'Battery/crank-powered radio for weather alerts', 'checked': False, 'cat': 'comms'},
-                {'text': 'Flashlights, lanterns, extra batteries', 'checked': False, 'cat': 'light'},
-                {'text': 'Generator fueled + extension cords ready', 'checked': False, 'cat': 'power'},
-                {'text': 'Carbon monoxide detector with fresh batteries', 'checked': False, 'cat': 'safety'},
-                {'text': 'Snow shovel, ice melt, sand/kitty litter for traction', 'checked': False, 'cat': 'tools'},
-                {'text': 'Vehicle: full tank, winter kit (blanket, shovel, chains, flares)', 'checked': False, 'cat': 'vehicle'},
-                {'text': 'Medications: 14-day supply on hand', 'checked': False, 'cat': 'medical'},
-                {'text': 'Let faucets drip to prevent pipe freezing', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Know location of water shut-off valve', 'checked': False, 'cat': 'shelter'},
-            ],
-        },
-        'grid_down': {
-            'name': 'Scenario: Extended Power Grid Failure',
-            'items': [
-                {'text': 'Fill all water containers immediately (water pressure will drop)', 'checked': False, 'cat': 'water'},
-                {'text': 'Inventory food: eat perishables first, then frozen, then shelf-stable', 'checked': False, 'cat': 'food'},
-                {'text': 'Unplug sensitive electronics to prevent surge damage on restoration', 'checked': False, 'cat': 'power'},
-                {'text': 'Generator: test, fuel, extension cords, run OUTSIDE only', 'checked': False, 'cat': 'power'},
-                {'text': 'Solar panels and battery banks charged and accessible', 'checked': False, 'cat': 'power'},
-                {'text': 'Cash on hand ($500+ in small bills) — electronic payments are down', 'checked': False, 'cat': 'finance'},
-                {'text': 'Fill vehicle gas tanks (pumps need electricity)', 'checked': False, 'cat': 'fuel'},
-                {'text': 'Battery/crank radio for information', 'checked': False, 'cat': 'comms'},
-                {'text': 'HAM/FRS/GMRS radio charged for local communication', 'checked': False, 'cat': 'comms'},
-                {'text': 'Establish neighborhood watch / check on elderly neighbors', 'checked': False, 'cat': 'security'},
-                {'text': 'Security: lock doors, close curtains, low profile after dark', 'checked': False, 'cat': 'security'},
-                {'text': 'Medical: inventory all medications, calculate days of supply', 'checked': False, 'cat': 'medical'},
-                {'text': 'Sanitation plan: bucket toilet with bags + kitty litter if water fails', 'checked': False, 'cat': 'sanitation'},
-                {'text': 'Cooking: camp stove, grill, or fire pit with fuel supply', 'checked': False, 'cat': 'food'},
-                {'text': 'Entertainment: books, cards, board games (morale matters)', 'checked': False, 'cat': 'morale'},
-            ],
-        },
-        'shelter_in_place': {
-            'name': 'Scenario: Shelter-in-Place (Chemical/Nuclear)',
-            'items': [
-                {'text': 'Get INSIDE immediately — sealed building is best protection', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Close and lock all windows and doors', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Turn OFF HVAC / air conditioning / fans', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Seal door gaps with wet towels', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Tape plastic sheeting over windows and vents', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Move to interior room above ground level', 'checked': False, 'cat': 'shelter'},
-                {'text': 'Monitor NOAA radio / emergency broadcasts for all-clear', 'checked': False, 'cat': 'comms'},
-                {'text': 'Water: fill containers from tap BEFORE contamination reaches supply', 'checked': False, 'cat': 'water'},
-                {'text': 'Potassium iodide (KI) tablets if nuclear — take per instructions', 'checked': False, 'cat': 'medical'},
-                {'text': 'DO NOT go outside to check conditions', 'checked': False, 'cat': 'safety'},
-                {'text': 'Cover nose and mouth with wet cloth if air quality degrades', 'checked': False, 'cat': 'safety'},
-                {'text': 'Account for all household members — do not separate', 'checked': False, 'cat': 'family'},
-                {'text': 'If contamination suspected on skin/clothes: remove outer clothing, shower', 'checked': False, 'cat': 'decon'},
-                {'text': 'Remain sheltered minimum 24 hours (nuclear) or until all-clear (chemical)', 'checked': False, 'cat': 'shelter'},
-            ],
-        },
-        'infant_emergency': {
-            'name': 'Infant / Baby Emergency Kit',
-            'items': [
-                {'text': 'Formula or breastmilk storage (3-day supply minimum)', 'checked': False, 'cat': 'food'},
-                {'text': 'Bottles, nipples, bottle brush, dish soap', 'checked': False, 'cat': 'feeding'},
-                {'text': 'Diapers (minimum 50) + wipes (2 packs)', 'checked': False, 'cat': 'hygiene'},
-                {'text': 'Diaper rash cream', 'checked': False, 'cat': 'medical'},
-                {'text': 'Baby Tylenol (infant acetaminophen) + dosing syringe', 'checked': False, 'cat': 'medical'},
-                {'text': 'Pedialyte or ORS packets (dehydration prevention)', 'checked': False, 'cat': 'medical'},
-                {'text': 'Warm clothing layers + hat + socks (season appropriate)', 'checked': False, 'cat': 'clothing'},
-                {'text': 'Blankets (2 receiving, 1 heavier)', 'checked': False, 'cat': 'warmth'},
-                {'text': 'Pacifiers (if used) — 2 minimum', 'checked': False, 'cat': 'comfort'},
-                {'text': 'Baby carrier (hands-free, for evacuation)', 'checked': False, 'cat': 'gear'},
-                {'text': 'Clean water for mixing formula (if not breastfeeding)', 'checked': False, 'cat': 'water'},
-                {'text': 'Small first aid kit: thermometer, nasal aspirator, nail clippers', 'checked': False, 'cat': 'medical'},
-                {'text': 'Birth certificate + insurance card copies', 'checked': False, 'cat': 'docs'},
-                {'text': 'Comfort item (stuffed animal, favorite toy)', 'checked': False, 'cat': 'comfort'},
-                {'text': 'Portable crib or pack-n-play (if evacuating)', 'checked': False, 'cat': 'gear'},
-            ],
-        },
-    }
+    from web.checklist_templates_data import CHECKLIST_TEMPLATES
 
     @app.route('/api/checklists')
     def api_checklists_list():
-        db = get_db()
         try:
-            rows = db.execute('SELECT * FROM checklists ORDER BY updated_at DESC').fetchall()
-        finally:
-            db.close()
+            limit = min(int(request.args.get('limit', 50)), 200)
+        except (ValueError, TypeError):
+            limit = 50
+        try:
+            offset = int(request.args.get('offset', 0))
+        except (ValueError, TypeError):
+            offset = 0
+        with db_session() as db:
+            rows = db.execute('SELECT * FROM checklists ORDER BY updated_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
         result = []
         for r in rows:
             items = json.loads(r['items'] or '[]')
@@ -1413,24 +1092,18 @@ def create_app():
         else:
             name = data.get('name', 'Custom Checklist')
             items = json.dumps(data.get('items', []))
-        db = get_db()
-        try:
+        with db_session() as db:
             cur = db.execute('INSERT INTO checklists (name, template, items) VALUES (?, ?, ?)',
                              (name, template_id, items))
             db.commit()
             cid = cur.lastrowid
             row = db.execute('SELECT * FROM checklists WHERE id = ?', (cid,)).fetchone()
-        finally:
-            db.close()
         return jsonify({**dict(row), 'items': json.loads(row['items'] or '[]')}), 201
 
     @app.route('/api/checklists/<int:cid>')
     def api_checklists_get(cid):
-        db = get_db()
-        try:
+        with db_session() as db:
             row = db.execute('SELECT * FROM checklists WHERE id = ?', (cid,)).fetchone()
-        finally:
-            db.close()
         if not row:
             return jsonify({'error': 'Not found'}), 404
         return jsonify({**dict(row), 'items': json.loads(row['items'] or '[]')})
@@ -1438,8 +1111,7 @@ def create_app():
     @app.route('/api/checklists/<int:cid>', methods=['PUT'])
     def api_checklists_update(cid):
         data = request.get_json() or {}
-        db = get_db()
-        try:
+        with db_session() as db:
             update_data = {}
             if 'name' in data:
                 update_data['name'] = data['name']
@@ -1452,32 +1124,35 @@ def create_app():
                 vals.append(cid)
                 db.execute(f'UPDATE checklists SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?', vals)
             db.commit()
-        finally:
-            db.close()
         return jsonify({'status': 'saved'})
 
     @app.route('/api/checklists/<int:cid>', methods=['DELETE'])
     def api_checklists_delete(cid):
-        db = get_db()
-        try:
+        with db_session() as db:
             db.execute('DELETE FROM checklists WHERE id = ?', (cid,))
             db.commit()
-        finally:
-            db.close()
         return jsonify({'status': 'deleted'})
 
-    # [EXTRACTED to blueprint]
+    @app.route('/api/checklists/<int:cid>/clone', methods=['POST'])
+    def api_checklist_clone(cid):
+        with db_session() as db:
+            row = db.execute('SELECT * FROM checklists WHERE id=?', (cid,)).fetchone()
+            if not row:
+                return jsonify({'error': 'not found'}), 404
+            d = dict(row)
+            cur = db.execute('INSERT INTO checklists (name, template, items) VALUES (?,?,?)',
+                (d.get('name', '') + ' (copy)', d.get('template', ''), d.get('items', '[]')))
+            db.commit()
+            new_id = cur.lastrowid
+        return jsonify({'status': 'cloned', 'id': new_id})
 
-    def _esc(s):
-        """Escape HTML for print output."""
-        return (s or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+    # [EXTRACTED to blueprint]
 
     @app.route('/api/preparedness/print')
     def api_preparedness_print():
         """Generate printable emergency summary page."""
-        db = get_db()
-        try:
-            contacts = db.execute('SELECT * FROM contacts ORDER BY name').fetchall()
+        with db_session() as db:
+            contacts = db.execute('SELECT * FROM contacts ORDER BY name LIMIT 10000').fetchall()
             settings = {r['key']: r['value'] for r in db.execute('SELECT key, value FROM settings').fetchall()}
 
             # Burn rate summary
@@ -1493,11 +1168,8 @@ def create_app():
             low = db.execute('SELECT name, quantity, unit, category FROM inventory WHERE quantity <= min_quantity AND min_quantity > 0').fetchall()
 
             # Expiring items
-            from datetime import datetime, timedelta
             soon = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
             expiring = db.execute("SELECT name, expiration, category FROM inventory WHERE expiration != '' AND expiration <= ? ORDER BY expiration", (soon,)).fetchall()
-        finally:
-            db.close()
 
         # Situation board
         sit = {}
@@ -1629,15 +1301,28 @@ def create_app():
 
     @app.route('/api/contacts')
     def api_contacts_list():
+        CONTACT_SORT_FIELDS = {'name', 'callsign', 'role', 'created_at', 'updated_at'}
+        try:
+            limit = min(int(request.args.get('limit', 50)), 200)
+        except (ValueError, TypeError):
+            limit = 50
+        try:
+            offset = int(request.args.get('offset', 0))
+        except (ValueError, TypeError):
+            offset = 0
+        sort_by = request.args.get('sort_by', 'name')
+        sort_dir = 'DESC' if request.args.get('sort_dir', 'asc').lower() == 'desc' else 'ASC'
+        if sort_by not in CONTACT_SORT_FIELDS:
+            sort_by = 'name'
         with db_session() as db:
             search = request.args.get('q', '').strip()
             if search:
                 rows = db.execute(
-                    "SELECT * FROM contacts WHERE name LIKE ? OR callsign LIKE ? OR role LIKE ? OR skills LIKE ? ORDER BY name",
-                    tuple(f'%{search}%' for _ in range(4))
+                    f"SELECT * FROM contacts WHERE name LIKE ? OR callsign LIKE ? OR role LIKE ? OR skills LIKE ? ORDER BY {sort_by} {sort_dir} LIMIT ? OFFSET ?",
+                    tuple(f'%{search}%' for _ in range(4)) + (limit, offset)
                 ).fetchall()
             else:
-                rows = db.execute('SELECT * FROM contacts ORDER BY name').fetchall()
+                rows = db.execute(f'SELECT * FROM contacts ORDER BY {sort_by} {sort_dir} LIMIT ? OFFSET ?', (limit, offset)).fetchall()
         return jsonify([dict(r) for r in rows])
 
     @app.route('/api/contacts', methods=['POST'])
@@ -1680,13 +1365,26 @@ def create_app():
             db.commit()
         return jsonify({'status': 'deleted'})
 
+    @app.route('/api/contacts/bulk-delete', methods=['POST'])
+    def api_contacts_bulk_delete():
+        data = request.get_json(force=True)
+        ids = data.get('ids', [])
+        if not ids or not isinstance(ids, list):
+            return jsonify({'error': 'ids array required'}), 400
+        if len(ids) > 100:
+            return jsonify({'error': 'max 100 items per bulk delete'}), 400
+        with db_session() as db:
+            placeholders = ','.join('?' * len(ids))
+            db.execute(f'DELETE FROM contacts WHERE id IN ({placeholders})', ids)
+            db.commit()
+        return jsonify({'status': 'deleted', 'count': len(ids)})
+
     # ─── Guides Context API ────────────────────────────────────────────
 
     @app.route('/api/guides/context')
     def api_guides_context():
         """Return live inventory/contacts data for context-aware decision tree rendering."""
-        db = get_db()
-        try:
+        with db_session() as db:
             # Relevant inventory items grouped by category
             items = db.execute("SELECT name, quantity, unit, category, expiration FROM inventory WHERE quantity > 0 ORDER BY category, name LIMIT 500").fetchall()
             inv_by_cat = {}
@@ -1722,8 +1420,6 @@ def create_app():
                     'comms_officer': next((c['name'] for c in contacts if 'comms' in (c['role'] or '').lower() or 'radio' in (c['role'] or '').lower()), None),
                 },
             })
-        finally:
-            db.close()
 
     # ─── LAN Chat API ─────────────────────────────────────────────────
 
@@ -1794,10 +1490,17 @@ def create_app():
 
     @app.route('/api/timers')
     def api_timers_list():
+        try:
+            limit = min(int(request.args.get('limit', 50)), 200)
+        except (ValueError, TypeError):
+            limit = 50
+        try:
+            offset = int(request.args.get('offset', 0))
+        except (ValueError, TypeError):
+            offset = 0
         with db_session() as db:
-            rows = db.execute('SELECT * FROM timers ORDER BY created_at DESC').fetchall()
+            rows = db.execute('SELECT * FROM timers ORDER BY created_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
         result = []
-        from datetime import datetime
         now = datetime.now()
         for r in rows:
             try:
@@ -1813,16 +1516,15 @@ def create_app():
     def api_timers_create():
         data = request.get_json() or {}
         try:
-            from datetime import datetime
             duration = int(data.get('duration_sec', 300))
-            db = get_db()
-            cur = db.execute('INSERT INTO timers (name, duration_sec, started_at) VALUES (?, ?, ?)',
-                             (data.get('name', 'Timer'), duration,
-                              datetime.now().isoformat()))
-            db.commit()
-            row = db.execute('SELECT * FROM timers WHERE id = ?', (cur.lastrowid,)).fetchone()
-            db.close()
-            return jsonify(dict(row)), 201
+            with db_session() as db:
+                cur = db.execute('INSERT INTO timers (name, duration_sec, started_at) VALUES (?, ?, ?)',
+                                 (data.get('name', 'Timer'), duration,
+                                  datetime.now().isoformat()))
+                db.commit()
+                row = db.execute('SELECT * FROM timers WHERE id = ?', (cur.lastrowid,)).fetchone()
+                result = dict(row)
+            return jsonify(result), 201
         except (ValueError, TypeError) as e:
             return jsonify({'error': f'Invalid duration: {e}'}), 400
         except Exception as e:
@@ -1857,8 +1559,16 @@ def create_app():
 
     @app.route('/api/vault')
     def api_vault_list():
+        try:
+            limit = min(int(request.args.get('limit', 50)), 200)
+        except (ValueError, TypeError):
+            limit = 50
+        try:
+            offset = int(request.args.get('offset', 0))
+        except (ValueError, TypeError):
+            offset = 0
         with db_session() as db:
-            rows = db.execute('SELECT id, title, created_at, updated_at FROM vault_entries ORDER BY updated_at DESC').fetchall()
+            rows = db.execute('SELECT id, title, created_at, updated_at FROM vault_entries ORDER BY updated_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
         return jsonify([dict(r) for r in rows])
 
     @app.route('/api/vault', methods=['POST'])
@@ -1867,6 +1577,8 @@ def create_app():
         for field in ('encrypted_data', 'iv', 'salt'):
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
+            if len(data.get(field, '') or '') > 1_000_000:
+                return jsonify({'error': f'{field} too large (max 1MB)'}), 400
         with db_session() as db:
             cur = db.execute('INSERT INTO vault_entries (title, encrypted_data, iv, salt) VALUES (?, ?, ?, ?)',
                              (data.get('title', 'Untitled'), data['encrypted_data'], data['iv'], data['salt']))
@@ -1888,6 +1600,8 @@ def create_app():
         for field in ('encrypted_data', 'iv', 'salt'):
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
+            if len(data.get(field, '') or '') > 1_000_000:
+                return jsonify({'error': f'{field} too large (max 1MB)'}), 400
         with db_session() as db:
             db.execute('UPDATE vault_entries SET title = ?, encrypted_data = ?, iv = ?, salt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
                        (data.get('title', ''), data['encrypted_data'], data['iv'], data['salt'], eid))
@@ -1984,7 +1698,10 @@ def create_app():
         file = request.files['file']
         db = None
         try:
-            data = json.loads(file.read().decode('utf-8'))
+            raw = file.read(2 * 1024 * 1024 + 1)
+            if len(raw) > 2 * 1024 * 1024:
+                return jsonify({'error': 'File exceeds 2MB limit'}), 400
+            data = json.loads(raw.decode('utf-8'))
             if data.get('type') != 'nomad_checklist':
                 return jsonify({'error': 'Invalid checklist file'}), 400
             db = get_db()
@@ -2009,7 +1726,7 @@ def create_app():
     @app.route('/api/waypoints/export-gpx')
     def api_waypoints_gpx():
         with db_session() as db:
-            rows = db.execute('SELECT * FROM waypoints ORDER BY created_at').fetchall()
+            rows = db.execute('SELECT * FROM waypoints ORDER BY created_at LIMIT 10000').fetchall()
         gpx = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="NOMADFieldDesk">\n'
         for w in rows:
             gpx += f'  <wpt lat="{w["lat"]}" lon="{w["lng"]}">\n'
@@ -2029,14 +1746,22 @@ def create_app():
             return jsonify({'error': 'No file'}), 400
         file = request.files['file']
         content = file.read().decode('utf-8', errors='replace')
-        import re
-        wpts = re.findall(r'<wpt\s+lat="([^"]+)"\s+lon="([^"]+)"[^>]*>.*?</wpt>', content, re.DOTALL)
+        import xml.etree.ElementTree as ET
+        try:
+            root = ET.fromstring(content)
+        except ET.ParseError as e:
+            return jsonify({'error': f'Invalid GPX XML: {e}'}), 400
+        ns = {'gpx': 'http://www.topografix.com/GPX/1/1'}
+        wpts = root.findall('.//gpx:wpt', ns) + root.findall('.//wpt')
         with db_session() as db:
             count = 0
-            for lat, lon in wpts:
-                segment = content[content.find(f'lat="{lat}"'):][:500]
-                name_match = re.search(r'<name>([^<]+)</name>', segment)
-                name = name_match.group(1) if name_match else f'Imported {lat},{lon}'
+            for wpt in wpts:
+                lat = wpt.get('lat')
+                lon = wpt.get('lon')
+                if lat is None or lon is None:
+                    continue
+                name_el = wpt.find('gpx:name', ns) or wpt.find('name')
+                name = name_el.text if name_el is not None and name_el.text else f'Imported {lat},{lon}'
                 try:
                     db.execute('INSERT INTO waypoints (name, lat, lng, category) VALUES (?, ?, ?, ?)',
                                (name, float(lat), float(lon), 'imported'))
@@ -2062,10 +1787,10 @@ def create_app():
         import time as _t
         _t.sleep(30)  # Wait for app to initialize
         while True:
+            db = None
             try:
                 alerts = []
                 db = get_db()
-                from datetime import datetime, timedelta
                 now = datetime.now()
                 today = now.strftime('%Y-%m-%d')
                 soon = (now + timedelta(days=14)).strftime('%Y-%m-%d')
@@ -2185,7 +1910,13 @@ def create_app():
                 except Exception:
                     pass
 
-                db.close()
+                # Close the read-only db before opening write sessions
+                if db:
+                    try:
+                        db.close()
+                    except Exception:
+                        pass
+                    db = None
 
                 # Deduplicate against existing active alerts (don't re-create dismissed ones within 24h)
                 if alerts:
@@ -2211,6 +1942,12 @@ def create_app():
 
             except Exception as e:
                 log.error(f'Alert engine error: {e}')
+            finally:
+                if db:
+                    try:
+                        db.close()
+                    except Exception:
+                        pass
             _t.sleep(300)  # Check every 5 minutes
 
     threading.Thread(target=_run_alert_checks, daemon=True).start()
@@ -2265,6 +2002,7 @@ def create_app():
             resp = req.post(f'http://localhost:{ollama.OLLAMA_PORT}/api/generate',
                            json={'model': model, 'prompt': prompt, 'stream': False},
                            timeout=30)
+            resp.raise_for_status()
             result = resp.json()
             return jsonify({'summary': result.get('response', '').strip()})
         except Exception as e:
@@ -2332,14 +2070,31 @@ def create_app():
 
     @app.route('/api/livestock')
     def api_livestock_list():
+        LIVESTOCK_SORT_FIELDS = {'name', 'species', 'breed', 'status', 'created_at', 'updated_at'}
+        try:
+            limit = min(int(request.args.get('limit', 50)), 200)
+        except (ValueError, TypeError):
+            limit = 50
+        try:
+            offset = int(request.args.get('offset', 0))
+        except (ValueError, TypeError):
+            offset = 0
+        sort_by = request.args.get('sort_by', 'species')
+        sort_dir = 'DESC' if request.args.get('sort_dir', 'asc').lower() == 'desc' else 'ASC'
+        if sort_by not in LIVESTOCK_SORT_FIELDS:
+            sort_by = 'species'
         with db_session() as db:
-            rows = db.execute('SELECT * FROM livestock ORDER BY species, name').fetchall()
+            rows = db.execute(f'SELECT * FROM livestock ORDER BY {sort_by} {sort_dir}, name ASC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
         return jsonify([{**dict(r), 'health_log': json.loads(r['health_log'] or '[]'),
                          'vaccinations': json.loads(r['vaccinations'] or '[]')} for r in rows])
 
     @app.route('/api/livestock', methods=['POST'])
     def api_livestock_create():
         data = request.get_json() or {}
+        if len(data.get('name', '') or '') > 200:
+            return jsonify({'error': 'name too long (max 200)'}), 400
+        if len(data.get('species', '') or '') > 200:
+            return jsonify({'error': 'species too long (max 200)'}), 400
         if not data.get('species'):
             return jsonify({'error': 'Species required'}), 400
         with db_session() as db:
@@ -2352,12 +2107,34 @@ def create_app():
     @app.route('/api/livestock/<int:lid>', methods=['PUT'])
     def api_livestock_update(lid):
         data = request.get_json() or {}
+        if len(data.get('name', '') or '') > 200:
+            return jsonify({'error': 'name too long (max 200)'}), 400
+        if len(data.get('species', '') or '') > 200:
+            return jsonify({'error': 'species too long (max 200)'}), 400
+        field_map = {
+            'species': lambda d: d['species'],
+            'name': lambda d: d['name'],
+            'tag': lambda d: d['tag'],
+            'dob': lambda d: d['dob'],
+            'sex': lambda d: d['sex'],
+            'weight_lbs': lambda d: d['weight_lbs'],
+            'status': lambda d: d['status'],
+            'health_log': lambda d: json.dumps(d['health_log']),
+            'vaccinations': lambda d: json.dumps(d['vaccinations']),
+            'notes': lambda d: d['notes'],
+        }
+        sets = []
+        vals = []
+        for col, fn in field_map.items():
+            if col in data:
+                sets.append(f'{col}=?')
+                vals.append(fn(data))
+        if not sets:
+            return jsonify({'status': 'no changes'})
+        sets.append('updated_at=CURRENT_TIMESTAMP')
+        vals.append(lid)
         with db_session() as db:
-            db.execute('UPDATE livestock SET species=?, name=?, tag=?, dob=?, sex=?, weight_lbs=?, status=?, health_log=?, vaccinations=?, notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-                       (data.get('species', ''), data.get('name', ''), data.get('tag', ''), data.get('dob', ''),
-                        data.get('sex', ''), data.get('weight_lbs'), data.get('status', 'active'),
-                        json.dumps(data.get('health_log', [])), json.dumps(data.get('vaccinations', [])),
-                        data.get('notes', ''), lid))
+            db.execute(f'UPDATE livestock SET {", ".join(sets)} WHERE id=?', tuple(vals))
             db.commit()
         return jsonify({'status': 'updated'})
 
@@ -2367,6 +2144,20 @@ def create_app():
             db.execute('DELETE FROM livestock WHERE id = ?', (lid,))
             db.commit()
         return jsonify({'status': 'deleted'})
+
+    @app.route('/api/livestock/bulk-delete', methods=['POST'])
+    def api_livestock_bulk_delete():
+        data = request.get_json(force=True)
+        ids = data.get('ids', [])
+        if not ids or not isinstance(ids, list):
+            return jsonify({'error': 'ids array required'}), 400
+        if len(ids) > 100:
+            return jsonify({'error': 'max 100 items per bulk delete'}), 400
+        with db_session() as db:
+            placeholders = ','.join('?' * len(ids))
+            db.execute(f'DELETE FROM livestock WHERE id IN ({placeholders})', ids)
+            db.commit()
+        return jsonify({'status': 'deleted', 'count': len(ids)})
 
     @app.route('/api/livestock/<int:lid>/health', methods=['POST'])
     def api_livestock_health_event(lid):
@@ -2385,10 +2176,48 @@ def create_app():
 
     # ─── Scenario Training Engine ──────────────────────────────────────
 
+    def _calculate_scenario_score(decisions, scenario_type, duration_sec=None):
+        """Calculate structured scenario score with category breakdown."""
+        score = 0
+        breakdown = {}
+
+        # Decision quality (40 points max)
+        decision_count = len(decisions) if isinstance(decisions, list) else 0
+        breakdown['decisions'] = min(40, decision_count * 8)
+        score += breakdown['decisions']
+
+        # Speed (20 points max) - faster is better
+        if duration_sec and duration_sec > 0:
+            if duration_sec < 300: breakdown['speed'] = 20       # Under 5 min
+            elif duration_sec < 600: breakdown['speed'] = 15     # Under 10 min
+            elif duration_sec < 900: breakdown['speed'] = 10     # Under 15 min
+            else: breakdown['speed'] = 5
+        else:
+            breakdown['speed'] = 10  # No timer, middle score
+        score += breakdown['speed']
+
+        # Completeness (20 points) - did all phases get addressed
+        breakdown['completeness'] = min(20, decision_count * 5)
+        score += breakdown['completeness']
+
+        # Base score (20 points) - just for attempting
+        breakdown['participation'] = 20
+        score += breakdown['participation']
+
+        return min(100, score), breakdown
+
     @app.route('/api/scenarios')
     def api_scenarios_list():
+        try:
+            limit = min(int(request.args.get('limit', 20)), 200)
+        except (ValueError, TypeError):
+            limit = 20
+        try:
+            offset = int(request.args.get('offset', 0))
+        except (ValueError, TypeError):
+            offset = 0
         with db_session() as db:
-            rows = db.execute('SELECT * FROM scenarios ORDER BY started_at DESC LIMIT 20').fetchall()
+            rows = db.execute('SELECT * FROM scenarios ORDER BY started_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
         return jsonify([{**dict(r), 'decisions': json.loads(r['decisions'] or '[]'),
                          'complications': json.loads(r['complications'] or '[]')} for r in rows])
 
@@ -2456,6 +2285,7 @@ Respond with ONLY a JSON object (no markdown, no explanation):
             import requests as req
             resp = req.post(f'http://localhost:{ollama.OLLAMA_PORT}/api/generate',
                            json={'model': models[0]['name'], 'prompt': prompt, 'stream': False, 'format': 'json'}, timeout=30)
+            resp.raise_for_status()
             result = resp.json().get('response', '{}')
             complication = json.loads(result)
             return jsonify(complication)
@@ -2494,13 +2324,21 @@ Provide:
 
 Respond as plain text, not JSON. Start with "Score: XX/100" on the first line."""
 
+        scenario_type = scenario['scenario_type'] if scenario else ''
+
         try:
             if not ollama.running() or not ollama.list_models():
-                score = min(100, max(20, len(decisions) * 15 + 10))
-                return jsonify({'score': score, 'aar': f'Score: {score}/100\n\nCompleted {len(decisions)} phases with {len(complications)} complications handled. Practice regularly to improve response times and decision quality.'})
+                score, breakdown = _calculate_scenario_score(decisions, scenario_type)
+                # Record skill progression
+                with db_session() as db:
+                    db.execute('INSERT INTO skill_progression (skill_tag, score, scenario_type, drill_type) VALUES (?, ?, ?, ?)',
+                               (scenario_type or 'general', score, scenario_type, None))
+                    db.commit()
+                return jsonify({'score': score, 'breakdown': breakdown, 'aar': f'Score: {score}/100\n\nCompleted {len(decisions)} phases with {len(complications)} complications handled. Practice regularly to improve response times and decision quality.'})
             import requests as req
             resp = req.post(f'http://localhost:{ollama.OLLAMA_PORT}/api/generate',
                            json={'model': ollama.list_models()[0]['name'], 'prompt': prompt, 'stream': False}, timeout=45)
+            resp.raise_for_status()
             aar_text = resp.json().get('response', '').strip()
             # Try to extract score
             score = 50
@@ -2508,10 +2346,23 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             score_match = re.search(r'Score:\s*(\d+)', aar_text)
             if score_match:
                 score = min(100, max(0, int(score_match.group(1))))
+            # Record skill progression
+            with db_session() as db:
+                db.execute('INSERT INTO skill_progression (skill_tag, score, scenario_type, drill_type) VALUES (?, ?, ?, ?)',
+                           (scenario_type or 'general', score, scenario_type, None))
+                db.commit()
             return jsonify({'score': score, 'aar': aar_text})
         except Exception as e:
-            score = min(100, max(20, len(decisions) * 15 + 10))
-            return jsonify({'score': score, 'aar': f'Score: {score}/100\n\nAI review unavailable. Completed {len(decisions)} decision phases. Review your choices and consider alternative approaches for future training.'})
+            score, breakdown = _calculate_scenario_score(decisions, scenario_type)
+            # Record skill progression
+            try:
+                with db_session() as db:
+                    db.execute('INSERT INTO skill_progression (skill_tag, score, scenario_type, drill_type) VALUES (?, ?, ?, ?)',
+                               (scenario_type or 'general', score, scenario_type, None))
+                    db.commit()
+            except Exception:
+                pass
+            return jsonify({'score': score, 'breakdown': breakdown, 'aar': f'Score: {score}/100\n\nAI review unavailable. Completed {len(decisions)} decision phases. Review your choices and consider alternative approaches for future training.'})
 
     # [EXTRACTED to blueprint] Medical module (patients + drugs + dosage + triage + TCCC)
 
@@ -2527,11 +2378,8 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
     def _load_auto_backup_config():
         """Load backup settings, skipping quietly if the configured DB is unavailable."""
         try:
-            db = get_db()
-            try:
+            with db_session() as db:
                 row = db.execute("SELECT value FROM settings WHERE key = 'auto_backup_config'").fetchone()
-            finally:
-                db.close()
         except Exception as e:
             log.debug(f'Auto-backup config unavailable: {e}')
             return None
@@ -2548,7 +2396,6 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
     def _run_auto_backup():
         """Execute scheduled auto-backup and reschedule."""
         import sqlite3 as _sqlite3
-        from datetime import datetime
         try:
             cfg = _load_auto_backup_config()
             if not cfg or not cfg.get('enabled'):
@@ -2737,17 +2584,68 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
 
     @app.route('/api/drills/history', methods=['POST'])
     def api_drill_history_save():
-        data = request.get_json() or {}
+        data = request.get_json(force=True)
+        if len(data.get('drill_type', '') or '') > 200:
+            return jsonify({'error': 'drill_type too long'}), 400
+        if len(data.get('title', '') or '') > 200:
+            return jsonify({'error': 'title too long'}), 400
         try:
-            db = get_db()
-            db.execute('INSERT INTO drill_history (drill_type, title, duration_sec, tasks_total, tasks_completed, notes) VALUES (?, ?, ?, ?, ?, ?)',
-                       (data.get('drill_type', ''), data.get('title', ''), int(data.get('duration_sec', 0)),
-                        int(data.get('tasks_total', 0)), int(data.get('tasks_completed', 0)), data.get('notes', '')))
-            db.commit()
-            db.close()
+            drill_type = data.get('drill_type', '')
+            tasks_total = int(data.get('tasks_total', 0))
+            tasks_completed = int(data.get('tasks_completed', 0))
+            duration_sec = int(data.get('duration_sec', 0))
+            with db_session() as db:
+                db.execute('INSERT INTO drill_history (drill_type, title, duration_sec, tasks_total, tasks_completed, notes) VALUES (?, ?, ?, ?, ?, ?)',
+                           (drill_type, data.get('title', ''), duration_sec,
+                            tasks_total, tasks_completed, data.get('notes', '')))
+                # Record skill progression for drill completion
+                drill_score = round((tasks_completed / max(tasks_total, 1)) * 100) if tasks_total > 0 else 50
+                db.execute('INSERT INTO skill_progression (skill_tag, score, scenario_type, drill_type) VALUES (?, ?, ?, ?)',
+                           (drill_type or 'general_drill', drill_score, None, drill_type))
+                db.commit()
             return jsonify({'status': 'saved'}), 201
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
+    # ─── Skill Progression Tracking ─────────────────────────────────────
+
+    @app.route('/api/training/progression', methods=['GET'])
+    def api_training_progression():
+        """Get skill progression data with trends."""
+        with db_session() as db:
+            rows = db.execute("""
+                SELECT skill_tag, scenario_type, score, recorded_at
+                FROM skill_progression
+                ORDER BY recorded_at DESC
+                LIMIT 200
+            """).fetchall()
+
+            # Group by skill_tag, compute trend
+            from collections import defaultdict as _defaultdict
+            by_skill = _defaultdict(list)
+            for r in rows:
+                by_skill[r['skill_tag']].append({
+                    'score': r['score'],
+                    'date': r['recorded_at'],
+                    'type': r['scenario_type']
+                })
+
+            result = []
+            for skill, entries in by_skill.items():
+                scores = [e['score'] for e in entries if e['score'] is not None]
+                if len(scores) >= 2:
+                    trend = 'improving' if scores[0] > scores[-1] else 'declining'
+                else:
+                    trend = 'stable'
+                result.append({
+                    'skill': skill,
+                    'latest_score': scores[0] if scores else None,
+                    'avg_score': round(sum(scores) / len(scores)) if scores else None,
+                    'attempts': len(entries),
+                    'trend': trend,
+                    'history': entries[:10]
+                })
+            return jsonify(sorted(result, key=lambda x: x.get('avg_score') or 0))
 
     # ─── Shopping List Generator ──────────────────────────────────────
 
@@ -2760,7 +2658,6 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
     def api_status_report():
         """Generate a comprehensive status report from all systems."""
         with db_session() as db:
-            from datetime import datetime, timedelta
 
             report = {'generated': datetime.now().isoformat(), 'version': VERSION}
 
@@ -2862,9 +2759,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
         with db_session() as db:
             freqs = db.execute('SELECT * FROM comms_log ORDER BY created_at DESC LIMIT 20').fetchall()
             contacts = db.execute("SELECT name, callsign, phone FROM contacts WHERE callsign != '' OR phone != '' ORDER BY name").fetchall()
-        from datetime import datetime
         now = datetime.now().strftime('%Y-%m-%d %H:%M')
-        from html import escape as esc
 
         standard_rows = [
             ('FRS Ch 1', '462.5625 MHz', 'Family rally primary'),
@@ -2890,9 +2785,9 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             traffic_html = '<div class="doc-table-shell"><table><thead><tr><th>Time</th><th>Callsign</th><th>Freq</th><th>Dir</th><th>Signal</th></tr></thead><tbody>'
             for entry in freqs[:10]:
                 traffic_html += (
-                    f'<tr><td>{esc(str(entry["created_at"]))}</td><td class="doc-strong">{esc(entry["callsign"] or "-")}</td>'
-                    f'<td>{esc(entry["freq"] or "-")}</td><td>{esc(entry["direction"] or "-")}</td>'
-                    f'<td>{esc(str(entry["signal_quality"] or "-"))}</td></tr>'
+                    f'<tr><td>{_esc(str(entry["created_at"]))}</td><td class="doc-strong">{_esc(entry["callsign"] or "-")}</td>'
+                    f'<td>{_esc(entry["freq"] or "-")}</td><td>{_esc(entry["direction"] or "-")}</td>'
+                    f'<td>{_esc(str(entry["signal_quality"] or "-"))}</td></tr>'
                 )
             traffic_html += '</tbody></table></div>'
 
@@ -2900,7 +2795,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
         if contacts:
             contacts_html = '<div class="doc-table-shell"><table><thead><tr><th>Name</th><th>Callsign</th><th>Phone</th></tr></thead><tbody>'
             for c in contacts:
-                contacts_html += f'<tr><td class="doc-strong">{esc(c["name"])}</td><td>{esc(c["callsign"] or "-")}</td><td>{esc(c["phone"] or "-")}</td></tr>'
+                contacts_html += f'<tr><td class="doc-strong">{_esc(c["name"])}</td><td>{_esc(c["callsign"] or "-")}</td><td>{_esc(c["phone"] or "-")}</td></tr>'
             contacts_html += '</tbody></table></div>'
 
         body = f'''<section class="doc-section">
@@ -2962,10 +2857,8 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
     def api_print_medical_cards():
         """Printable wallet-sized medical cards for each person."""
         with db_session() as db:
-            patients = db.execute('SELECT * FROM patients ORDER BY name').fetchall()
-        from datetime import datetime
+            patients = db.execute('SELECT * FROM patients ORDER BY name LIMIT 10000').fetchall()
         now = datetime.now().strftime('%Y-%m-%d')
-        from html import escape as esc
         card_grid = '<div class="doc-grid-3">'
         allergy_count = 0
         medication_count = 0
@@ -2981,17 +2874,17 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
                 allergy_count += 1
             if medications:
                 medication_count += 1
-            allergy_html = ''.join(f'<span class="doc-chip doc-chip-alert">{esc(str(a))}</span>' for a in allergies) or '<span class="doc-chip doc-chip-muted">NKDA</span>'
-            conditions_html = ''.join(f'<span class="doc-chip">{esc(str(c))}</span>' for c in conditions) or '<span class="doc-chip doc-chip-muted">None recorded</span>'
-            meds_html = ''.join(f'<span class="doc-chip">{esc(str(m))}</span>' for m in medications) or '<span class="doc-chip doc-chip-muted">None recorded</span>'
+            allergy_html = ''.join(f'<span class="doc-chip doc-chip-alert">{_esc(str(a))}</span>' for a in allergies) or '<span class="doc-chip doc-chip-muted">NKDA</span>'
+            conditions_html = ''.join(f'<span class="doc-chip">{_esc(str(c))}</span>' for c in conditions) or '<span class="doc-chip doc-chip-muted">None recorded</span>'
+            meds_html = ''.join(f'<span class="doc-chip">{_esc(str(m))}</span>' for m in medications) or '<span class="doc-chip doc-chip-muted">None recorded</span>'
             card_grid += f'''<div class="doc-panel doc-panel-strong">
   <h2 class="doc-section-title">Medical Card</h2>
   <div class="doc-note-box" style="background:#fff;border-style:solid;">
-    <div class="doc-strong" style="font-size:18px;">{esc(record["name"])}</div>
+    <div class="doc-strong" style="font-size:18px;">{_esc(record["name"])}</div>
     <div style="margin-top:10px;" class="doc-chip-list">
-      <span class="doc-chip">DOB: {esc(str(record.get("dob","—")))}</span>
-      <span class="doc-chip">Blood: {esc(str(record.get("blood_type","—")))}</span>
-      <span class="doc-chip">Weight: {esc(str(record.get("weight_kg","?")))} kg</span>
+      <span class="doc-chip">DOB: {_esc(str(record.get("dob","—")))}</span>
+      <span class="doc-chip">Blood: {_esc(str(record.get("blood_type","—")))}</span>
+      <span class="doc-chip">Weight: {_esc(str(record.get("weight_kg","?")))} kg</span>
     </div>
     <div style="margin-top:12px;">
       <div class="doc-section-title" style="margin-bottom:8px;">Allergies</div>
@@ -3041,7 +2934,6 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
     @app.route('/api/print/bug-out-checklist')
     def api_print_bugout():
         """Printable bug-out grab-and-go checklist."""
-        from datetime import datetime
         now = datetime.now().strftime('%Y-%m-%d %H:%M')
         items = [
             ('WATER','2+ gallons per person, filter/purification tabs, collapsible container'),
@@ -3127,7 +3019,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
     def api_contacts_print():
         """Printable contacts directory."""
         with db_session() as db:
-            contacts = db.execute('SELECT * FROM contacts ORDER BY name').fetchall()
+            contacts = db.execute('SELECT * FROM contacts ORDER BY name LIMIT 10000').fetchall()
         now = time.strftime('%Y-%m-%d %H:%M')
         rally_points = sorted({dict(c).get('rally_point', '').strip() for c in contacts if dict(c).get('rally_point', '').strip()})
         callsign_count = sum(1 for c in contacts if dict(c).get('callsign'))
@@ -3197,20 +3089,41 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
 
     # ─── PDF Generation (ReportLab) ──────────────────────────────────
 
-    @app.route('/api/print/pdf/operations-binder')
-    def api_print_pdf_operations_binder():
-        """Generate a full operations binder as a PDF using ReportLab."""
+    def _pdf_setup():
+        """Import ReportLab modules and return them as a namespace dict.
+
+        Returns None if reportlab is not installed.
+        """
         try:
+            import io
             from reportlab.lib.pagesizes import letter
             from reportlab.lib.units import inch
             from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
             from reportlab.lib import colors
-            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+            from reportlab.platypus import (
+                SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak,
+            )
         except ImportError:
-            return jsonify({'error': 'reportlab not installed', 'hint': 'pip install reportlab'}), 500
+            return None
+        return {
+            'io': io, 'letter': letter, 'inch': inch,
+            'getSampleStyleSheet': getSampleStyleSheet, 'ParagraphStyle': ParagraphStyle,
+            'colors': colors, 'SimpleDocTemplate': SimpleDocTemplate,
+            'Table': Table, 'TableStyle': TableStyle, 'Paragraph': Paragraph,
+            'Spacer': Spacer, 'PageBreak': PageBreak,
+        }
 
-        import io
-        from datetime import datetime
+    @app.route('/api/print/pdf/operations-binder')
+    def api_print_pdf_operations_binder():
+        """Generate a full operations binder as a PDF using ReportLab."""
+        rl = _pdf_setup()
+        if rl is None:
+            return jsonify({'error': 'reportlab not installed', 'hint': 'pip install reportlab'}), 500
+        io, letter, inch = rl['io'], rl['letter'], rl['inch']
+        getSampleStyleSheet, ParagraphStyle = rl['getSampleStyleSheet'], rl['ParagraphStyle']
+        colors = rl['colors']
+        SimpleDocTemplate, Table, TableStyle = rl['SimpleDocTemplate'], rl['Table'], rl['TableStyle']
+        Paragraph, Spacer, PageBreak = rl['Paragraph'], rl['Spacer'], rl['PageBreak']
 
         with db_session() as db:
             contacts = [dict(r) for r in db.execute('SELECT * FROM contacts ORDER BY name LIMIT 500').fetchall()]
@@ -3385,20 +3298,16 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
     @app.route('/api/print/pdf/wallet-cards')
     def api_print_pdf_wallet_cards():
         """Generate PDF wallet-sized cards (3.375 x 2.125 inches each)."""
-        try:
-            from reportlab.lib.pagesizes import letter
-            from reportlab.lib.units import inch
-            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-            from reportlab.lib import colors
-            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-        except ImportError:
+        rl = _pdf_setup()
+        if rl is None:
             return jsonify({'error': 'reportlab not installed', 'hint': 'pip install reportlab'}), 500
-
-        import io
-        from datetime import datetime
+        io, letter, inch = rl['io'], rl['letter'], rl['inch']
+        ParagraphStyle, colors = rl['ParagraphStyle'], rl['colors']
+        SimpleDocTemplate, Table, TableStyle = rl['SimpleDocTemplate'], rl['Table'], rl['TableStyle']
+        Paragraph, Spacer = rl['Paragraph'], rl['Spacer']
 
         with db_session() as db:
-            patients = [dict(r) for r in db.execute('SELECT * FROM patients ORDER BY name').fetchall()]
+            patients = [dict(r) for r in db.execute('SELECT * FROM patients ORDER BY name LIMIT 10000').fetchall()]
             contacts = [dict(r) for r in db.execute("SELECT name, phone, callsign, freq, rally_point FROM contacts WHERE phone != '' OR callsign != '' ORDER BY name LIMIT 10").fetchall()]
             waypoints = [dict(r) for r in db.execute("SELECT name, lat, lng, category FROM waypoints WHERE category IN ('rally','shelter','cache','home','base') ORDER BY name LIMIT 6").fetchall()]
             freqs = [dict(r) for r in db.execute('SELECT freq, callsign, message FROM comms_log ORDER BY created_at DESC LIMIT 8').fetchall()]
@@ -3491,17 +3400,13 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
     @app.route('/api/print/pdf/soi')
     def api_print_pdf_soi():
         """Generate Signal Operating Instructions (SOI) as PDF."""
-        try:
-            from reportlab.lib.pagesizes import letter
-            from reportlab.lib.units import inch
-            from reportlab.lib.styles import ParagraphStyle
-            from reportlab.lib import colors
-            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-        except ImportError:
+        rl = _pdf_setup()
+        if rl is None:
             return jsonify({'error': 'reportlab not installed', 'hint': 'pip install reportlab'}), 500
-
-        import io
-        from datetime import datetime
+        io, letter, inch = rl['io'], rl['letter'], rl['inch']
+        ParagraphStyle, colors = rl['ParagraphStyle'], rl['colors']
+        SimpleDocTemplate, Table, TableStyle = rl['SimpleDocTemplate'], rl['Table'], rl['TableStyle']
+        Paragraph, Spacer = rl['Paragraph'], rl['Spacer']
 
         with db_session() as db:
             contacts = [dict(r) for r in db.execute("SELECT name, callsign, freq, role FROM contacts WHERE callsign != '' OR freq != '' ORDER BY name").fetchall()]
@@ -3609,14 +3514,13 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
     def api_emergency_sheet():
         """Generate a comprehensive printable emergency reference sheet."""
         with db_session() as db:
-            from datetime import datetime, timedelta
 
             # Gather all critical data
-            contacts = [dict(r) for r in db.execute('SELECT * FROM contacts ORDER BY name').fetchall()]
+            contacts = [dict(r) for r in db.execute('SELECT * FROM contacts ORDER BY name LIMIT 10000').fetchall()]
             inventory = [dict(r) for r in db.execute('SELECT * FROM inventory ORDER BY category, name').fetchall()]
             burn_items = [dict(r) for r in db.execute('SELECT name, quantity, unit, daily_usage, category FROM inventory WHERE daily_usage > 0 ORDER BY (quantity/daily_usage)').fetchall()]
-            patients = [dict(r) for r in db.execute('SELECT * FROM patients ORDER BY name').fetchall()]
-            waypoints = [dict(r) for r in db.execute('SELECT * FROM waypoints ORDER BY category, name').fetchall()]
+            patients = [dict(r) for r in db.execute('SELECT * FROM patients ORDER BY name LIMIT 10000').fetchall()]
+            waypoints = [dict(r) for r in db.execute('SELECT * FROM waypoints ORDER BY category, name LIMIT 10000').fetchall()]
             checklists = [dict(r) for r in db.execute('SELECT name, items FROM checklists ORDER BY name').fetchall()]
             sit_raw = db.execute("SELECT value FROM settings WHERE key = 'sit_board'").fetchone()
             sit = json.loads(sit_raw['value'] or '{}') if sit_raw else {}
@@ -3654,9 +3558,18 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
         if patients:
             patients_html = '<div class="doc-table-shell"><table><thead><tr><th>Name</th><th>Age</th><th>Weight</th><th>Blood</th><th>Allergies</th><th>Medications</th><th>Conditions</th></tr></thead><tbody>'
             for p in patients:
-                allergies = json.loads(p.get('allergies') or '[]')
-                meds = json.loads(p.get('medications') or '[]')
-                conds = json.loads(p.get('conditions') or '[]')
+                try:
+                    allergies = json.loads(p.get('allergies') or '[]')
+                except (json.JSONDecodeError, TypeError):
+                    allergies = []
+                try:
+                    meds = json.loads(p.get('medications') or '[]')
+                except (json.JSONDecodeError, TypeError):
+                    meds = []
+                try:
+                    conds = json.loads(p.get('conditions') or '[]')
+                except (json.JSONDecodeError, TypeError):
+                    conds = []
                 allergy_str = ', '.join(allergies) if allergies else 'NKDA'
                 patients_html += (
                     f"<tr><td class=\"doc-strong\">{_esc(p.get('name',''))}</td><td>{p.get('age','') or '-'}</td>"
@@ -3707,7 +3620,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             for cl in checklists:
                 items = json.loads(cl.get('items') or '[]')
                 total = len(items)
-                checked = sum(1 for i in items if i.get('checked'))
+                checked = sum(1 for i in items if isinstance(i, dict) and i.get('checked'))
                 pct = round(checked / total * 100) if total > 0 else 0
                 checklist_html += f"<tr><td class=\"doc-strong\">{_esc(cl['name'])}</td><td>{checked}/{total} ({pct}%)</td></tr>"
             checklist_html += '</tbody></table></div>'
@@ -3725,9 +3638,8 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
 
         tasks_html = ''
         try:
-            db2 = get_db()
-            tasks = [dict(r) for r in db2.execute("SELECT name, category, next_due, assigned_to FROM scheduled_tasks WHERE next_due IS NOT NULL ORDER BY next_due LIMIT 15").fetchall()]
-            db2.close()
+            with db_session() as db2:
+                tasks = [dict(r) for r in db2.execute("SELECT name, category, next_due, assigned_to FROM scheduled_tasks WHERE next_due IS NOT NULL ORDER BY next_due LIMIT 15").fetchall()]
             if tasks:
                 task_table = '<div class="doc-table-shell"><table><thead><tr><th>Task</th><th>Category</th><th>Due</th><th>Assigned</th></tr></thead><tbody>'
                 for t in tasks:
@@ -3745,9 +3657,8 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
 
         notes_html = ''
         try:
-            db3 = get_db()
-            mem_row = db3.execute("SELECT value FROM settings WHERE key = 'ai_memory'").fetchone()
-            db3.close()
+            with db_session() as db3:
+                mem_row = db3.execute("SELECT value FROM settings WHERE key = 'ai_memory'").fetchone()
             if mem_row and mem_row['value']:
                 memories = json.loads(mem_row['value'])
                 if memories:
@@ -3852,7 +3763,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
         for r in rows:
             items = json.loads(r['items'] or '[]')
             total = len(items)
-            checked = sum(1 for i in items if i.get('checked'))
+            checked = sum(1 for i in items if isinstance(i, dict) and i.get('checked'))
             result.append({'id': r['id'], 'name': r['name'], 'total': total, 'checked': checked,
                           'pct': round(checked / total * 100) if total > 0 else 0})
         return jsonify(result)
@@ -3862,7 +3773,9 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
     @app.route('/api/readiness-score')
     def api_readiness_score():
         """Cross-module readiness assessment (0-100) with category breakdown."""
-        from datetime import datetime, timedelta
+        cached = _cached('readiness', 60)
+        if cached:
+            return jsonify(cached)
         with db_session() as db:
             scores = {}
 
@@ -3946,43 +3859,50 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
         else:
             grade = 'F'
 
-        return jsonify({
+        result = {
             'total': total, 'max': max_total, 'grade': grade,
             'categories': scores,
-        })
+        }
+        _set_cache('readiness', result)
+        return jsonify(result)
 
     # [EXTRACTED to blueprint] KB workspaces
 
 
     # [EXTRACTED to blueprint]
 
+    _benchmark_net_lock = threading.Lock()
+
     @app.route('/api/benchmark/network', methods=['POST'])
     def api_benchmark_network():
         """Benchmark local network throughput."""
         import time as _time
         import socket
+        if not _benchmark_net_lock.acquire(blocking=False):
+            return jsonify({'error': 'Benchmark already running'}), 409
+        server_sock = None
+        conn = None
         try:
-            # Test local loopback as baseline, or test to a peer
             peer = (request.json or {}).get('peer', '127.0.0.1')
-            port = 18234
             chunk = b'X' * (1024 * 1024)  # 1MB chunks
             total_mb = 10
 
-            # Simple TCP throughput test
             server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            server_sock.bind(('0.0.0.0', port))
+            server_sock.bind(('', 0))
+            port = server_sock.getsockname()[1]
             server_sock.listen(1)
             server_sock.settimeout(5)
 
-            # Connect in background
             def send_data():
                 try:
                     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    s.connect((peer, port))
-                    for _ in range(total_mb):
-                        s.sendall(chunk)
-                    s.close()
+                    try:
+                        s.connect((peer, port))
+                        for _ in range(total_mb):
+                            s.sendall(chunk)
+                    finally:
+                        s.close()
                 except Exception:
                     pass
 
@@ -3998,23 +3918,31 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
                     break
                 received += len(data)
             elapsed = _time.time() - start
-            conn.close()
-            server_sock.close()
             t.join(timeout=2)
 
             mbps = round((received / 1024 / 1024) / elapsed * 8, 1) if elapsed > 0 else 0
 
-            db = get_db()
-            try:
+            with db_session() as db:
                 db.execute('INSERT INTO benchmark_results (test_type, scores) VALUES (?, ?)',
                            ('network', json.dumps({'throughput_mbps': mbps, 'peer': peer, 'data_mb': total_mb})))
+                db.execute('DELETE FROM benchmark_results WHERE id NOT IN (SELECT id FROM benchmark_results ORDER BY created_at DESC LIMIT 100)')
                 db.commit()
-            finally:
-                db.close()
 
             return jsonify({'throughput_mbps': mbps, 'data_mb': round(received/1024/1024, 1), 'elapsed_sec': round(elapsed, 2)})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            if server_sock:
+                try:
+                    server_sock.close()
+                except Exception:
+                    pass
+            _benchmark_net_lock.release()
 
     # ─── Data Summary ──────────────────────────────────────────────────
 
@@ -4061,21 +3989,23 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
         if not q:
             return jsonify({'conversations': [], 'notes': [], 'documents': [], 'inventory': [], 'contacts': [], 'checklists': []})
         with db_session() as db:
-            like = f'%{q}%'
-            convos = db.execute("SELECT id, title, 'conversation' as type FROM conversations WHERE title LIKE ? OR messages LIKE ? LIMIT 10", (like, like)).fetchall()
-            notes = db.execute("SELECT id, title, 'note' as type FROM notes WHERE title LIKE ? OR content LIKE ? LIMIT 10", (like, like)).fetchall()
-            docs = db.execute("SELECT id, filename as title, 'document' as type FROM documents WHERE filename LIKE ? AND status = 'ready' LIMIT 10", (like,)).fetchall()
-            inv = db.execute("SELECT id, name as title, 'inventory' as type FROM inventory WHERE name LIKE ? OR location LIKE ? OR notes LIKE ? LIMIT 10", (like, like, like)).fetchall()
-            contacts = db.execute("SELECT id, name as title, 'contact' as type FROM contacts WHERE name LIKE ? OR callsign LIKE ? OR role LIKE ? OR skills LIKE ? LIMIT 10", (like, like, like, like)).fetchall()
-            checklists = db.execute("SELECT id, name as title, 'checklist' as type FROM checklists WHERE name LIKE ? LIMIT 10", (like,)).fetchall()
-            skills = db.execute("SELECT id, name as title, 'skill' as type FROM skills WHERE name LIKE ? OR category LIKE ? OR notes LIKE ? LIMIT 5", (like, like, like)).fetchall()
-            ammo = db.execute("SELECT id, caliber as title, 'ammo' as type FROM ammo_inventory WHERE caliber LIKE ? OR brand LIKE ? OR location LIKE ? LIMIT 5", (like, like, like)).fetchall()
-            equipment = db.execute("SELECT id, name as title, 'equipment' as type FROM equipment_log WHERE name LIKE ? OR category LIKE ? OR location LIKE ? LIMIT 5", (like, like, like)).fetchall()
-            waypoints = db.execute("SELECT id, name as title, 'waypoint' as type FROM waypoints WHERE name LIKE ? OR notes LIKE ? OR category LIKE ? LIMIT 5", (like, like, like)).fetchall()
-            freqs = db.execute("SELECT id, service as title, 'frequency' as type FROM freq_database WHERE service LIKE ? OR description LIKE ? OR notes LIKE ? LIMIT 5", (like, like, like)).fetchall()
-            patients = db.execute("SELECT id, name as title, 'patient' as type FROM patients WHERE name LIKE ? LIMIT 5", (like,)).fetchall()
-            incidents = db.execute("SELECT id, description as title, 'incident' as type FROM incidents WHERE description LIKE ? OR category LIKE ? LIMIT 5", (like, like)).fetchall()
-            fuel = db.execute("SELECT id, fuel_type as title, 'fuel' as type FROM fuel_storage WHERE fuel_type LIKE ? OR location LIKE ? LIMIT 5", (like, like)).fetchall()
+            q_escaped = q.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+            like = f'%{q_escaped}%'
+            esc = "ESCAPE '\\'"
+            convos = db.execute(f"SELECT id, title, 'conversation' as type FROM conversations WHERE title LIKE ? {esc} OR messages LIKE ? {esc} LIMIT 10", (like, like)).fetchall()
+            notes = db.execute(f"SELECT id, title, 'note' as type FROM notes WHERE title LIKE ? {esc} OR content LIKE ? {esc} LIMIT 10", (like, like)).fetchall()
+            docs = db.execute(f"SELECT id, filename as title, 'document' as type FROM documents WHERE filename LIKE ? {esc} AND status = 'ready' LIMIT 10", (like,)).fetchall()
+            inv = db.execute(f"SELECT id, name as title, 'inventory' as type FROM inventory WHERE name LIKE ? {esc} OR location LIKE ? {esc} OR notes LIKE ? {esc} LIMIT 10", (like, like, like)).fetchall()
+            contacts = db.execute(f"SELECT id, name as title, 'contact' as type FROM contacts WHERE name LIKE ? {esc} OR callsign LIKE ? {esc} OR role LIKE ? {esc} OR skills LIKE ? {esc} LIMIT 10", (like, like, like, like)).fetchall()
+            checklists = db.execute(f"SELECT id, name as title, 'checklist' as type FROM checklists WHERE name LIKE ? {esc} LIMIT 10", (like,)).fetchall()
+            skills = db.execute(f"SELECT id, name as title, 'skill' as type FROM skills WHERE name LIKE ? {esc} OR category LIKE ? {esc} OR notes LIKE ? {esc} LIMIT 5", (like, like, like)).fetchall()
+            ammo = db.execute(f"SELECT id, caliber as title, 'ammo' as type FROM ammo_inventory WHERE caliber LIKE ? {esc} OR brand LIKE ? {esc} OR location LIKE ? {esc} LIMIT 5", (like, like, like)).fetchall()
+            equipment = db.execute(f"SELECT id, name as title, 'equipment' as type FROM equipment_log WHERE name LIKE ? {esc} OR category LIKE ? {esc} OR location LIKE ? {esc} LIMIT 5", (like, like, like)).fetchall()
+            waypoints = db.execute(f"SELECT id, name as title, 'waypoint' as type FROM waypoints WHERE name LIKE ? {esc} OR notes LIKE ? {esc} OR category LIKE ? {esc} LIMIT 5", (like, like, like)).fetchall()
+            freqs = db.execute(f"SELECT id, service as title, 'frequency' as type FROM freq_database WHERE service LIKE ? {esc} OR description LIKE ? {esc} OR notes LIKE ? {esc} LIMIT 5", (like, like, like)).fetchall()
+            patients = db.execute(f"SELECT id, name as title, 'patient' as type FROM patients WHERE name LIKE ? {esc} LIMIT 5", (like,)).fetchall()
+            incidents = db.execute(f"SELECT id, description as title, 'incident' as type FROM incidents WHERE description LIKE ? {esc} OR category LIKE ? {esc} LIMIT 5", (like, like)).fetchall()
+            fuel = db.execute(f"SELECT id, fuel_type as title, 'fuel' as type FROM fuel_storage WHERE fuel_type LIKE ? {esc} OR location LIKE ? {esc} LIMIT 5", (like, like)).fetchall()
         return jsonify({
             'conversations': [dict(r) for r in convos], 'notes': [dict(r) for r in notes],
             'documents': [dict(r) for r in docs], 'inventory': [dict(r) for r in inv],
@@ -4164,20 +4094,31 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
 
     @app.route('/api/skills')
     def api_skills_list():
-        conn = get_db()
+        SKILL_SORT_FIELDS = {'name', 'category', 'proficiency', 'created_at', 'updated_at'}
         try:
-            rows = conn.execute('SELECT * FROM skills ORDER BY category, name').fetchall()
+            limit = min(int(request.args.get('limit', 50)), 200)
+        except (ValueError, TypeError):
+            limit = 50
+        try:
+            offset = int(request.args.get('offset', 0))
+        except (ValueError, TypeError):
+            offset = 0
+        sort_by = request.args.get('sort_by', 'category')
+        sort_dir = 'DESC' if request.args.get('sort_dir', 'asc').lower() == 'desc' else 'ASC'
+        if sort_by not in SKILL_SORT_FIELDS:
+            sort_by = 'category'
+        with db_session() as conn:
+            rows = conn.execute(f'SELECT * FROM skills ORDER BY {sort_by} {sort_dir}, name ASC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
             return jsonify([dict(r) for r in rows])
-        finally:
-            conn.close()
 
     @app.route('/api/skills', methods=['POST'])
     def api_skills_create():
         d = request.json or {}
+        if len(d.get('name', '') or '') > 200:
+            return jsonify({'error': 'name too long (max 200)'}), 400
         if not d.get('name', '').strip():
             return jsonify({'error': 'name is required'}), 400
-        conn = get_db()
-        try:
+        with db_session() as conn:
             cur = conn.execute(
                 'INSERT INTO skills (name, category, proficiency, notes, last_practiced) VALUES (?,?,?,?,?)',
                 (d['name'].strip(), d.get('category','general'), d.get('proficiency','none'),
@@ -4185,14 +4126,13 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             conn.commit()
             row = conn.execute('SELECT * FROM skills WHERE id=?', (cur.lastrowid,)).fetchone()
             return jsonify(dict(row)), 201
-        finally:
-            conn.close()
 
     @app.route('/api/skills/<int:sid>', methods=['PUT'])
     def api_skills_update(sid):
         d = request.json or {}
-        conn = get_db()
-        try:
+        if len(d.get('name', '') or '') > 200:
+            return jsonify({'error': 'name too long (max 200)'}), 400
+        with db_session() as conn:
             conn.execute(
                 'UPDATE skills SET name=?, category=?, proficiency=?, notes=?, last_practiced=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
                 (d.get('name',''), d.get('category','general'), d.get('proficiency','none'),
@@ -4200,106 +4140,149 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             conn.commit()
             row = conn.execute('SELECT * FROM skills WHERE id=?', (sid,)).fetchone()
             return jsonify(dict(row) if row else {})
-        finally:
-            conn.close()
 
     @app.route('/api/skills/<int:sid>', methods=['DELETE'])
     def api_skills_delete(sid):
-        conn = get_db()
-        try:
+        with db_session() as conn:
             conn.execute('DELETE FROM skills WHERE id=?', (sid,))
             conn.commit()
             return jsonify({'ok': True})
-        finally:
-            conn.close()
+
+    @app.route('/api/skills/bulk-delete', methods=['POST'])
+    def api_skills_bulk_delete():
+        data = request.get_json(force=True)
+        ids = data.get('ids', [])
+        if not ids or not isinstance(ids, list):
+            return jsonify({'error': 'ids array required'}), 400
+        if len(ids) > 100:
+            return jsonify({'error': 'max 100 items per bulk delete'}), 400
+        with db_session() as conn:
+            placeholders = ','.join('?' * len(ids))
+            conn.execute(f'DELETE FROM skills WHERE id IN ({placeholders})', ids)
+            conn.commit()
+        return jsonify({'status': 'deleted', 'count': len(ids)})
+
+    @app.route('/api/skills/export')
+    def api_skills_export():
+        with db_session() as conn:
+            rows = conn.execute('SELECT * FROM skills ORDER BY category, name LIMIT 10000').fetchall()
+        data = [dict(r) for r in rows]
+        return Response(json.dumps(data, indent=2, default=str),
+                        mimetype='application/json',
+                        headers={'Content-Disposition': 'attachment; filename=skills_export.json'})
+
+    @app.route('/api/skills/import', methods=['POST'])
+    def api_skills_import():
+        data = request.get_json(force=True)
+        if not isinstance(data, list):
+            return jsonify({'error': 'expected JSON array'}), 400
+        if len(data) > 1000:
+            return jsonify({'error': 'max 1000 items'}), 400
+        imported = 0
+        with db_session() as conn:
+            for item in data:
+                conn.execute(
+                    'INSERT INTO skills (name, category, proficiency, notes, last_practiced) VALUES (?,?,?,?,?)',
+                    (item.get('name', ''), item.get('category', 'general'),
+                     item.get('proficiency', 'none'), item.get('notes', ''),
+                     item.get('last_practiced', '')))
+                imported += 1
+            conn.commit()
+        return jsonify({'status': 'imported', 'count': imported})
 
     @app.route('/api/skills/seed-defaults', methods=['POST'])
     def api_skills_seed():
         """Seed the default 60-skill list if table is empty."""
-        conn = get_db()
-        count = conn.execute('SELECT COUNT(*) FROM skills').fetchone()[0]
-        if count > 0:
-            conn.close()
-            return jsonify({'seeded': 0})
-        defaults = [
-            # Fire
-            ('Fire Starting (friction/bow drill)', 'Fire'), ('Fire Starting (ferro rod)', 'Fire'),
-            ('Fire Starting (flint & steel)', 'Fire'), ('Fire Starting (magnification)', 'Fire'),
-            ('Maintaining a fire for 12+ hours', 'Fire'), ('Building a fire in rain/wind', 'Fire'),
-            # Water
-            ('Water sourcing (streams, dew, transpiration)', 'Water'),
-            ('Water purification (boiling)', 'Water'), ('Water purification (chemical)', 'Water'),
-            ('Water purification (filtration)', 'Water'), ('Rainwater collection setup', 'Water'),
-            ('Solar disinfection (SODIS)', 'Water'),
-            # Shelter
-            ('Debris hut construction', 'Shelter'), ('Tarp shelter rigging', 'Shelter'),
-            ('Cold-weather shelter (snow trench, quinzhee)', 'Shelter'),
-            ('Knot tying (8 essential knots)', 'Shelter'), ('Rope/cordage making', 'Shelter'),
-            # Food
-            ('Foraging wild edibles', 'Food'), ('Identifying poisonous plants', 'Food'),
-            ('Small game trapping (snares)', 'Food'), ('Hunting / firearms proficiency', 'Food'),
-            ('Fishing (without conventional tackle)', 'Food'), ('Food preservation (canning)', 'Food'),
-            ('Food preservation (dehydrating)', 'Food'), ('Food preservation (smoking)', 'Food'),
-            ('Butchering / game processing', 'Food'), ('Gardening (seed-to-harvest)', 'Food'),
-            # Navigation
-            ('Map and compass navigation', 'Navigation'), ('Celestial navigation (stars/sun)', 'Navigation'),
-            ('GPS use and offline mapping', 'Navigation'), ('Dead reckoning', 'Navigation'),
-            ('Terrain association', 'Navigation'), ('Creating a field sketch map', 'Navigation'),
-            # Medical
-            ('CPR (adult, child, infant)', 'Medical'), ('Tourniquet application', 'Medical'),
-            ('Wound packing / pressure bandage', 'Medical'), ('Splinting fractures', 'Medical'),
-            ('Suturing / wound closure (improvised)', 'Medical'),
-            ('Burn treatment', 'Medical'), ('Triage (START method)', 'Medical'),
-            ('Managing shock', 'Medical'), ('Drug interaction awareness', 'Medical'),
-            ('Childbirth assistance', 'Medical'), ('Dental emergency management', 'Medical'),
-            # Communications
-            ('Ham radio operation (Technician)', 'Communications'),
-            ('Ham radio operation (General/HF)', 'Communications'),
-            ('Morse code (sending & receiving)', 'Communications'),
-            ('Meshtastic / LoRa mesh setup', 'Communications'),
-            ('Radio programming (CHIRP)', 'Communications'),
-            ('ICS / ARES net procedures', 'Communications'),
-            # Security
-            ('Threat assessment / situational awareness', 'Security'),
-            ('Perimeter security setup', 'Security'),
-            ('Night operations', 'Security'), ('Gray man / OPSEC', 'Security'),
-            # Mechanical
-            ('Vehicle maintenance (basic)', 'Mechanical'),
-            ('Small engine repair', 'Mechanical'),
-            ('Improvised tool fabrication', 'Mechanical'),
-            ('Electrical / solar system wiring', 'Mechanical'),
-            ('Water system plumbing', 'Mechanical'),
-            # Homesteading
-            ('Livestock care (chickens)', 'Homesteading'),
-            ('Livestock care (goats/pigs/cattle)', 'Homesteading'),
-            ('Composting', 'Homesteading'), ('Seed saving', 'Homesteading'),
-            ('Natural building (adobe/cob)', 'Homesteading'),
-        ]
-        for name, cat in defaults:
-            conn.execute('INSERT OR IGNORE INTO skills (name, category, proficiency) VALUES (?,?,?)',
-                         (name, cat, 'none'))
-        conn.commit()
-        conn.close()
+        with db_session() as conn:
+            count = conn.execute('SELECT COUNT(*) FROM skills').fetchone()[0]
+            if count > 0:
+                return jsonify({'seeded': 0})
+            defaults = [
+                # Fire
+                ('Fire Starting (friction/bow drill)', 'Fire'), ('Fire Starting (ferro rod)', 'Fire'),
+                ('Fire Starting (flint & steel)', 'Fire'), ('Fire Starting (magnification)', 'Fire'),
+                ('Maintaining a fire for 12+ hours', 'Fire'), ('Building a fire in rain/wind', 'Fire'),
+                # Water
+                ('Water sourcing (streams, dew, transpiration)', 'Water'),
+                ('Water purification (boiling)', 'Water'), ('Water purification (chemical)', 'Water'),
+                ('Water purification (filtration)', 'Water'), ('Rainwater collection setup', 'Water'),
+                ('Solar disinfection (SODIS)', 'Water'),
+                # Shelter
+                ('Debris hut construction', 'Shelter'), ('Tarp shelter rigging', 'Shelter'),
+                ('Cold-weather shelter (snow trench, quinzhee)', 'Shelter'),
+                ('Knot tying (8 essential knots)', 'Shelter'), ('Rope/cordage making', 'Shelter'),
+                # Food
+                ('Foraging wild edibles', 'Food'), ('Identifying poisonous plants', 'Food'),
+                ('Small game trapping (snares)', 'Food'), ('Hunting / firearms proficiency', 'Food'),
+                ('Fishing (without conventional tackle)', 'Food'), ('Food preservation (canning)', 'Food'),
+                ('Food preservation (dehydrating)', 'Food'), ('Food preservation (smoking)', 'Food'),
+                ('Butchering / game processing', 'Food'), ('Gardening (seed-to-harvest)', 'Food'),
+                # Navigation
+                ('Map and compass navigation', 'Navigation'), ('Celestial navigation (stars/sun)', 'Navigation'),
+                ('GPS use and offline mapping', 'Navigation'), ('Dead reckoning', 'Navigation'),
+                ('Terrain association', 'Navigation'), ('Creating a field sketch map', 'Navigation'),
+                # Medical
+                ('CPR (adult, child, infant)', 'Medical'), ('Tourniquet application', 'Medical'),
+                ('Wound packing / pressure bandage', 'Medical'), ('Splinting fractures', 'Medical'),
+                ('Suturing / wound closure (improvised)', 'Medical'),
+                ('Burn treatment', 'Medical'), ('Triage (START method)', 'Medical'),
+                ('Managing shock', 'Medical'), ('Drug interaction awareness', 'Medical'),
+                ('Childbirth assistance', 'Medical'), ('Dental emergency management', 'Medical'),
+                # Communications
+                ('Ham radio operation (Technician)', 'Communications'),
+                ('Ham radio operation (General/HF)', 'Communications'),
+                ('Morse code (sending & receiving)', 'Communications'),
+                ('Meshtastic / LoRa mesh setup', 'Communications'),
+                ('Radio programming (CHIRP)', 'Communications'),
+                ('ICS / ARES net procedures', 'Communications'),
+                # Security
+                ('Threat assessment / situational awareness', 'Security'),
+                ('Perimeter security setup', 'Security'),
+                ('Night operations', 'Security'), ('Gray man / OPSEC', 'Security'),
+                # Mechanical
+                ('Vehicle maintenance (basic)', 'Mechanical'),
+                ('Small engine repair', 'Mechanical'),
+                ('Improvised tool fabrication', 'Mechanical'),
+                ('Electrical / solar system wiring', 'Mechanical'),
+                ('Water system plumbing', 'Mechanical'),
+                # Homesteading
+                ('Livestock care (chickens)', 'Homesteading'),
+                ('Livestock care (goats/pigs/cattle)', 'Homesteading'),
+                ('Composting', 'Homesteading'), ('Seed saving', 'Homesteading'),
+                ('Natural building (adobe/cob)', 'Homesteading'),
+            ]
+            for name, cat in defaults:
+                conn.execute('INSERT OR IGNORE INTO skills (name, category, proficiency) VALUES (?,?,?)',
+                             (name, cat, 'none'))
+            conn.commit()
         return jsonify({'seeded': len(defaults)})
 
     # ─── Ammo Inventory ───────────────────────────────────────────────
 
     @app.route('/api/ammo')
     def api_ammo_list():
-        conn = get_db()
-        rows = conn.execute('SELECT * FROM ammo_inventory ORDER BY caliber, brand').fetchall()
-        conn.close()
+        try:
+            limit = min(int(request.args.get('limit', 50)), 200)
+        except (ValueError, TypeError):
+            limit = 50
+        try:
+            offset = int(request.args.get('offset', 0))
+        except (ValueError, TypeError):
+            offset = 0
+        with db_session() as conn:
+            rows = conn.execute('SELECT * FROM ammo_inventory ORDER BY caliber, brand LIMIT ? OFFSET ?', (limit, offset)).fetchall()
         return jsonify([dict(r) for r in rows])
 
     @app.route('/api/ammo', methods=['POST'])
     def api_ammo_create():
         d = request.json or {}
+        if len(d.get('caliber', '') or '') > 200:
+            return jsonify({'error': 'caliber too long (max 200)'}), 400
         try:
             qty = int(d.get('quantity', 0))
         except (ValueError, TypeError):
             qty = 0
-        conn = get_db()
-        try:
+        with db_session() as conn:
             cur = conn.execute(
                 'INSERT INTO ammo_inventory (caliber, brand, bullet_weight, bullet_type, quantity, location, notes) VALUES (?,?,?,?,?,?,?)',
                 (d.get('caliber',''), d.get('brand',''), d.get('bullet_weight',''),
@@ -4307,18 +4290,17 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             conn.commit()
             row = conn.execute('SELECT * FROM ammo_inventory WHERE id=?', (cur.lastrowid,)).fetchone()
             return jsonify(dict(row)), 201
-        finally:
-            conn.close()
 
     @app.route('/api/ammo/<int:aid>', methods=['PUT'])
     def api_ammo_update(aid):
         d = request.json or {}
+        if len(d.get('caliber', '') or '') > 200:
+            return jsonify({'error': 'caliber too long (max 200)'}), 400
         try:
             qty = int(d.get('quantity', 0))
         except (ValueError, TypeError):
             qty = 0
-        conn = get_db()
-        try:
+        with db_session() as conn:
             conn.execute(
                 'UPDATE ammo_inventory SET caliber=?, brand=?, bullet_weight=?, bullet_type=?, quantity=?, location=?, notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
                 (d.get('caliber',''), d.get('brand',''), d.get('bullet_weight',''),
@@ -4326,45 +4308,90 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             conn.commit()
             row = conn.execute('SELECT * FROM ammo_inventory WHERE id=?', (aid,)).fetchone()
             return jsonify(dict(row) if row else {})
-        finally:
-            conn.close()
 
     @app.route('/api/ammo/<int:aid>', methods=['DELETE'])
     def api_ammo_delete(aid):
-        conn = get_db()
-        try:
+        with db_session() as conn:
             conn.execute('DELETE FROM ammo_inventory WHERE id=?', (aid,))
             conn.commit()
             return jsonify({'ok': True})
-        finally:
-            conn.close()
+
+    @app.route('/api/ammo/bulk-delete', methods=['POST'])
+    def api_ammo_bulk_delete():
+        data = request.get_json(force=True)
+        ids = data.get('ids', [])
+        if not ids or not isinstance(ids, list):
+            return jsonify({'error': 'ids array required'}), 400
+        if len(ids) > 100:
+            return jsonify({'error': 'max 100 items per bulk delete'}), 400
+        with db_session() as conn:
+            placeholders = ','.join('?' * len(ids))
+            conn.execute(f'DELETE FROM ammo_inventory WHERE id IN ({placeholders})', ids)
+            conn.commit()
+        return jsonify({'status': 'deleted', 'count': len(ids)})
+
+    @app.route('/api/ammo/export')
+    def api_ammo_export():
+        with db_session() as conn:
+            rows = conn.execute('SELECT * FROM ammo_inventory ORDER BY caliber, brand LIMIT 10000').fetchall()
+        data = [dict(r) for r in rows]
+        return Response(json.dumps(data, indent=2, default=str),
+                        mimetype='application/json',
+                        headers={'Content-Disposition': 'attachment; filename=ammo_export.json'})
+
+    @app.route('/api/ammo/import', methods=['POST'])
+    def api_ammo_import():
+        data = request.get_json(force=True)
+        if not isinstance(data, list):
+            return jsonify({'error': 'expected JSON array'}), 400
+        if len(data) > 1000:
+            return jsonify({'error': 'max 1000 items'}), 400
+        imported = 0
+        with db_session() as conn:
+            for item in data:
+                try:
+                    qty = int(item.get('quantity', 0))
+                except (ValueError, TypeError):
+                    qty = 0
+                conn.execute(
+                    'INSERT INTO ammo_inventory (caliber, brand, bullet_weight, bullet_type, quantity, location, notes) VALUES (?,?,?,?,?,?,?)',
+                    (item.get('caliber', ''), item.get('brand', ''),
+                     item.get('bullet_weight', ''), item.get('bullet_type', ''),
+                     qty, item.get('location', ''), item.get('notes', '')))
+                imported += 1
+            conn.commit()
+        return jsonify({'status': 'imported', 'count': imported})
 
     @app.route('/api/ammo/summary')
     def api_ammo_summary():
-        conn = get_db()
-        try:
+        with db_session() as conn:
             rows = conn.execute(
                 'SELECT caliber, SUM(quantity) as total FROM ammo_inventory GROUP BY caliber ORDER BY total DESC'
             ).fetchall()
             total = conn.execute('SELECT SUM(quantity) FROM ammo_inventory').fetchone()[0] or 0
             return jsonify({'by_caliber': [dict(r) for r in rows], 'total': total})
-        finally:
-            conn.close()
 
     # ─── Community Resource Registry ──────────────────────────────────
 
     @app.route('/api/community')
     def api_community_list():
-        conn = get_db()
         try:
-            rows = conn.execute('SELECT * FROM community_resources ORDER BY trust_level DESC, name').fetchall()
+            limit = min(int(request.args.get('limit', 50)), 200)
+        except (ValueError, TypeError):
+            limit = 50
+        try:
+            offset = int(request.args.get('offset', 0))
+        except (ValueError, TypeError):
+            offset = 0
+        with db_session() as conn:
+            rows = conn.execute('SELECT * FROM community_resources ORDER BY trust_level DESC, name LIMIT ? OFFSET ?', (limit, offset)).fetchall()
             return jsonify([dict(r) for r in rows])
-        finally:
-            conn.close()
 
     @app.route('/api/community', methods=['POST'])
     def api_community_create():
         d = request.json or {}
+        if len(d.get('name', '') or '') > 200:
+            return jsonify({'error': 'name too long (max 200)'}), 400
         if not d.get('name', '').strip():
             return jsonify({'error': 'name is required'}), 400
         try:
@@ -4372,8 +4399,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
         except (ValueError, TypeError):
             dist = 0.0
         import json as _json
-        conn = get_db()
-        try:
+        with db_session() as conn:
             cur = conn.execute(
                 'INSERT INTO community_resources (name, distance_mi, skills, equipment, contact, notes, trust_level) VALUES (?,?,?,?,?,?,?)',
                 (d['name'].strip(), dist,
@@ -4382,19 +4408,18 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             conn.commit()
             row = conn.execute('SELECT * FROM community_resources WHERE id=?', (cur.lastrowid,)).fetchone()
             return jsonify(dict(row)), 201
-        finally:
-            conn.close()
 
     @app.route('/api/community/<int:cid>', methods=['PUT'])
     def api_community_update(cid):
         d = request.json or {}
+        if len(d.get('name', '') or '') > 200:
+            return jsonify({'error': 'name too long (max 200)'}), 400
         try:
             dist = float(d.get('distance_mi', 0))
         except (ValueError, TypeError):
             dist = 0.0
         import json as _json
-        conn = get_db()
-        try:
+        with db_session() as conn:
             conn.execute(
                 'UPDATE community_resources SET name=?, distance_mi=?, skills=?, equipment=?, contact=?, notes=?, trust_level=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
                 (d.get('name',''), dist,
@@ -4403,30 +4428,36 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             conn.commit()
             row = conn.execute('SELECT * FROM community_resources WHERE id=?', (cid,)).fetchone()
             return jsonify(dict(row) if row else {})
-        finally:
-            conn.close()
 
     @app.route('/api/community/<int:cid>', methods=['DELETE'])
     def api_community_delete(cid):
-        conn = get_db()
-        try:
+        with db_session() as conn:
             conn.execute('DELETE FROM community_resources WHERE id=?', (cid,))
             conn.commit()
             return jsonify({'ok': True})
-        finally:
-            conn.close()
+
+    @app.route('/api/community/bulk-delete', methods=['POST'])
+    def api_community_bulk_delete():
+        data = request.get_json(force=True)
+        ids = data.get('ids', [])
+        if not ids or not isinstance(ids, list):
+            return jsonify({'error': 'ids array required'}), 400
+        if len(ids) > 100:
+            return jsonify({'error': 'max 100 items per bulk delete'}), 400
+        with db_session() as conn:
+            placeholders = ','.join('?' * len(ids))
+            conn.execute(f'DELETE FROM community_resources WHERE id IN ({placeholders})', ids)
+            conn.commit()
+        return jsonify({'status': 'deleted', 'count': len(ids)})
 
     # ─── Radiation Dose Log ───────────────────────────────────────────
 
     @app.route('/api/radiation')
     def api_radiation_list():
-        conn = get_db()
-        try:
+        with db_session() as conn:
             rows = conn.execute('SELECT * FROM radiation_log ORDER BY created_at DESC LIMIT 200').fetchall()
             total = conn.execute('SELECT COALESCE(MAX(cumulative_rem), 0) FROM radiation_log').fetchone()[0] or 0
             return jsonify({'readings': [dict(r) for r in rows], 'total_rem': round(total, 4)})
-        finally:
-            conn.close()
 
     @app.route('/api/radiation', methods=['POST'])
     def api_radiation_create():
@@ -4435,44 +4466,50 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             new_rate = float(d.get('dose_rate_rem', 0))
         except (ValueError, TypeError):
             new_rate = 0.0
-        conn = get_db()
         try:
+            duration_hours = float(d.get('duration_hours', 1.0))
+        except (ValueError, TypeError):
+            duration_hours = 1.0
+        dose = round(new_rate * duration_hours, 4)
+        with db_session() as conn:
             last = conn.execute('SELECT cumulative_rem FROM radiation_log ORDER BY id DESC LIMIT 1').fetchone()
             prev_cum = (last['cumulative_rem'] or 0) if last else 0
-            new_cum = round(prev_cum + new_rate, 4)
+            new_cum = round(prev_cum + dose, 4)
             cur = conn.execute(
                 'INSERT INTO radiation_log (dose_rate_rem, location, cumulative_rem, notes) VALUES (?,?,?,?)',
                 (new_rate, d.get('location',''), new_cum, d.get('notes','')))
             conn.commit()
             row = conn.execute('SELECT * FROM radiation_log WHERE id=?', (cur.lastrowid,)).fetchone()
             return jsonify(dict(row)), 201
-        finally:
-            conn.close()
 
     @app.route('/api/radiation/clear', methods=['POST'])
     def api_radiation_clear():
-        conn = get_db()
-        try:
+        with db_session() as conn:
             conn.execute('DELETE FROM radiation_log')
             conn.commit()
             return jsonify({'ok': True})
-        finally:
-            conn.close()
 
     # ─── Fuel Storage ─────────────────────────────────────────────────
 
     @app.route('/api/fuel')
     def api_fuel_list():
-        conn = get_db()
         try:
-            rows = conn.execute('SELECT * FROM fuel_storage ORDER BY fuel_type, created_at DESC').fetchall()
+            limit = min(int(request.args.get('limit', 50)), 200)
+        except (ValueError, TypeError):
+            limit = 50
+        try:
+            offset = int(request.args.get('offset', 0))
+        except (ValueError, TypeError):
+            offset = 0
+        with db_session() as conn:
+            rows = conn.execute('SELECT * FROM fuel_storage ORDER BY fuel_type, created_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
             return jsonify([dict(r) for r in rows])
-        finally:
-            conn.close()
 
     @app.route('/api/fuel', methods=['POST'])
     def api_fuel_create():
         d = request.json or {}
+        if len(d.get('fuel_type', '') or '') > 200:
+            return jsonify({'error': 'fuel_type too long (max 200)'}), 400
         if not d.get('fuel_type', '').strip():
             return jsonify({'error': 'fuel_type is required'}), 400
         try:
@@ -4483,8 +4520,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             qty = float(d.get('quantity', 0))
         except (ValueError, TypeError):
             qty = 0.0
-        conn = get_db()
-        try:
+        with db_session() as conn:
             cur = conn.execute(
                 'INSERT INTO fuel_storage (fuel_type, quantity, unit, container, location, stabilizer_added, date_stored, expires, notes) VALUES (?,?,?,?,?,?,?,?,?)',
                 (d['fuel_type'].strip(), qty, d.get('unit','gallons'),
@@ -4493,12 +4529,12 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             conn.commit()
             row = conn.execute('SELECT * FROM fuel_storage WHERE id=?', (cur.lastrowid,)).fetchone()
             return jsonify(dict(row)), 201
-        finally:
-            conn.close()
 
     @app.route('/api/fuel/<int:fid>', methods=['PUT'])
     def api_fuel_update(fid):
         d = request.json or {}
+        if len(d.get('fuel_type', '') or '') > 200:
+            return jsonify({'error': 'fuel_type too long (max 200)'}), 400
         try:
             stab = int(d.get('stabilizer_added', 0))
         except (ValueError, TypeError):
@@ -4507,8 +4543,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             qty = float(d.get('quantity', 0))
         except (ValueError, TypeError):
             qty = 0.0
-        conn = get_db()
-        try:
+        with db_session() as conn:
             conn.execute(
                 'UPDATE fuel_storage SET fuel_type=?,quantity=?,unit=?,container=?,location=?,stabilizer_added=?,date_stored=?,expires=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',
                 (d.get('fuel_type',''), qty, d.get('unit','gallons'),
@@ -4517,46 +4552,63 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             conn.commit()
             row = conn.execute('SELECT * FROM fuel_storage WHERE id=?', (fid,)).fetchone()
             return jsonify(dict(row) if row else {})
-        finally:
-            conn.close()
 
     @app.route('/api/fuel/<int:fid>', methods=['DELETE'])
     def api_fuel_delete(fid):
-        conn = get_db()
-        try:
+        with db_session() as conn:
             conn.execute('DELETE FROM fuel_storage WHERE id=?', (fid,))
             conn.commit()
             return jsonify({'ok': True})
-        finally:
-            conn.close()
+
+    @app.route('/api/fuel/bulk-delete', methods=['POST'])
+    def api_fuel_bulk_delete():
+        data = request.get_json(force=True)
+        ids = data.get('ids', [])
+        if not ids or not isinstance(ids, list):
+            return jsonify({'error': 'ids array required'}), 400
+        if len(ids) > 100:
+            return jsonify({'error': 'max 100 items per bulk delete'}), 400
+        with db_session() as conn:
+            placeholders = ','.join('?' * len(ids))
+            conn.execute(f'DELETE FROM fuel_storage WHERE id IN ({placeholders})', ids)
+            conn.commit()
+        return jsonify({'status': 'deleted', 'count': len(ids)})
 
     @app.route('/api/fuel/summary')
     def api_fuel_summary():
-        conn = get_db()
-        try:
+        with db_session() as conn:
             rows = conn.execute('SELECT fuel_type, SUM(quantity) as total, unit FROM fuel_storage GROUP BY fuel_type, unit').fetchall()
             return jsonify([dict(r) for r in rows])
-        finally:
-            conn.close()
 
     # ─── Equipment Maintenance ────────────────────────────────────────
 
     @app.route('/api/equipment')
     def api_equipment_list():
-        conn = get_db()
+        EQUIPMENT_SORT_FIELDS = {'name', 'category', 'status', 'next_service', 'created_at', 'updated_at'}
         try:
-            rows = conn.execute('SELECT * FROM equipment_log ORDER BY status, next_service').fetchall()
+            limit = min(int(request.args.get('limit', 50)), 200)
+        except (ValueError, TypeError):
+            limit = 50
+        try:
+            offset = int(request.args.get('offset', 0))
+        except (ValueError, TypeError):
+            offset = 0
+        sort_by = request.args.get('sort_by', 'status')
+        sort_dir = 'DESC' if request.args.get('sort_dir', 'asc').lower() == 'desc' else 'ASC'
+        if sort_by not in EQUIPMENT_SORT_FIELDS:
+            sort_by = 'status'
+        with db_session() as conn:
+            rows = conn.execute(f'SELECT * FROM equipment_log ORDER BY {sort_by} {sort_dir}, next_service ASC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
             return jsonify([dict(r) for r in rows])
-        finally:
-            conn.close()
 
     @app.route('/api/equipment', methods=['POST'])
     def api_equipment_create():
         d = request.json or {}
+        if len(d.get('name', '') or '') > 200:
+            return jsonify({'error': 'name too long (max 200)'}), 400
         if not d.get('name', '').strip():
             return jsonify({'error': 'name is required'}), 400
-        conn = get_db()
-        try:
+        with db_session() as conn:
             cur = conn.execute(
                 'INSERT INTO equipment_log (name, category, last_service, next_service, service_notes, status, location, notes) VALUES (?,?,?,?,?,?,?,?)',
                 (d['name'].strip(), d.get('category','general'), d.get('last_service',''),
@@ -4565,14 +4617,13 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             conn.commit()
             row = conn.execute('SELECT * FROM equipment_log WHERE id=?', (cur.lastrowid,)).fetchone()
             return jsonify(dict(row)), 201
-        finally:
-            conn.close()
 
     @app.route('/api/equipment/<int:eid>', methods=['PUT'])
     def api_equipment_update(eid):
         d = request.json or {}
-        conn = get_db()
-        try:
+        if len(d.get('name', '') or '') > 200:
+            return jsonify({'error': 'name too long (max 200)'}), 400
+        with db_session() as conn:
             conn.execute(
                 'UPDATE equipment_log SET name=?,category=?,last_service=?,next_service=?,service_notes=?,status=?,location=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=?',
                 (d.get('name',''), d.get('category','general'), d.get('last_service',''),
@@ -4581,18 +4632,56 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             conn.commit()
             row = conn.execute('SELECT * FROM equipment_log WHERE id=?', (eid,)).fetchone()
             return jsonify(dict(row) if row else {})
-        finally:
-            conn.close()
 
     @app.route('/api/equipment/<int:eid>', methods=['DELETE'])
     def api_equipment_delete(eid):
-        conn = get_db()
-        try:
+        with db_session() as conn:
             conn.execute('DELETE FROM equipment_log WHERE id=?', (eid,))
             conn.commit()
             return jsonify({'ok': True})
-        finally:
-            conn.close()
+
+    @app.route('/api/equipment/bulk-delete', methods=['POST'])
+    def api_equipment_bulk_delete():
+        data = request.get_json(force=True)
+        ids = data.get('ids', [])
+        if not ids or not isinstance(ids, list):
+            return jsonify({'error': 'ids array required'}), 400
+        if len(ids) > 100:
+            return jsonify({'error': 'max 100 items per bulk delete'}), 400
+        with db_session() as conn:
+            placeholders = ','.join('?' * len(ids))
+            conn.execute(f'DELETE FROM equipment_log WHERE id IN ({placeholders})', ids)
+            conn.commit()
+        return jsonify({'status': 'deleted', 'count': len(ids)})
+
+    @app.route('/api/equipment/export')
+    def api_equipment_export():
+        with db_session() as conn:
+            rows = conn.execute('SELECT * FROM equipment_log ORDER BY category, name LIMIT 10000').fetchall()
+        data = [dict(r) for r in rows]
+        return Response(json.dumps(data, indent=2, default=str),
+                        mimetype='application/json',
+                        headers={'Content-Disposition': 'attachment; filename=equipment_export.json'})
+
+    @app.route('/api/equipment/import', methods=['POST'])
+    def api_equipment_import():
+        data = request.get_json(force=True)
+        if not isinstance(data, list):
+            return jsonify({'error': 'expected JSON array'}), 400
+        if len(data) > 1000:
+            return jsonify({'error': 'max 1000 items'}), 400
+        imported = 0
+        with db_session() as conn:
+            for item in data:
+                conn.execute(
+                    'INSERT INTO equipment_log (name, category, last_service, next_service, service_notes, status, location, notes) VALUES (?,?,?,?,?,?,?,?)',
+                    (item.get('name', ''), item.get('category', 'general'),
+                     item.get('last_service', ''), item.get('next_service', ''),
+                     item.get('service_notes', ''), item.get('status', 'operational'),
+                     item.get('location', ''), item.get('notes', '')))
+                imported += 1
+            conn.commit()
+        return jsonify({'status': 'imported', 'count': imported})
 
     # [EXTRACTED to blueprint]
 
@@ -4721,22 +4810,29 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
 
     @app.route('/api/tasks/<int:task_id>/complete', methods=['POST'])
     def api_tasks_complete(task_id):
-        from datetime import datetime, timedelta
         with db_session() as db:
             row = db.execute('SELECT * FROM scheduled_tasks WHERE id = ?', (task_id,)).fetchone()
             if not row:
                 return jsonify({'error': 'Task not found'}), 404
             now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             new_count = (row['completed_count'] or 0) + 1
-            # Calculate next_due for recurring tasks
+            # Calculate next_due for recurring tasks (anchored to previous due date to prevent drift)
             next_due = None
             rec = row['recurrence']
+            current_next_due = row['next_due']
+            if current_next_due:
+                try:
+                    base = datetime.fromisoformat(current_next_due)
+                except (ValueError, TypeError):
+                    base = datetime.now()
+            else:
+                base = datetime.now()
             if rec == 'daily':
-                next_due = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
+                next_due = (base + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
             elif rec == 'weekly':
-                next_due = (datetime.now() + timedelta(weeks=1)).strftime('%Y-%m-%d %H:%M:%S')
+                next_due = (base + timedelta(weeks=1)).strftime('%Y-%m-%d %H:%M:%S')
             elif rec == 'monthly':
-                next_due = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
+                next_due = (base + timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
             else:
                 next_due = None  # one-time task stays completed
             db.execute('UPDATE scheduled_tasks SET completed_count = ?, last_completed = ?, next_due = ? WHERE id = ?',
@@ -4750,7 +4846,6 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
 
     @app.route('/api/tasks/due')
     def api_tasks_due():
-        from datetime import datetime
         with db_session() as db:
             now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             rows = db.execute(
@@ -4762,12 +4857,9 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
 
     @app.route('/api/watch-schedules')
     def api_watch_schedules():
-        db = get_db()
-        try:
-            rows = db.execute('SELECT * FROM watch_schedules ORDER BY start_date DESC').fetchall()
+        with db_session() as db:
+            rows = db.execute('SELECT * FROM watch_schedules ORDER BY start_date DESC LIMIT 10000').fetchall()
             return jsonify([dict(r) for r in rows])
-        finally:
-            db.close()
 
     @app.route('/api/watch-schedules', methods=['POST'])
     def api_watch_schedules_create():
@@ -4775,7 +4867,10 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
         name = data.get('name', 'Watch Schedule').strip()
         start_date = data.get('start_date', '')
         end_date = data.get('end_date', '')
-        shift_hours = int(data.get('shift_duration_hours', 4))
+        try:
+            shift_hours = int(data.get('shift_duration_hours', 4))
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid shift_duration_hours'}), 400
         personnel = data.get('personnel', [])
         notes = data.get('notes', '')
 
@@ -4787,7 +4882,6 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             return jsonify({'error': 'At least 2 personnel required'}), 400
 
         import json as _json
-        from datetime import datetime, timedelta
 
         # Auto-generate rotation schedule
         schedule = []
@@ -4812,56 +4906,80 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             current = shift_end
             person_idx += 1
 
-        db = get_db()
-        try:
+        with db_session() as db:
             cur = db.execute(
                 'INSERT INTO watch_schedules (name, start_date, end_date, shift_duration_hours, personnel, schedule_json, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 (name, start_date, end_date or (start + timedelta(days=7)).strftime('%Y-%m-%d'), shift_hours, _json.dumps(personnel), _json.dumps(schedule), notes)
             )
             db.commit()
             sid = cur.lastrowid
-        finally:
-            db.close()
         log_activity('watch_schedule_created', 'operations', f'{name}: {len(personnel)} personnel, {shift_hours}h shifts')
         return jsonify({'id': sid, 'name': name, 'shifts': len(schedule), 'schedule': schedule}), 201
 
+    @app.route('/api/watch-schedules/<int:sid>', methods=['PUT'])
+    def api_watch_schedules_update(sid):
+        data = request.get_json() or {}
+        if len(data.get('name', '') or '') > 200:
+            return jsonify({'error': 'name too long (max 200)'}), 400
+        import json as _json
+        with db_session() as db:
+            sets = []
+            vals = []
+            if 'name' in data:
+                sets.append('name=?')
+                vals.append(data['name'])
+            if 'start_date' in data:
+                sets.append('start_date=?')
+                vals.append(data['start_date'])
+            if 'end_date' in data:
+                sets.append('end_date=?')
+                vals.append(data['end_date'])
+            if 'shift_duration_hours' in data:
+                sets.append('shift_duration_hours=?')
+                vals.append(int(data['shift_duration_hours']))
+            if 'personnel' in data:
+                sets.append('personnel=?')
+                vals.append(_json.dumps(data['personnel']))
+            if 'schedule_json' in data:
+                sets.append('schedule_json=?')
+                vals.append(_json.dumps(data['schedule_json']))
+            if 'notes' in data:
+                sets.append('notes=?')
+                vals.append(data['notes'])
+            if not sets:
+                return jsonify({'status': 'no changes'})
+            sets.append('updated_at=CURRENT_TIMESTAMP')
+            vals.append(sid)
+            db.execute(f'UPDATE watch_schedules SET {", ".join(sets)} WHERE id=?', tuple(vals))
+            db.commit()
+            return jsonify({'status': 'updated'})
+
     @app.route('/api/watch-schedules/<int:sid>', methods=['DELETE'])
     def api_watch_schedules_delete(sid):
-        db = get_db()
-        try:
+        with db_session() as db:
             db.execute('DELETE FROM watch_schedules WHERE id = ?', (sid,))
             db.commit()
-        finally:
-            db.close()
         return jsonify({'status': 'deleted'})
 
     @app.route('/api/watch-schedules/<int:sid>')
     def api_watch_schedule_detail(sid):
-        db = get_db()
-        try:
+        with db_session() as db:
             row = db.execute('SELECT * FROM watch_schedules WHERE id = ?', (sid,)).fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
             return jsonify(dict(row))
-        finally:
-            db.close()
 
     @app.route('/api/watch-schedules/<int:sid>/print')
     def api_watch_schedule_print(sid):
         """Generate a printable HTML watch schedule."""
         import json as _json
-        from html import escape as _esc
-        from datetime import datetime
-        db = get_db()
-        try:
+        with db_session() as db:
             row = db.execute('SELECT * FROM watch_schedules WHERE id = ?', (sid,)).fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
             sched = row
             schedule = _json.loads(sched['schedule_json'] or '[]')
             personnel = _json.loads(sched['personnel'] or '[]')
-        finally:
-            db.close()
 
         generated_at = time.strftime('%Y-%m-%d %H:%M')
         cadence = f'{sched["shift_duration_hours"]}h'
@@ -4990,7 +5108,6 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
     def api_sun():
         """NOAA solar calculator — returns sunrise, sunset, civil twilight, golden hour."""
         import math
-        from datetime import datetime, timedelta, timezone
 
         lat = request.args.get('lat', type=float)
         lng = request.args.get('lng', type=float)
@@ -5102,7 +5219,6 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
     @app.route('/api/alerts/predictive')
     def api_alerts_predictive():
         """Analyze trends and return predictions: burn rates, fuel expiry, equipment overdue, medication schedules."""
-        from datetime import datetime, timedelta
         alerts = []
         today = datetime.now()
         today_str = today.strftime('%Y-%m-%d')
@@ -5207,6 +5323,14 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
                     'category': r['category'],
                 })
 
+        # Optional filters
+        filter_type = request.args.get('type', '').strip()
+        filter_severity = request.args.get('severity', '').strip().lower()
+        if filter_type:
+            alerts = [a for a in alerts if a['type'] == filter_type]
+        if filter_severity in ('critical', 'warning'):
+            alerts = [a for a in alerts if a['severity'] == filter_severity]
+
         # Sort: critical first, then warning
         alerts.sort(key=lambda a: (0 if a['severity'] == 'critical' else 1, a.get('days_remaining', a.get('days_until_expiry', a.get('days_until_service', 999)))))
         return jsonify({'alerts': alerts, 'count': len(alerts), 'generated_at': today.strftime('%Y-%m-%d %H:%M:%S')})
@@ -5275,7 +5399,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             # Tables with updated_at or created_at
             TRACKED = {
                 'inventory': "SELECT * FROM inventory WHERE created_at > ? OR updated_at > ? ORDER BY updated_at DESC LIMIT 1000",
-                'contacts': "SELECT * FROM contacts WHERE created_at > ? ORDER BY created_at DESC LIMIT 500",
+                'contacts': "SELECT * FROM contacts WHERE created_at > ? OR updated_at > ? ORDER BY created_at DESC LIMIT 500",
                 'waypoints': "SELECT * FROM waypoints WHERE created_at > ? ORDER BY created_at DESC LIMIT 500",
             }
             for table, query in TRACKED.items():
@@ -5475,7 +5599,8 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
                         req.post(f"http://{peer['ip']}:{peer.get('port', 8080)}/api/group-exercises/{exercise_id}/sync-state",
                                  json={'shared_state': shared_state, 'decisions_log': decisions_log,
                                        'status': status, 'score': score, 'aar_text': aar_text,
-                                       'phase': shared_state.get('phase', 0)}, timeout=5)
+                                       'phase': shared_state.get('phase', 0),
+                                       'source_node_id': _get_node_id()}, timeout=5)
                     except Exception:
                         pass
                     break
@@ -5557,30 +5682,49 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
     register_advanced_routes(app)
 
     # ─── SSE Real-Time Event Bus ─────────────────────────────────────
+    _sse_connects = {}  # ip -> list of timestamps
 
     @app.route('/api/events/stream')
     def event_stream():
         """SSE endpoint — pushes real-time events to connected clients."""
+        ip = request.remote_addr or 'unknown'
+        now = time.time()
+        with _sse_lock:
+            connects = _sse_connects.get(ip, [])
+            connects = [t for t in connects if now - t < 60]
+            if len(connects) >= 10:
+                return jsonify({'error': 'rate limited'}), 429
+            connects.append(now)
+            _sse_connects[ip] = connects
         with _sse_lock:
             if len(_sse_clients) >= MAX_SSE_CLIENTS:
                 return jsonify({'error': 'Too many SSE connections'}), 429
         q = queue.Queue(maxsize=50)
-        with _sse_lock:
-            _sse_clients.append(q)
+        sse_register_client(q)
         def generate():
             try:
                 while True:
                     try:
                         msg = q.get(timeout=30)
+                        sse_touch_client(q)
                         yield msg
                     except queue.Empty:
+                        sse_touch_client(q)
                         yield ": keepalive\n\n"
-            except GeneratorExit:
-                with _sse_lock:
-                    if q in _sse_clients:
-                        _sse_clients.remove(q)
+            finally:
+                sse_unregister_client(q)
         return Response(generate(), mimetype='text/event-stream',
                         headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+    # Background thread: periodically clean up stale SSE clients
+    def _sse_stale_cleanup_loop():
+        while True:
+            time.sleep(30)
+            try:
+                sse_cleanup_stale_clients()
+            except Exception:
+                pass
+    threading.Thread(target=_sse_stale_cleanup_loop, daemon=True).start()
 
     @app.route('/api/events/test')
     def event_test():
@@ -5606,14 +5750,12 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
 
     @app.route('/api/i18n/language', methods=['GET'])
     def api_i18n_get_language():
-        db = get_db()
         try:
-            row = db.execute("SELECT value FROM settings WHERE key = 'language'").fetchone()
-            lang = row['value'] if row else 'en'
+            with db_session() as db:
+                row = db.execute("SELECT value FROM settings WHERE key = 'language'").fetchone()
+                lang = row['value'] if row else 'en'
         except Exception:
             lang = 'en'
-        finally:
-            db.close()
         return jsonify({'language': lang})
 
     @app.route('/api/i18n/language', methods=['POST'])
@@ -5622,15 +5764,115 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
         lang = data.get('language', '').strip()
         if lang not in SUPPORTED_LANGUAGES:
             return jsonify({'error': f'Unsupported language: {lang}'}), 400
-        db = get_db()
-        try:
+        with db_session() as db:
             db.execute(
                 "INSERT OR REPLACE INTO settings (key, value) VALUES ('language', ?)",
                 (lang,)
             )
             db.commit()
-        finally:
-            db.close()
         return jsonify({'status': 'ok', 'language': lang})
+
+    # ─── Inventory Batch Expiration ──────────────────────────────────
+
+    @app.route('/api/inventory/<int:iid>/batches', methods=['GET'])
+    def api_inventory_batches(iid):
+        with db_session() as db:
+            rows = db.execute('SELECT * FROM inventory_batches WHERE inventory_id = ? ORDER BY expiration ASC', (iid,)).fetchall()
+            return jsonify([dict(r) for r in rows])
+
+    @app.route('/api/inventory/<int:iid>/batches', methods=['POST'])
+    def api_inventory_batch_create(iid):
+        d = request.json or {}
+        with db_session() as db:
+            cur = db.execute('INSERT INTO inventory_batches (inventory_id, quantity, expiration, lot_number, date_acquired, cost) VALUES (?, ?, ?, ?, ?, ?)',
+                (iid, d.get('quantity', 0), d.get('expiration'), d.get('lot_number'), d.get('date_acquired'), d.get('cost')))
+            db.commit()
+            row = db.execute('SELECT * FROM inventory_batches WHERE id = ?', (cur.lastrowid,)).fetchone()
+            return jsonify(dict(row)), 201
+
+    # ─── Consumption History ─────────────────────────────────────────
+
+    @app.route('/api/inventory/<int:iid>/consumption-history', methods=['GET'])
+    def api_consumption_history(iid):
+        with db_session() as db:
+            rows = db.execute('SELECT * FROM consumption_log WHERE inventory_id = ? ORDER BY consumed_at DESC LIMIT 100', (iid,)).fetchall()
+            return jsonify([dict(r) for r in rows])
+
+    @app.route('/api/inventory/consumption-rate', methods=['GET'])
+    def api_consumption_rates():
+        with db_session() as db:
+            # Get items with consumption history, compute 7-day and 30-day rolling averages
+            rows = db.execute("""
+                SELECT cl.inventory_id, i.name, i.quantity, i.unit,
+                    SUM(CASE WHEN cl.consumed_at >= datetime('now', '-7 days') THEN cl.amount ELSE 0 END) / 7.0 as avg_7d,
+                    SUM(CASE WHEN cl.consumed_at >= datetime('now', '-30 days') THEN cl.amount ELSE 0 END) / 30.0 as avg_30d
+                FROM consumption_log cl
+                JOIN inventory i ON i.id = cl.inventory_id
+                WHERE cl.consumed_at >= datetime('now', '-30 days')
+                GROUP BY cl.inventory_id
+                ORDER BY avg_7d DESC
+                LIMIT 100
+            """).fetchall()
+            return jsonify([dict(r) for r in rows])
+
+    # ─── Nutritional Tracking ────────────────────────────────────────
+
+    @app.route('/api/inventory/nutrition-summary', methods=['GET'])
+    def api_nutrition_summary():
+        with db_session() as db:
+            # Sum calories, protein, fat, carbs from inventory items that have nutritional data
+            # These fields may not exist yet, so handle gracefully
+            rows = db.execute("""
+                SELECT category,
+                    SUM(quantity * COALESCE(calories_per_unit, 0)) as total_calories,
+                    SUM(quantity * COALESCE(protein_g, 0)) as total_protein,
+                    SUM(quantity * COALESCE(fat_g, 0)) as total_fat,
+                    SUM(quantity * COALESCE(carbs_g, 0)) as total_carbs,
+                    COUNT(*) as item_count
+                FROM inventory
+                WHERE category IN ('food', 'Food', 'water', 'Water', 'freeze-dried', 'canned', 'grains')
+                GROUP BY category
+            """).fetchall()
+            total_cal = sum(r['total_calories'] or 0 for r in rows)
+            household_size = 1
+            try:
+                hs = db.execute("SELECT value FROM settings WHERE key='household_size'").fetchone()
+                if hs: household_size = max(1, int(hs['value']))
+            except Exception: pass
+            calories_per_day = household_size * 2000
+            days_of_food = round(total_cal / calories_per_day, 1) if calories_per_day > 0 else 0
+            return jsonify({
+                'by_category': [dict(r) for r in rows],
+                'total_calories': total_cal,
+                'household_size': household_size,
+                'days_of_food': days_of_food,
+                'calories_per_day': calories_per_day
+            })
+
+    # ─── Food Security Dashboard ─────────────────────────────────────
+
+    @app.route('/api/garden/food-security', methods=['GET'])
+    def api_food_security():
+        with db_session() as db:
+            # Aggregate: current food inventory calories + preserved food + projected harvest
+            inv_cal = db.execute("SELECT SUM(quantity * COALESCE(calories_per_unit, 0)) as cal FROM inventory WHERE category IN ('food','Food','canned','grains','freeze-dried')").fetchone()['cal'] or 0
+            pres_cal = db.execute("SELECT SUM(quantity * COALESCE(calories_per_unit, 0)) as cal FROM preservation_log").fetchone()
+            pres_cal = (pres_cal['cal'] if pres_cal else 0) or 0
+            household_size = 1
+            try:
+                hs = db.execute("SELECT value FROM settings WHERE key='household_size'").fetchone()
+                if hs: household_size = max(1, int(hs['value']))
+            except Exception: pass
+            daily_need = household_size * 2000
+            total_cal = inv_cal + pres_cal
+            days = round(total_cal / daily_need, 1) if daily_need > 0 else 0
+            return jsonify({
+                'inventory_calories': round(inv_cal),
+                'preserved_calories': round(pres_cal),
+                'total_calories': round(total_cal),
+                'household_size': household_size,
+                'days_of_food': days,
+                'daily_caloric_need': daily_need
+            })
 
     return app

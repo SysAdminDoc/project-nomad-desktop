@@ -12,7 +12,7 @@ from werkzeug.utils import secure_filename
 
 from config import get_data_dir, Config
 from platform_utils import get_data_base
-from db import get_db, log_activity
+from db import db_session, log_activity
 from services import ollama, qdrant, stirling
 from web.state import _embed_state, _ocr_pipeline_state, _ocr_processed_files
 
@@ -36,16 +36,52 @@ def get_kb_upload_dir():
 
 
 def chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
-    """Split text into overlapping chunks (~chunk_size words)."""
-    words = text.split()
+    """Split text into chunks respecting paragraph boundaries and sentences."""
+    if not text or not text.strip():
+        return []
+
+    # Split on paragraph boundaries (double newlines)
+    paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+
     chunks = []
-    i = 0
-    while i < len(words):
-        chunk = ' '.join(words[i:i + chunk_size])
-        if chunk.strip():
-            chunks.append(chunk)
-        i += chunk_size - overlap
-    return chunks
+    current_chunk = []
+    current_words = 0
+    current_heading = ''
+
+    for para in paragraphs:
+        # Detect headings (lines starting with # or all-caps short lines)
+        lines = para.split('\n')
+        if lines and (lines[0].startswith('#') or (len(lines[0]) < 80 and lines[0].isupper())):
+            current_heading = lines[0].lstrip('#').strip()
+
+        para_words = len(para.split())
+
+        if current_words + para_words > chunk_size and current_chunk:
+            # Emit current chunk
+            chunk_text_str = '\n\n'.join(current_chunk)
+            if current_heading:
+                chunk_text_str = f'[{current_heading}]\n{chunk_text_str}'
+            chunks.append(chunk_text_str)
+
+            # Overlap: keep last paragraph if it's short
+            if para_words < overlap:
+                current_chunk = [current_chunk[-1]] if current_chunk else []
+                current_words = len(current_chunk[0].split()) if current_chunk else 0
+            else:
+                current_chunk = []
+                current_words = 0
+
+        current_chunk.append(para)
+        current_words += para_words
+
+    # Emit remaining
+    if current_chunk:
+        chunk_text_str = '\n\n'.join(current_chunk)
+        if current_heading:
+            chunk_text_str = f'[{current_heading}]\n{chunk_text_str}'
+        chunks.append(chunk_text_str)
+
+    return chunks if chunks else [text[:chunk_size * 5]]
 
 
 def embed_text(texts, prefix='search_document: '):
@@ -82,19 +118,18 @@ def extract_text_from_file(filepath, content_type):
 
 def _analyze_document(doc_id, text, filename):
     """Background: classify, summarize, extract entities from a document using AI."""
-    db = get_db()
-    try:
-        if not ollama.running() or not ollama.list_models():
-            db.execute("UPDATE documents SET doc_category = 'other', summary = 'AI analysis unavailable \u2014 start Ollama for document intelligence.' WHERE id = ?", (doc_id,))
-            db.commit()
-            db.close()
-            return
+    with db_session() as db:
+        try:
+            if not ollama.running() or not ollama.list_models():
+                db.execute("UPDATE documents SET doc_category = 'other', summary = 'AI analysis unavailable \u2014 start Ollama for document intelligence.' WHERE id = ?", (doc_id,))
+                db.commit()
+                return
 
-        model = ollama.list_models()[0]['name']
-        import requests as req
-        text_sample = text[:3000]
+            model = ollama.list_models()[0]['name']
+            import requests as req
+            text_sample = text[:3000]
 
-        classify_prompt = f"""Classify this document into ONE category: medical, property, vehicle, financial, legal, reference, personal, other.
+            classify_prompt = f"""Classify this document into ONE category: medical, property, vehicle, financial, legal, reference, personal, other.
 
 Document filename: {filename}
 Document text (first 3000 chars):
@@ -102,25 +137,25 @@ Document text (first 3000 chars):
 
 Respond with ONLY the category word, nothing else."""
 
-        r = req.post(f'http://localhost:{ollama.OLLAMA_PORT}/api/generate',
-                    json={'model': model, 'prompt': classify_prompt, 'stream': False}, timeout=20)
-        cat_words = r.json().get('response', '').strip().lower().split() if r.ok else []
-        category = cat_words[0] if cat_words else 'other'
-        if category not in DOC_CATEGORIES:
-            category = 'other'
+            r = req.post(f'http://localhost:{ollama.OLLAMA_PORT}/api/generate',
+                        json={'model': model, 'prompt': classify_prompt, 'stream': False}, timeout=20)
+            cat_words = r.json().get('response', '').strip().lower().split() if r.ok else []
+            category = cat_words[0] if cat_words else 'other'
+            if category not in DOC_CATEGORIES:
+                category = 'other'
 
-        summary_prompt = f"""Write a 2-3 sentence summary of this document. Be concise and factual.
+            summary_prompt = f"""Write a 2-3 sentence summary of this document. Be concise and factual.
 
 Document: {filename}
 Text: {text_sample}
 
 Summary:"""
 
-        r = req.post(f'http://localhost:{ollama.OLLAMA_PORT}/api/generate',
-                    json={'model': model, 'prompt': summary_prompt, 'stream': False}, timeout=20)
-        summary = r.json().get('response', '').strip()[:500] if r.ok else ''
+            r = req.post(f'http://localhost:{ollama.OLLAMA_PORT}/api/generate',
+                        json={'model': model, 'prompt': summary_prompt, 'stream': False}, timeout=20)
+            summary = r.json().get('response', '').strip()[:500] if r.ok else ''
 
-        entity_prompt = f"""Extract key entities from this document as a JSON array. Include: names (people), dates, medications, addresses, phone numbers, vehicle info (make/model/year/VIN), dollar amounts, and GPS coordinates if present.
+            entity_prompt = f"""Extract key entities from this document as a JSON array. Include: names (people), dates, medications, addresses, phone numbers, vehicle info (make/model/year/VIN), dollar amounts, and GPS coordinates if present.
 
 Document: {filename}
 Text: {text_sample}
@@ -128,37 +163,33 @@ Text: {text_sample}
 Respond with ONLY a JSON array of objects, each with "type" and "value" keys. Example: [{{"type":"person","value":"John Smith"}},{{"type":"medication","value":"Lisinopril 10mg"}}]
 If no entities found, respond with: []"""
 
-        r = req.post(f'http://localhost:{ollama.OLLAMA_PORT}/api/generate',
-                    json={'model': model, 'prompt': entity_prompt, 'stream': False, 'format': 'json'}, timeout=25)
-        entities_raw = r.json().get('response', '[]') if r.ok else '[]'
-        try:
-            entities = json.loads(entities_raw)
-            if not isinstance(entities, list):
+            r = req.post(f'http://localhost:{ollama.OLLAMA_PORT}/api/generate',
+                        json={'model': model, 'prompt': entity_prompt, 'stream': False, 'format': 'json'}, timeout=25)
+            entities_raw = r.json().get('response', '[]') if r.ok else '[]'
+            try:
+                entities = json.loads(entities_raw)
+                if not isinstance(entities, list):
+                    entities = []
+            except Exception:
                 entities = []
-        except Exception:
-            entities = []
 
-        linked = []
-        if entities:
-            contacts = [dict(r) for r in db.execute('SELECT id, name FROM contacts').fetchall()]
-            contact_names = {c['name'].lower(): c['id'] for c in contacts}
-            for ent in entities:
-                if ent.get('type') == 'person' and ent.get('value', '').lower() in contact_names:
-                    linked.append({'type': 'contact', 'id': contact_names[ent['value'].lower()], 'name': ent['value']})
+            linked = []
+            if entities:
+                contacts = [dict(r) for r in db.execute('SELECT id, name FROM contacts').fetchall()]
+                contact_names = {c['name'].lower(): c['id'] for c in contacts}
+                for ent in entities:
+                    if ent.get('type') == 'person' and ent.get('value', '').lower() in contact_names:
+                        linked.append({'type': 'contact', 'id': contact_names[ent['value'].lower()], 'name': ent['value']})
 
-        db.execute("UPDATE documents SET doc_category = ?, summary = ?, entities = ?, linked_records = ? WHERE id = ?",
-                   (category, summary, json.dumps(entities), json.dumps(linked), doc_id))
-        db.commit()
-        log.info(f'Document {doc_id} analyzed: {category}, {len(entities)} entities, {len(linked)} links')
-    except Exception as e:
-        log.error(f'Document analysis failed for {doc_id}: {e}')
-        db.execute("UPDATE documents SET doc_category = 'other', summary = ? WHERE id = ?",
-                   (f'Analysis failed: {e}', doc_id))
-        db.commit()
-    finally:
-        db.close()
-
-
+            db.execute("UPDATE documents SET doc_category = ?, summary = ?, entities = ?, linked_records = ? WHERE id = ?",
+                       (category, summary, json.dumps(entities), json.dumps(linked), doc_id))
+            db.commit()
+            log.info(f'Document {doc_id} analyzed: {category}, {len(entities)} entities, {len(linked)} links')
+        except Exception as e:
+            log.error(f'Document analysis failed for {doc_id}: {e}')
+            db.execute("UPDATE documents SET doc_category = 'other', summary = ? WHERE id = ?",
+                       (f'Analysis failed: {e}', doc_id))
+            db.commit()
 # ─── KB Upload ──────────────────────────────────────────────────────
 
 @kb_bp.route('/api/kb/upload', methods=['POST'])
@@ -201,22 +232,18 @@ def api_kb_upload():
         except Exception as e:
             log.warning(f'Auto-OCR failed for {filename}: {e}')
 
-    db = get_db()
-    try:
+    with db_session() as db:
         cur = db.execute('INSERT INTO documents (filename, content_type, file_size, status) VALUES (?, ?, ?, ?)',
                          (filename, content_type, file_size, 'pending'))
         db.commit()
         doc_id = cur.lastrowid
-    finally:
-        db.close()
-
     # Start embedding in background
     def do_embed():
         import web.state as _ws
         _ws._embed_state.clear()
         _ws._embed_state.update({'status': 'processing', 'doc_id': doc_id, 'progress': 0, 'detail': f'Processing {filename}...'})
-        db2 = get_db()
-        try:
+        with db_session() as db2:
+          try:
             _ws._embed_state['detail'] = 'Checking embedding model...'
             models = ollama.list_models()
             model_names = [m['name'] for m in models]
@@ -265,15 +292,12 @@ def api_kb_upload():
 
             threading.Thread(target=_analyze_document, args=(doc_id, text, filename), daemon=True).start()
 
-        except Exception as e:
+          except Exception as e:
             log.error(f'Embedding failed for doc {doc_id}: {e}')
             db2.execute('UPDATE documents SET status = ?, error = ? WHERE id = ?', ('error', str(e), doc_id))
             db2.commit()
             _ws._embed_state.clear()
             _ws._embed_state.update({'status': 'error', 'doc_id': doc_id, 'progress': 0, 'detail': str(e)})
-        finally:
-            db2.close()
-
     threading.Thread(target=do_embed, daemon=True).start()
     return jsonify({'status': 'uploading', 'doc_id': doc_id}), 201
 
@@ -282,18 +306,19 @@ def api_kb_upload():
 
 @kb_bp.route('/api/kb/documents')
 def api_kb_documents():
-    db = get_db()
     try:
-        docs = db.execute('SELECT * FROM documents ORDER BY created_at DESC').fetchall()
-    finally:
-        db.close()
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        docs = db.execute('SELECT * FROM documents ORDER BY created_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return jsonify([dict(d) for d in docs])
 
 
 @kb_bp.route('/api/kb/documents/<int:doc_id>', methods=['DELETE'])
 def api_kb_document_delete(doc_id):
-    db = get_db()
-    try:
+    with db_session() as db:
         doc = db.execute('SELECT filename FROM documents WHERE id = ?', (doc_id,)).fetchone()
         if doc:
             filepath = os.path.join(get_kb_upload_dir(), doc['filename'])
@@ -302,8 +327,6 @@ def api_kb_document_delete(doc_id):
             qdrant.delete_by_doc_id(doc_id)
             db.execute('DELETE FROM documents WHERE id = ?', (doc_id,))
             db.commit()
-    finally:
-        db.close()
     return jsonify({'status': 'deleted'})
 
 
@@ -320,13 +343,18 @@ def api_kb_search():
     data = request.get_json() or {}
     query = data.get('query', '')
     limit = data.get('limit', 5)
+    workspace_id = data.get('workspace_id') or request.args.get('workspace_id')
     if not query:
         return jsonify([])
     try:
         vectors = embed_text([query], prefix='search_query: ')
         if not vectors:
             return jsonify([])
-        results = qdrant.search(vectors[0], limit=limit)
+        # Build filter for workspace-scoped search
+        filter_params = None
+        if workspace_id:
+            filter_params = {"must": [{"key": "workspace_id", "match": {"value": int(workspace_id)}}]}
+        results = qdrant.search(vectors[0], limit=limit, filter_params=filter_params)
         return jsonify([{
             'text': r.get('payload', {}).get('text', ''),
             'filename': r.get('payload', {}).get('filename', ''),
@@ -342,9 +370,8 @@ def api_kb_search():
 @kb_bp.route('/api/kb/documents/<int:doc_id>/analyze', methods=['POST'])
 def api_kb_analyze(doc_id):
     """Trigger AI analysis (classify, summarize, extract) for a document."""
-    db = get_db()
-    doc = db.execute('SELECT * FROM documents WHERE id = ?', (doc_id,)).fetchone()
-    db.close()
+    with db_session() as db:
+        doc = db.execute('SELECT * FROM documents WHERE id = ?', (doc_id,)).fetchone()
     if not doc:
         return jsonify({'error': 'Not found'}), 404
 
@@ -360,9 +387,8 @@ def api_kb_analyze(doc_id):
 @kb_bp.route('/api/kb/documents/<int:doc_id>/details')
 def api_kb_doc_details(doc_id):
     """Get full document details including analysis results."""
-    db = get_db()
-    doc = db.execute('SELECT * FROM documents WHERE id = ?', (doc_id,)).fetchone()
-    db.close()
+    with db_session() as db:
+        doc = db.execute('SELECT * FROM documents WHERE id = ?', (doc_id,)).fetchone()
     if not doc:
         return jsonify({'error': 'Not found'}), 404
     d = dict(doc)
@@ -380,8 +406,7 @@ def api_kb_doc_details(doc_id):
 @kb_bp.route('/api/kb/documents/<int:doc_id>/import-entities', methods=['POST'])
 def api_kb_import_entities(doc_id):
     """Import extracted entities from a document into structured tables."""
-    db = get_db()
-    try:
+    with db_session() as db:
         doc = db.execute('SELECT entities FROM documents WHERE id = ?', (doc_id,)).fetchone()
         if not doc:
             return jsonify({'error': 'Not found'}), 404
@@ -467,16 +492,11 @@ def api_kb_import_entities(doc_id):
         total = imported['contacts'] + imported['inventory'] + imported['waypoints']
         log_activity('entity_import', 'documents', f'Imported {total} entities from doc #{doc_id}')
         return jsonify({'status': 'imported', 'results': imported, 'total_imported': total})
-    finally:
-        db.close()
-
-
 @kb_bp.route('/api/kb/analyze-all', methods=['POST'])
 def api_kb_analyze_all():
     """Analyze all unanalyzed documents."""
-    db = get_db()
-    docs = db.execute("SELECT * FROM documents WHERE (doc_category IS NULL OR doc_category = '') AND status = 'ready'").fetchall()
-    db.close()
+    with db_session() as db:
+        docs = db.execute("SELECT * FROM documents WHERE (doc_category IS NULL OR doc_category = '') AND status = 'ready'").fetchall()
     count = 0
     for doc in docs:
         filepath = os.path.join(get_kb_upload_dir(), doc['filename'])
@@ -493,14 +513,14 @@ def api_kb_analyze_all():
 @kb_bp.route('/api/kb/workspaces', methods=['GET'])
 def api_kb_workspaces():
     """List knowledge base workspaces."""
-    db = get_db()
     try:
-        rows = db.execute('SELECT * FROM kb_workspaces ORDER BY name').fetchall()
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM kb_workspaces ORDER BY name LIMIT ? OFFSET ?', (limit, offset)).fetchall()
         return jsonify([dict(r) for r in rows])
-    finally:
-        db.close()
-
-
 @kb_bp.route('/api/kb/workspaces', methods=['POST'])
 def api_kb_workspace_create():
     """Create a KB workspace."""
@@ -508,8 +528,7 @@ def api_kb_workspace_create():
     name = d.get('name', '').strip()
     if not name:
         return jsonify({'error': 'name required'}), 400
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute(
             'INSERT INTO kb_workspaces (name, description, watch_folder, auto_index) VALUES (?, ?, ?, ?)',
             (name, d.get('description', ''), d.get('watch_folder', ''), d.get('auto_index', 0))
@@ -517,35 +536,22 @@ def api_kb_workspace_create():
         db.commit()
         wid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
         return jsonify({'id': wid, 'status': 'ok'})
-    finally:
-        db.close()
-
-
 @kb_bp.route('/api/kb/workspaces/<int:wid>', methods=['DELETE'])
 def api_kb_workspace_delete(wid):
     """Delete a KB workspace."""
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('DELETE FROM kb_workspaces WHERE id = ?', (wid,))
         db.commit()
         return jsonify({'status': 'ok'})
-    finally:
-        db.close()
-
-
 # ─── Auto-OCR Pipeline ─────────────────────────────────────────────
 
 def _ocr_pipeline_scan():
     """Scan watch folders for new files and process them."""
     import datetime
-    db = get_db()
-    try:
+    with db_session() as db:
         workspaces = db.execute(
             'SELECT * FROM kb_workspaces WHERE auto_index = 1 AND watch_folder IS NOT NULL AND watch_folder != ""'
         ).fetchall()
-    finally:
-        db.close()
-
     for ws in workspaces:
         folder = ws['watch_folder']
         if not os.path.isdir(folder):
@@ -591,17 +597,15 @@ def _ocr_pipeline_scan():
                         log.warning(f'Auto-OCR pipeline: OCR failed for {safe_name}: {e}')
 
                 file_size = os.path.getsize(dest)
-                db2 = get_db()
-                try:
+                with db_session() as db2:
                     db2.execute(
                         'INSERT INTO documents (filename, content_type, file_size, status, doc_category) VALUES (?, ?, ?, ?, ?)',
                         (safe_name, content_type, file_size, 'pending', f'watch:{ws["name"]}')
                     )
                     db2.commit()
-                finally:
-                    db2.close()
-
                 _ocr_processed_files.add(file_key)
+                if len(_ocr_processed_files) > 1000:
+                    _ocr_processed_files.clear()
                 _ocr_pipeline_state['processed'] += 1
                 log_activity('ocr_pipeline', 'import', f'Auto-imported {safe_name} from {ws["name"]}')
             except Exception as e:

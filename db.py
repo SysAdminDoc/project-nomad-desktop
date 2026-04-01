@@ -47,6 +47,9 @@ def db_session():
     conn = get_db()
     try:
         yield conn
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 
@@ -139,7 +142,10 @@ def apply_migrations(conn):
 
         try:
             conn.execute('BEGIN')
-            conn.executescript(sql)
+            for statement in sql.split(';'):
+                statement = statement.strip()
+                if statement:
+                    conn.execute(statement)
             conn.execute(
                 'INSERT INTO _migrations (filename) VALUES (?)', (filename,)
             )
@@ -156,6 +162,12 @@ def init_db():
     try:
         _init_db_inner(conn)
         apply_migrations(conn)
+        # Prune old activity log entries (older than 90 days)
+        try:
+            conn.execute("DELETE FROM activity_log WHERE created_at < datetime('now', '-90 days')")
+            conn.commit()
+        except Exception:
+            pass  # Table may not exist yet on first run
     finally:
         conn.close()
 
@@ -491,6 +503,31 @@ def _init_db_inner(conn):
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS federation_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            offer_id INTEGER,
+            request_id INTEGER,
+            from_node_id TEXT NOT NULL,
+            to_node_id TEXT NOT NULL,
+            item_type TEXT NOT NULL,
+            quantity REAL DEFAULT 0,
+            status TEXT DEFAULT 'proposed',
+            proposed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            accepted_at TIMESTAMP,
+            delivered_at TIMESTAMP,
+            confirmed_at TIMESTAMP,
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS sync_peers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            peer_id TEXT NOT NULL UNIQUE,
+            last_synced_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS vector_clocks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             table_name TEXT NOT NULL,
@@ -635,8 +672,26 @@ def _init_db_inner(conn):
             type TEXT DEFAULT 'polygon',
             geojson TEXT NOT NULL,
             label TEXT DEFAULT '',
+            name TEXT DEFAULT '',
+            lat REAL,
+            lng REAL,
             color TEXT DEFAULT '#ff0000',
             notes TEXT DEFAULT '',
+            is_geofence INTEGER DEFAULT 0,
+            properties TEXT DEFAULT '{}',
+            radius_m REAL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS gps_tracks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL DEFAULT 'Track',
+            geojson TEXT NOT NULL DEFAULT '{}',
+            total_distance_m REAL DEFAULT 0,
+            total_ascent_m REAL DEFAULT 0,
+            duration_sec INTEGER DEFAULT 0,
+            started_at TIMESTAMP,
+            ended_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -699,6 +754,39 @@ def _init_db_inner(conn):
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS medication_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id INTEGER NOT NULL,
+            drug_name TEXT NOT NULL,
+            dose TEXT DEFAULT '',
+            route TEXT DEFAULT '',
+            administered_by TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
+            next_dose_due TIMESTAMP,
+            administered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS triage_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id INTEGER NOT NULL,
+            old_category TEXT DEFAULT '',
+            new_category TEXT DEFAULT '',
+            reason TEXT DEFAULT '',
+            changed_by TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS wound_updates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            wound_id INTEGER NOT NULL,
+            patient_id INTEGER NOT NULL,
+            status TEXT DEFAULT '',
+            treatment TEXT DEFAULT '',
+            size_cm REAL,
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS journal (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             entry TEXT NOT NULL,
@@ -750,6 +838,31 @@ def _init_db_inner(conn):
             generator_running INTEGER DEFAULT 0,
             notes TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS generators (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            rated_watts INTEGER DEFAULT 0,
+            fuel_type TEXT DEFAULT 'gasoline',
+            tank_capacity_gal REAL DEFAULT 0,
+            fuel_consumption_gph REAL DEFAULT 0,
+            oil_change_interval_hours REAL DEFAULT 100,
+            total_runtime_hours REAL DEFAULT 0,
+            last_started TIMESTAMP,
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS generator_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            generator_id INTEGER NOT NULL,
+            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            ended_at TIMESTAMP,
+            runtime_hours REAL DEFAULT 0,
+            fuel_used_gal REAL DEFAULT 0,
+            notes TEXT DEFAULT '',
+            FOREIGN KEY (generator_id) REFERENCES generators(id)
         );
 
         CREATE TABLE IF NOT EXISTS sync_log (
@@ -1193,6 +1306,116 @@ def _init_db_inner(conn):
             default_shelf_life_days INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        /* ═══ Batch-Level Expiration Tracking ═══ */
+        CREATE TABLE IF NOT EXISTS inventory_batches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            inventory_id INTEGER NOT NULL REFERENCES inventory(id) ON DELETE CASCADE,
+            quantity REAL NOT NULL DEFAULT 0,
+            expiration TEXT,
+            lot_number TEXT,
+            date_acquired TEXT,
+            cost REAL,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        /* ═══ Consumption History ═══ */
+        CREATE TABLE IF NOT EXISTS consumption_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            inventory_id INTEGER NOT NULL REFERENCES inventory(id) ON DELETE CASCADE,
+            amount REAL NOT NULL,
+            consumed_at TEXT DEFAULT (datetime('now')),
+            notes TEXT
+        );
+
+        /* ═══ Motion Detection Captures ═══ */
+        CREATE TABLE IF NOT EXISTS motion_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            camera_id INTEGER NOT NULL,
+            mean_diff REAL,
+            image_path TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        /* ═══ Persistent Download Queue ═══ */
+        CREATE TABLE IF NOT EXISTS download_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT NOT NULL,
+            title TEXT,
+            status TEXT DEFAULT 'queued',
+            retries INTEGER DEFAULT 0,
+            error TEXT,
+            file_path TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            completed_at TEXT
+        );
+
+        /* ═══ Task Completion History ═══ */
+        CREATE TABLE IF NOT EXISTS task_completions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER NOT NULL,
+            completed_by TEXT,
+            completed_at TEXT DEFAULT (datetime('now')),
+            notes TEXT,
+            duration_minutes INTEGER
+        );
+
+        /* ═══ Communications Window Scheduling ═══ */
+        CREATE TABLE IF NOT EXISTS comms_schedules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            frequency TEXT NOT NULL,
+            mode TEXT,
+            net_name TEXT,
+            check_in_time TEXT,
+            assigned_operator TEXT,
+            priority INTEGER DEFAULT 5,
+            active INTEGER DEFAULT 1,
+            notes TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        /* ═══ Garden Water Tracking ═══ */
+        CREATE TABLE IF NOT EXISTS water_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plot_id INTEGER,
+            source TEXT DEFAULT 'manual',
+            gallons REAL NOT NULL,
+            date TEXT DEFAULT (date('now')),
+            notes TEXT
+        );
+
+        /* ═══ Weather Storm Lifecycle ═══ */
+        CREATE TABLE IF NOT EXISTS storm_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TEXT NOT NULL,
+            ended_at TEXT,
+            storm_type TEXT,
+            peak_intensity TEXT,
+            total_pressure_drop REAL,
+            min_pressure REAL,
+            wind_peak REAL,
+            precip_total REAL,
+            notes TEXT
+        );
+
+        /* ═══ Note Version History ═══ */
+        CREATE TABLE IF NOT EXISTS note_revisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+            title TEXT,
+            content TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        /* ═══ Training Skill Tracking ═══ */
+        CREATE TABLE IF NOT EXISTS skill_progression (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            skill_tag TEXT NOT NULL,
+            score INTEGER,
+            scenario_type TEXT,
+            drill_type TEXT,
+            recorded_at TEXT DEFAULT (datetime('now'))
+        );
     ''')
     conn.commit()
 
@@ -1258,6 +1481,13 @@ def _init_db_inner(conn):
         # v4.9.0 — conflict resolution tracking
         'ALTER TABLE sync_log ADD COLUMN resolved INTEGER DEFAULT 0',
         'ALTER TABLE sync_log ADD COLUMN resolution TEXT DEFAULT ""',
+        # GPS tracks & geofence support
+        'ALTER TABLE map_annotations ADD COLUMN name TEXT DEFAULT ""',
+        'ALTER TABLE map_annotations ADD COLUMN lat REAL',
+        'ALTER TABLE map_annotations ADD COLUMN lng REAL',
+        'ALTER TABLE map_annotations ADD COLUMN is_geofence INTEGER DEFAULT 0',
+        'ALTER TABLE map_annotations ADD COLUMN properties TEXT DEFAULT "{}"',
+        'ALTER TABLE map_annotations ADD COLUMN radius_m REAL DEFAULT 0',
     ]:
         try:
             conn.execute(migration)
@@ -1271,6 +1501,7 @@ def _init_db_inner(conn):
         'CREATE INDEX IF NOT EXISTS idx_activity_log_level ON activity_log(level)',
         'CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations(updated_at DESC)',
         'CREATE INDEX IF NOT EXISTS idx_inventory_category ON inventory(category)',
+        'CREATE INDEX IF NOT EXISTS idx_inventory_category_name ON inventory(category, name)',
         'CREATE INDEX IF NOT EXISTS idx_inventory_expiration ON inventory(expiration)',
         'CREATE INDEX IF NOT EXISTS idx_incidents_created ON incidents(created_at DESC)',
         'CREATE INDEX IF NOT EXISTS idx_incidents_category ON incidents(category)',
@@ -1398,11 +1629,117 @@ def _init_db_inner(conn):
         'CREATE INDEX IF NOT EXISTS idx_training_datasets_status ON training_datasets(status)',
         'CREATE INDEX IF NOT EXISTS idx_training_jobs_status ON training_jobs(status)',
         'CREATE INDEX IF NOT EXISTS idx_perimeter_zones_type ON perimeter_zones(zone_type)',
-        # UPC barcode database
-        'CREATE INDEX IF NOT EXISTS idx_upc_database_upc ON upc_database(upc)',
+        # UPC barcode database (upc column has UNIQUE constraint which auto-creates index)
         'CREATE INDEX IF NOT EXISTS idx_upc_database_category ON upc_database(category)',
         'CREATE INDEX IF NOT EXISTS idx_shopping_list_inventory_id ON shopping_list(inventory_id)',
         'CREATE INDEX IF NOT EXISTS idx_conversation_branches_parent ON conversation_branches(conversation_id, parent_message_idx)',
+        # Inventory batches
+        'CREATE INDEX IF NOT EXISTS idx_inventory_batches_inv ON inventory_batches(inventory_id)',
+        'CREATE INDEX IF NOT EXISTS idx_inventory_batches_expiration ON inventory_batches(expiration)',
+        'CREATE INDEX IF NOT EXISTS idx_inventory_batches_lot ON inventory_batches(lot_number)',
+        # Consumption log
+        'CREATE INDEX IF NOT EXISTS idx_consumption_log_inv ON consumption_log(inventory_id)',
+        'CREATE INDEX IF NOT EXISTS idx_consumption_log_consumed ON consumption_log(consumed_at DESC)',
+        # Medication log
+        'CREATE INDEX IF NOT EXISTS idx_medication_log_patient ON medication_log(patient_id, administered_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_medication_log_drug ON medication_log(drug_name)',
+        'CREATE INDEX IF NOT EXISTS idx_medication_log_next_dose ON medication_log(next_dose_due)',
+        # Wound updates
+        'CREATE INDEX IF NOT EXISTS idx_wound_updates_wound ON wound_updates(wound_id)',
+        'CREATE INDEX IF NOT EXISTS idx_wound_updates_patient ON wound_updates(patient_id, created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_wound_updates_status ON wound_updates(status)',
+        # Triage history
+        'CREATE INDEX IF NOT EXISTS idx_triage_history_patient ON triage_history(patient_id, created_at DESC)',
+        # GPS tracks
+        'CREATE INDEX IF NOT EXISTS idx_gps_tracks_created ON gps_tracks(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_gps_tracks_started ON gps_tracks(started_at DESC)',
+        # Generators
+        'CREATE INDEX IF NOT EXISTS idx_generators_fuel_type ON generators(fuel_type)',
+        # Generator sessions
+        'CREATE INDEX IF NOT EXISTS idx_generator_sessions_gen ON generator_sessions(generator_id)',
+        'CREATE INDEX IF NOT EXISTS idx_generator_sessions_started ON generator_sessions(started_at DESC)',
+        # Motion events
+        'CREATE INDEX IF NOT EXISTS idx_motion_events_camera ON motion_events(camera_id, created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_motion_events_created ON motion_events(created_at DESC)',
+        # Download queue
+        'CREATE INDEX IF NOT EXISTS idx_download_queue_status ON download_queue(status)',
+        'CREATE INDEX IF NOT EXISTS idx_download_queue_created ON download_queue(created_at DESC)',
+        # Task completions
+        'CREATE INDEX IF NOT EXISTS idx_task_completions_task ON task_completions(task_id)',
+        'CREATE INDEX IF NOT EXISTS idx_task_completions_completed ON task_completions(completed_at DESC)',
+        # Comms schedules
+        'CREATE INDEX IF NOT EXISTS idx_comms_schedules_active ON comms_schedules(active)',
+        'CREATE INDEX IF NOT EXISTS idx_comms_schedules_priority ON comms_schedules(priority)',
+        # Water log
+        'CREATE INDEX IF NOT EXISTS idx_water_log_plot ON water_log(plot_id)',
+        'CREATE INDEX IF NOT EXISTS idx_water_log_date ON water_log(date DESC)',
+        # Storm events
+        'CREATE INDEX IF NOT EXISTS idx_storm_events_started ON storm_events(started_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_storm_events_type ON storm_events(storm_type)',
+        # Note revisions
+        'CREATE INDEX IF NOT EXISTS idx_note_revisions_note ON note_revisions(note_id, created_at DESC)',
+        # Skill progression
+        'CREATE INDEX IF NOT EXISTS idx_skill_progression_tag ON skill_progression(skill_tag)',
+        'CREATE INDEX IF NOT EXISTS idx_skill_progression_recorded ON skill_progression(recorded_at DESC)',
+        # ── Missing foreign key indexes ──
+        'CREATE INDEX IF NOT EXISTS idx_training_jobs_dataset ON training_jobs(dataset_id)',
+        'CREATE INDEX IF NOT EXISTS idx_federation_transactions_offer ON federation_transactions(offer_id)',
+        'CREATE INDEX IF NOT EXISTS idx_federation_transactions_request ON federation_transactions(request_id)',
+        'CREATE INDEX IF NOT EXISTS idx_federation_transactions_from_node ON federation_transactions(from_node_id)',
+        'CREATE INDEX IF NOT EXISTS idx_federation_transactions_to_node ON federation_transactions(to_node_id)',
+        'CREATE INDEX IF NOT EXISTS idx_federation_offers_node ON federation_offers(node_id)',
+        'CREATE INDEX IF NOT EXISTS idx_federation_requests_node ON federation_requests(node_id)',
+        'CREATE INDEX IF NOT EXISTS idx_mutual_aid_agreements_peer ON mutual_aid_agreements(peer_node_id)',
+        'CREATE INDEX IF NOT EXISTS idx_dead_drop_from_node ON dead_drop_messages(from_node_id)',
+        'CREATE INDEX IF NOT EXISTS idx_dead_drop_recipient ON dead_drop_messages(recipient)',
+        'CREATE INDEX IF NOT EXISTS idx_sync_log_peer_node ON sync_log(peer_node_id)',
+        # ── Missing category / status / type filter indexes ──
+        'CREATE INDEX IF NOT EXISTS idx_services_category ON services(category)',
+        'CREATE INDEX IF NOT EXISTS idx_sensor_devices_status ON sensor_devices(status)',
+        'CREATE INDEX IF NOT EXISTS idx_sensor_devices_type ON sensor_devices(device_type)',
+        'CREATE INDEX IF NOT EXISTS idx_preservation_log_method ON preservation_log(method)',
+        'CREATE INDEX IF NOT EXISTS idx_federation_offers_item_type ON federation_offers(item_type)',
+        'CREATE INDEX IF NOT EXISTS idx_federation_requests_item_type ON federation_requests(item_type)',
+        'CREATE INDEX IF NOT EXISTS idx_federation_requests_urgency ON federation_requests(urgency)',
+        'CREATE INDEX IF NOT EXISTS idx_federation_transactions_status ON federation_transactions(status)',
+        'CREATE INDEX IF NOT EXISTS idx_mutual_aid_agreements_status ON mutual_aid_agreements(status)',
+        'CREATE INDEX IF NOT EXISTS idx_livestock_status ON livestock(status)',
+        'CREATE INDEX IF NOT EXISTS idx_scenarios_type ON scenarios(scenario_type)',
+        'CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity)',
+        'CREATE INDEX IF NOT EXISTS idx_alerts_type ON alerts(alert_type)',
+        'CREATE INDEX IF NOT EXISTS idx_subscriptions_category ON subscriptions(category)',
+        'CREATE INDEX IF NOT EXISTS idx_equipment_category ON equipment_log(category)',
+        'CREATE INDEX IF NOT EXISTS idx_drill_history_type ON drill_history(drill_type)',
+        'CREATE INDEX IF NOT EXISTS idx_comms_log_direction ON comms_log(direction)',
+        'CREATE INDEX IF NOT EXISTS idx_lan_messages_type ON lan_messages(msg_type)',
+        'CREATE INDEX IF NOT EXISTS idx_access_log_direction ON access_log(direction)',
+        'CREATE INDEX IF NOT EXISTS idx_sync_log_status ON sync_log(status)',
+        'CREATE INDEX IF NOT EXISTS idx_sync_log_direction ON sync_log(direction)',
+        'CREATE INDEX IF NOT EXISTS idx_perimeter_zones_threat ON perimeter_zones(threat_level)',
+        # ── Missing created_at / updated_at ordering indexes ──
+        'CREATE INDEX IF NOT EXISTS idx_contacts_created ON contacts(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_inventory_created ON inventory(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_notes_created ON notes(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_documents_created ON documents(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_checklists_updated ON checklists(updated_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_books_created ON books(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_patients_created ON patients(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_preservation_log_created ON preservation_log(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_federation_transactions_created ON federation_transactions(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_mutual_aid_agreements_created ON mutual_aid_agreements(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_training_datasets_created ON training_datasets(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_training_jobs_created ON training_jobs(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_livestock_created ON livestock(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_scenarios_started ON scenarios(started_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_ammo_created ON ammo_inventory(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_community_created ON community_resources(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_equipment_created ON equipment_log(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_fuel_created ON fuel_storage(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_lan_transfers_created ON lan_transfers(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_perimeter_zones_created ON perimeter_zones(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_triage_events_created ON triage_events(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_group_exercises_created ON group_exercises(created_at DESC)',
     ]:
         try:
             conn.execute(idx)

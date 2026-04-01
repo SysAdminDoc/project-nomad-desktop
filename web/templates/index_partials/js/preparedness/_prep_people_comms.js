@@ -46,13 +46,10 @@ async function addEmergencyNumbers() {
     {name: 'National Weather Service', phone: '', role: 'Weather alerts', freq: 'NOAA 162.400-162.550 MHz', notes: 'Monitor via NOAA weather radio'},
     {name: 'Coast Guard', phone: 'VHF Ch 16', role: 'Maritime emergency', freq: '156.800 MHz', notes: 'Marine distress frequency'},
   ];
-  let added = 0;
-  for (const c of numbers) {
-    try {
-      await fetch('/api/contacts', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)});
-      added++;
-    } catch(e) {}
-  }
+  const results = await Promise.allSettled(numbers.map(c =>
+    fetch('/api/contacts', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)})
+  ));
+  const added = results.filter(r => r.status === 'fulfilled').length;
   toast(`Added ${added} emergency contacts`, 'success');
   loadContacts();
 }

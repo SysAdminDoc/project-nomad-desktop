@@ -9,7 +9,8 @@ import logging
 from flask import Blueprint, request, jsonify
 from werkzeug.utils import secure_filename
 
-from db import get_db, log_activity
+from web.blueprints import error_response
+from db import db_session, log_activity
 from config import get_data_dir
 from services.manager import format_size
 from web.state import (
@@ -27,19 +28,19 @@ comms_bp = Blueprint('comms', __name__)
 def api_lan_transfer_send():
     """Send a file to another NOMAD node on the LAN."""
     if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
+        return error_response('No file provided')
     f = request.files['file']
     peer_ip = request.form.get('peer_ip', '').strip()
     if not peer_ip:
-        return jsonify({'error': 'peer_ip required'}), 400
+        return error_response('peer_ip required')
     # SSRF protection: reject loopback, link-local, and non-private-LAN IPs
     import ipaddress as _ipa
     try:
         ip_obj = _ipa.ip_address(peer_ip)
         if ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_reserved or ip_obj.is_unspecified:
-            return jsonify({'error': 'Invalid peer IP address'}), 400
+            return error_response('Invalid peer IP address')
     except ValueError:
-        return jsonify({'error': 'Invalid IP address format'}), 400
+        return error_response('Invalid IP address format')
 
     # Save locally first
     transfer_dir = os.path.join(get_data_dir(), 'transfers', 'outgoing')
@@ -49,17 +50,13 @@ def api_lan_transfer_send():
     f.save(local_path)
     file_size = os.path.getsize(local_path)
 
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute(
             'INSERT INTO lan_transfers (filename, file_size, direction, peer_ip, status) VALUES (?, ?, ?, ?, ?)',
             (safe, file_size, 'outgoing', peer_ip, 'sending')
         )
         db.commit()
         tid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
-    finally:
-        db.close()
-
     # Send in background
     def do_send():
         import requests as _req
@@ -68,15 +65,13 @@ def api_lan_transfer_send():
                 port = 8080
                 _req.post(f'http://{peer_ip}:{port}/api/lan/transfer/receive',
                           files={'file': (safe, fh)}, timeout=300)
-            db2 = get_db()
-            db2.execute('UPDATE lan_transfers SET status = ? WHERE id = ?', ('completed', tid))
-            db2.commit()
-            db2.close()
+            with db_session() as db2:
+                db2.execute('UPDATE lan_transfers SET status = ? WHERE id = ?', ('completed', tid))
+                db2.commit()
         except Exception:
-            db2 = get_db()
-            db2.execute('UPDATE lan_transfers SET status = ? WHERE id = ?', ('failed', tid))
-            db2.commit()
-            db2.close()
+            with db_session() as db2:
+                db2.execute('UPDATE lan_transfers SET status = ? WHERE id = ?', ('failed', tid))
+                db2.commit()
     threading.Thread(target=do_send, daemon=True).start()
     return jsonify({'status': 'sending', 'transfer_id': tid, 'filename': safe})
 
@@ -92,28 +87,21 @@ def api_lan_transfer_receive():
     f.save(os.path.join(recv_dir, safe))
     file_size = os.path.getsize(os.path.join(recv_dir, safe))
 
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute(
             'INSERT INTO lan_transfers (filename, file_size, direction, peer_ip, peer_name, status) VALUES (?, ?, ?, ?, ?, ?)',
             (safe, file_size, 'incoming', request.remote_addr or '', request.form.get('sender', ''), 'completed')
         )
         db.commit()
         log_activity('lan_transfer', detail=f'Received {safe} ({file_size} bytes)')
-    finally:
-        db.close()
     return jsonify({'status': 'received', 'filename': safe})
 
 @comms_bp.route('/api/lan/transfers')
 def api_lan_transfers():
     """List file transfers."""
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute('SELECT * FROM lan_transfers ORDER BY created_at DESC LIMIT 50').fetchall()
         return jsonify([dict(r) for r in rows])
-    finally:
-        db.close()
-
 # ─── HF Propagation Prediction (v5.0 Phase 8) ───────────────────
 
 @comms_bp.route('/api/radio/propagation')
@@ -176,58 +164,54 @@ def api_radio_propagation():
 
 @comms_bp.route('/api/lan/messages')
 def api_lan_messages():
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
     after_id = request.args.get('after', 0, type=int)
-    db = get_db()
-    if after_id:
-        rows = db.execute('SELECT * FROM lan_messages WHERE id > ? ORDER BY id ASC LIMIT 100', (after_id,)).fetchall()
-    else:
-        rows = db.execute('SELECT * FROM lan_messages ORDER BY id DESC LIMIT 50').fetchall()
-        rows = list(reversed(rows))
-    db.close()
-    return jsonify([dict(r) for r in rows])
-
+    with db_session() as db:
+        if after_id:
+            rows = db.execute('SELECT * FROM lan_messages WHERE id > ? ORDER BY id ASC LIMIT ? OFFSET ?', (after_id, limit, offset)).fetchall()
+        else:
+            rows = db.execute('SELECT * FROM lan_messages ORDER BY id DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
+            rows = list(reversed(rows))
+        return jsonify([dict(r) for r in rows])
 @comms_bp.route('/api/lan/messages', methods=['POST'])
 def api_lan_send():
     data = request.get_json() or {}
     content = (data.get('content', '') or '').strip()
     if not content:
-        return jsonify({'error': 'Empty message'}), 400
+        return error_response('Empty message')
     sender = (data.get('sender', '') or '').strip() or 'Anonymous'
     msg_type = data.get('msg_type', 'text')
-    db = get_db()
-    cur = db.execute('INSERT INTO lan_messages (sender, content, msg_type) VALUES (?, ?, ?)',
-                     (sender[:50], content[:2000], msg_type))
-    db.commit()
-    msg = db.execute('SELECT * FROM lan_messages WHERE id = ?', (cur.lastrowid,)).fetchone()
-    db.close()
-    return jsonify(dict(msg)), 201
-
+    with db_session() as db:
+        cur = db.execute('INSERT INTO lan_messages (sender, content, msg_type) VALUES (?, ?, ?)',
+                         (sender[:50], content[:2000], msg_type))
+        db.commit()
+        msg = db.execute('SELECT * FROM lan_messages WHERE id = ?', (cur.lastrowid,)).fetchone()
+        return jsonify(dict(msg)), 201
 @comms_bp.route('/api/lan/messages/clear', methods=['POST'])
 def api_lan_clear():
-    db = get_db()
-    db.execute('DELETE FROM lan_messages')
-    db.commit()
-    db.close()
-    return jsonify({'status': 'cleared'})
-
+    with db_session() as db:
+        db.execute('DELETE FROM lan_messages')
+        db.commit()
+        log_activity('lan_messages_cleared', detail='Cleared LAN messages')
+        return jsonify({'status': 'cleared'})
 # ─── LAN Enhancements (v5.0 Phase 10) ──────────────────────────
 
 @comms_bp.route('/api/lan/channels')
 def api_lan_channels():
     """List LAN chat channels."""
-    db = get_db()
-    try:
-        rows = db.execute('SELECT * FROM lan_channels ORDER BY name').fetchall()
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM lan_channels ORDER BY name LIMIT 5000').fetchall()
         channels = [dict(r) for r in rows]
         if not channels:
-            for ch in ['General', 'Security', 'Medical', 'Logistics']:
-                db.execute('INSERT OR IGNORE INTO lan_channels (name) VALUES (?)', (ch,))
+            db.executemany('INSERT OR IGNORE INTO lan_channels (name) VALUES (?)',
+                          [(ch,) for ch in ['General', 'Security', 'Medical', 'Logistics']])
             db.commit()
             channels = [{'name': ch} for ch in ['General', 'Security', 'Medical', 'Logistics']]
         return jsonify(channels)
-    finally:
-        db.close()
-
 @comms_bp.route('/api/lan/channels', methods=['POST'])
 def api_lan_channel_create():
     """Create a LAN chat channel."""
@@ -235,27 +219,19 @@ def api_lan_channel_create():
     name = d.get('name', '').strip()
     if not name:
         return jsonify({'error': 'name required'}), 400
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('INSERT OR IGNORE INTO lan_channels (name, description) VALUES (?, ?)',
                    (name, d.get('description', '')))
         db.commit()
         return jsonify({'status': 'ok'})
-    finally:
-        db.close()
-
 @comms_bp.route('/api/lan/presence')
 def api_lan_presence():
     """List known LAN nodes and their status."""
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute(
             "SELECT * FROM lan_presence WHERE last_seen >= datetime('now', '-5 minutes') ORDER BY node_name"
         ).fetchall()
         return jsonify([dict(r) for r in rows])
-    finally:
-        db.close()
-
 @comms_bp.route('/api/lan/presence/heartbeat', methods=['POST'])
 def api_lan_heartbeat():
     """Register/update LAN presence."""
@@ -263,8 +239,7 @@ def api_lan_heartbeat():
     ip = request.remote_addr or d.get('ip', '')
     name = d.get('name', 'Unknown')
     version = d.get('version', '')
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute(
             '''INSERT INTO lan_presence (node_name, ip, status, version, last_seen)
                VALUES (?, ?, 'online', ?, CURRENT_TIMESTAMP)
@@ -274,45 +249,40 @@ def api_lan_heartbeat():
         )
         db.commit()
         return jsonify({'status': 'ok'})
-    finally:
-        db.close()
-
 @comms_bp.route('/api/comms/frequencies')
 def api_comms_frequencies():
-    db = get_db()
-    rows = db.execute('SELECT * FROM freq_database ORDER BY service, frequency').fetchall()
-    db.close()
-    # If empty, seed with standard frequencies
-    if not rows:
+    try:
+        limit = min(int(request.args.get('limit', 500)), 1000)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 500, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM freq_database ORDER BY service, frequency LIMIT ? OFFSET ?', (limit, offset)).fetchall()
+    if not rows and offset == 0:
         _seed_frequencies()
-        db = get_db()
-        rows = db.execute('SELECT * FROM freq_database ORDER BY service, frequency').fetchall()
-        db.close()
+        with db_session() as db:
+            rows = db.execute('SELECT * FROM freq_database ORDER BY service, frequency LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 @comms_bp.route('/api/comms/frequencies', methods=['POST'])
 def api_comms_freq_create():
     data = request.get_json() or {}
-    db = get_db()
-    db.execute('INSERT INTO freq_database (frequency, mode, bandwidth, service, description, region, license_required, priority, notes) VALUES (?,?,?,?,?,?,?,?,?)',
-               (data.get('frequency', 0), data.get('mode', 'FM'), data.get('bandwidth', ''),
-                data.get('service', ''), data.get('description', ''), data.get('region', 'US'),
-                data.get('license_required', 0), data.get('priority', 0), data.get('notes', '')))
-    db.commit()
-    db.close()
-    return jsonify({'status': 'created'})
-
+    with db_session() as db:
+        db.execute('INSERT INTO freq_database (frequency, mode, bandwidth, service, description, region, license_required, priority, notes) VALUES (?,?,?,?,?,?,?,?,?)',
+                   (data.get('frequency', 0), data.get('mode', 'FM'), data.get('bandwidth', ''),
+                    data.get('service', ''), data.get('description', ''), data.get('region', 'US'),
+                    data.get('license_required', 0), data.get('priority', 0), data.get('notes', '')))
+        db.commit()
+        return jsonify({'status': 'created'})
 @comms_bp.route('/api/comms/frequencies/<int:fid>', methods=['DELETE'])
 def api_comms_freq_delete(fid):
-    db = get_db()
-    db.execute('DELETE FROM freq_database WHERE id = ?', (fid,))
-    db.commit()
-    db.close()
-    return jsonify({'status': 'deleted'})
-
+    with db_session() as db:
+        db.execute('DELETE FROM freq_database WHERE id = ?', (fid,))
+        db.commit()
+        log_activity('frequency_deleted', 'comms', 'Deleted frequency')
+        return jsonify({'status': 'deleted'})
 def _seed_frequencies():
     """Seed standard emergency/preparedness frequencies (~340 entries covering 20+ services)."""
-    db = get_db()
     freqs = [
         # ── FRS (Family Radio Service) — 22 channels ─────────────────
         (462.5625,'FM','12.5','FRS Ch 1','Family Radio — primary','US',0,10,'Most common FRS channel; shared with GMRS'),
@@ -622,16 +592,76 @@ def _seed_frequencies():
         (923.875,'LoRa','125','Meshtastic US Alt','Meshtastic alt US channel','US',0,4,'Alternative to default 906.875'),
         (916.800,'LoRa','125','Meshtastic US LR','Meshtastic long range','US',0,5,'Long-range preset'),
     ]
-    for f in freqs:
-        db.execute('INSERT OR IGNORE INTO freq_database (frequency, mode, bandwidth, service, description, region, license_required, priority, notes) VALUES (?,?,?,?,?,?,?,?,?)', f)
-    db.commit()
-    db.close()
+    with db_session() as db:
+        db.executemany('INSERT OR IGNORE INTO freq_database (frequency, mode, bandwidth, service, description, region, license_required, priority, notes) VALUES (?,?,?,?,?,?,?,?,?)', freqs)
+        db.commit()
 
+
+# ─── Comms Window Scheduling ─────────────────────────────────────
+
+@comms_bp.route('/api/comms/schedules', methods=['GET'])
+def api_comms_schedules_list():
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM comms_schedules WHERE active = 1 ORDER BY check_in_time LIMIT 5000').fetchall()
+        return jsonify([dict(r) for r in rows])
+@comms_bp.route('/api/comms/schedules', methods=['POST'])
+def api_comms_schedules_create():
+    d = request.json or {}
+    with db_session() as db:
+        cur = db.execute('INSERT INTO comms_schedules (frequency, mode, net_name, check_in_time, assigned_operator, priority, notes) VALUES (?,?,?,?,?,?,?)',
+            (d.get('frequency',''), d.get('mode',''), d.get('net_name',''), d.get('check_in_time',''), d.get('assigned_operator',''), d.get('priority', 5), d.get('notes','')))
+        db.commit()
+        row = db.execute('SELECT * FROM comms_schedules WHERE id = ?', (cur.lastrowid,)).fetchone()
+        return jsonify(dict(row)), 201
+@comms_bp.route('/api/comms/schedules/<int:sid>', methods=['DELETE'])
+def api_comms_schedules_delete(sid):
+    with db_session() as db:
+        db.execute('DELETE FROM comms_schedules WHERE id = ?', (sid,))
+        db.commit()
+        return jsonify({'deleted': True})
+@comms_bp.route('/api/comms/schedules/overdue', methods=['GET'])
+def api_comms_schedules_overdue():
+    with db_session() as db:
+        # Find schedules where check_in_time has passed today with no comms_log entry
+        rows = db.execute("""
+            SELECT cs.* FROM comms_schedules cs
+            WHERE cs.active = 1 AND cs.check_in_time <= time('now')
+            AND NOT EXISTS (
+                SELECT 1 FROM comms_log cl
+                WHERE cl.frequency = cs.frequency
+                AND cl.created_at >= date('now')
+            )
+        """).fetchall()
+        return jsonify([dict(r) for r in rows])
+# ─── Frequency Scan Lists ────────────────────────────────────────
+
+@comms_bp.route('/api/comms/frequencies/priority', methods=['GET'])
+def api_comms_freq_priority():
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM freq_database WHERE priority >= 7 ORDER BY frequency LIMIT 5000').fetchall()
+        return jsonify([dict(r) for r in rows])
+# ─── Mesh/LAN Bridging ──────────────────────────────────────────
+
+@comms_bp.route('/api/comms/bridge', methods=['POST'])
+def api_comms_bridge():
+    d = request.json or {}
+    msg = d.get('message', '')
+    source = d.get('source', 'lan')  # 'lan' or 'mesh'
+    with db_session() as db:
+        if source == 'lan':
+            # Bridge LAN message to mesh
+            db.execute('INSERT INTO mesh_messages (content, sender, source) VALUES (?, ?, ?)',
+                (msg[:200], d.get('sender', 'Bridge'), 'bridged'))
+        else:
+            # Bridge mesh message to LAN
+            db.execute('INSERT INTO lan_messages (content, sender, source) VALUES (?, ?, ?)',
+                (msg, d.get('sender', 'Bridge'), 'bridged'))
+        db.commit()
+        return jsonify({'bridged': True})
 @comms_bp.route('/api/comms/dashboard')
 def api_comms_dashboard():
     """Comms status overview — last contacts, active frequencies, mesh status."""
-    db = get_db()
-    try:
+    with db_session() as db:
         last_logs = [dict(r) for r in db.execute('SELECT callsign, freq, direction, created_at FROM comms_log ORDER BY created_at DESC LIMIT 5').fetchall()]
         freq_count = db.execute('SELECT COUNT(*) as c FROM freq_database').fetchone()['c']
         contacts_with_radio = db.execute("SELECT COUNT(*) as c FROM contacts WHERE callsign != ''").fetchone()['c']
@@ -642,34 +672,25 @@ def api_comms_dashboard():
             'radio_contacts': contacts_with_radio,
             'radio_profiles': profiles,
         })
-    finally:
-        db.close()
-
 @comms_bp.route('/api/comms/radio-profiles')
 def api_comms_profiles_list():
-    db = get_db()
-    rows = db.execute('SELECT * FROM radio_profiles ORDER BY name').fetchall()
-    db.close()
-    return jsonify([dict(r) for r in rows])
-
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM radio_profiles ORDER BY name').fetchall()
+        return jsonify([dict(r) for r in rows])
 @comms_bp.route('/api/comms/radio-profiles', methods=['POST'])
 def api_comms_profiles_create():
     data = request.get_json() or {}
-    db = get_db()
-    db.execute('INSERT INTO radio_profiles (radio_model, name, channels) VALUES (?,?,?)',
-               (data.get('radio_model', ''), data.get('name', 'New Profile'), json.dumps(data.get('channels', []))))
-    db.commit()
-    db.close()
-    return jsonify({'status': 'created'})
-
+    with db_session() as db:
+        db.execute('INSERT INTO radio_profiles (radio_model, name, channels) VALUES (?,?,?)',
+                   (data.get('radio_model', ''), data.get('name', 'New Profile'), json.dumps(data.get('channels', []))))
+        db.commit()
+        return jsonify({'status': 'created'})
 @comms_bp.route('/api/comms/radio-profiles/<int:pid>', methods=['DELETE'])
 def api_comms_profiles_delete(pid):
-    db = get_db()
-    db.execute('DELETE FROM radio_profiles WHERE id = ?', (pid,))
-    db.commit()
-    db.close()
-    return jsonify({'status': 'deleted'})
-
+    with db_session() as db:
+        db.execute('DELETE FROM radio_profiles WHERE id = ?', (pid,))
+        db.commit()
+        return jsonify({'status': 'deleted'})
 @comms_bp.route('/api/broadcast')
 def api_broadcast_get():
     return jsonify(_broadcast)
@@ -695,31 +716,30 @@ def api_broadcast_clear():
 
 @comms_bp.route('/api/comms-log')
 def api_comms_log_list():
-    db = get_db()
-    rows = db.execute('SELECT * FROM comms_log ORDER BY created_at DESC LIMIT 200').fetchall()
-    db.close()
-    return jsonify([dict(r) for r in rows])
-
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM comms_log ORDER BY created_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
+        return jsonify([dict(r) for r in rows])
 @comms_bp.route('/api/comms-log', methods=['POST'])
 def api_comms_log_create():
     data = request.get_json() or {}
-    db = get_db()
-    cur = db.execute('INSERT INTO comms_log (freq, callsign, direction, message, signal_quality) VALUES (?, ?, ?, ?, ?)',
-                     (data.get('freq', ''), data.get('callsign', ''), data.get('direction', 'rx'),
-                      data.get('message', ''), data.get('signal_quality', '')))
-    db.commit()
-    row = db.execute('SELECT * FROM comms_log WHERE id = ?', (cur.lastrowid,)).fetchone()
-    db.close()
-    return jsonify(dict(row)), 201
-
+    with db_session() as db:
+        cur = db.execute('INSERT INTO comms_log (freq, callsign, direction, message, signal_quality) VALUES (?, ?, ?, ?, ?)',
+                         (data.get('freq', ''), data.get('callsign', ''), data.get('direction', 'rx'),
+                          data.get('message', ''), data.get('signal_quality', '')))
+        db.commit()
+        row = db.execute('SELECT * FROM comms_log WHERE id = ?', (cur.lastrowid,)).fetchone()
+        return jsonify(dict(row)), 201
 @comms_bp.route('/api/comms-log/<int:lid>', methods=['DELETE'])
 def api_comms_log_delete(lid):
-    db = get_db()
-    db.execute('DELETE FROM comms_log WHERE id = ?', (lid,))
-    db.commit()
-    db.close()
-    return jsonify({'status': 'deleted'})
-
+    with db_session() as db:
+        db.execute('DELETE FROM comms_log WHERE id = ?', (lid,))
+        db.commit()
+        return jsonify({'status': 'deleted'})
 # ─── Drill History API ────────────────────────────────────────────
 
 
@@ -800,12 +820,10 @@ def api_mesh_status():
 @comms_bp.route('/api/mesh/messages')
 def api_mesh_messages_list():
     """List recent mesh messages."""
-    db = get_db()
-    limit = request.args.get('limit', 50, type=int)
-    rows = db.execute('SELECT * FROM mesh_messages ORDER BY timestamp DESC LIMIT ?', (limit,)).fetchall()
-    db.close()
-    return jsonify([dict(r) for r in rows])
-
+    with db_session() as db:
+        limit = request.args.get('limit', 50, type=int)
+        rows = db.execute('SELECT * FROM mesh_messages ORDER BY timestamp DESC LIMIT ?', (limit,)).fetchall()
+        return jsonify([dict(r) for r in rows])
 @comms_bp.route('/api/mesh/messages', methods=['POST'])
 def api_mesh_messages_send():
     """Send a mesh message — stub stores locally."""
@@ -815,14 +833,13 @@ def api_mesh_messages_send():
     to_node = data.get('to_node', '^all')
     if not message:
         return jsonify({'error': 'message is required'}), 400
-    db = get_db()
-    cur = db.execute(
-        'INSERT INTO mesh_messages (from_node, to_node, message, channel) VALUES (?, ?, ?, ?)',
-        ('!local', to_node, message, channel))
-    db.commit()
-    msg_id = cur.lastrowid
-    row = db.execute('SELECT * FROM mesh_messages WHERE id = ?', (msg_id,)).fetchone()
-    db.close()
+    with db_session() as db:
+        cur = db.execute(
+            'INSERT INTO mesh_messages (from_node, to_node, message, channel) VALUES (?, ?, ?, ?)',
+            ('!local', to_node, message, channel))
+        db.commit()
+        msg_id = cur.lastrowid
+        row = db.execute('SELECT * FROM mesh_messages WHERE id = ?', (msg_id,)).fetchone()
     if not _mesh_state['connected']:
         return jsonify({'status': 'queued', 'note': 'No mesh radio connected — message stored locally', 'message': dict(row)}), 202
     return jsonify({'status': 'sent', 'message': dict(row)}), 201
@@ -840,66 +857,64 @@ def api_mesh_nodes():
 def api_comms_status_board():
     """Unified view of all communication channels."""
     from datetime import datetime, timedelta
-    db = get_db()
+    with db_session() as db:
+        # LAN peers
+        lan_peers = []
+        try:
+            peers = db.execute('SELECT * FROM federation_peers ORDER BY last_seen DESC').fetchall()
+            lan_peers = [dict(p) for p in peers]
+        except Exception:
+            pass
 
-    # LAN peers
-    lan_peers = []
-    try:
-        peers = db.execute('SELECT * FROM federation_peers ORDER BY last_seen DESC').fetchall()
-        lan_peers = [dict(p) for p in peers]
-    except Exception:
-        pass
+        # Mesh nodes
+        mesh_nodes = []
+        mesh_status = dict(_mesh_state)
 
-    # Mesh nodes
-    mesh_nodes = []
-    mesh_status = dict(_mesh_state)
+        # Federation peers
+        fed_peers = []
+        try:
+            rows = db.execute("SELECT * FROM federation_peers WHERE trust_level != 'blocked' ORDER BY last_seen DESC").fetchall()
+            fed_peers = [dict(r) for r in rows]
+        except Exception:
+            pass
 
-    # Federation peers
-    fed_peers = []
-    try:
-        rows = db.execute("SELECT * FROM federation_peers WHERE trust_level != 'blocked' ORDER BY last_seen DESC").fetchall()
-        fed_peers = [dict(r) for r in rows]
-    except Exception:
-        pass
+        # Recent comms log
+        recent_comms = []
+        try:
+            since = (datetime.now() - timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
+            rows = db.execute('SELECT * FROM comms_log WHERE created_at >= ? ORDER BY created_at DESC LIMIT 50', (since,)).fetchall()
+            recent_comms = [dict(r) for r in rows]
+        except Exception:
+            pass
 
-    # Recent comms log
-    recent_comms = []
-    try:
-        since = (datetime.now() - timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
-        rows = db.execute('SELECT * FROM comms_log WHERE created_at >= ? ORDER BY created_at DESC LIMIT 50', (since,)).fetchall()
-        recent_comms = [dict(r) for r in rows]
-    except Exception:
-        pass
+        # Active frequencies from radio profiles
+        active_freqs = []
+        try:
+            rows = db.execute('SELECT * FROM radio_profiles ORDER BY name').fetchall()
+            for r in rows:
+                try:
+                    channels = json.loads(r['channels']) if r['channels'] else []
+                    for ch in channels:
+                        active_freqs.append({
+                            'profile': r['name'],
+                            'radio': r['radio_model'],
+                            'channel': ch.get('name', ''),
+                            'frequency': ch.get('frequency', ''),
+                        })
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
-    # Active frequencies from radio profiles
-    active_freqs = []
-    try:
-        rows = db.execute('SELECT * FROM radio_profiles ORDER BY name').fetchall()
-        for r in rows:
-            try:
-                channels = json.loads(r['channels']) if r['channels'] else []
-                for ch in channels:
-                    active_freqs.append({
-                        'profile': r['name'],
-                        'radio': r['radio_model'],
-                        'channel': ch.get('name', ''),
-                        'frequency': ch.get('frequency', ''),
-                    })
-            except Exception:
-                pass
-    except Exception:
-        pass
+        # Recent mesh messages
+        mesh_msgs = []
+        try:
+            rows = db.execute('SELECT * FROM mesh_messages ORDER BY timestamp DESC LIMIT 20').fetchall()
+            mesh_msgs = [dict(r) for r in rows]
+        except Exception:
+            pass
 
-    # Recent mesh messages
-    mesh_msgs = []
-    try:
-        rows = db.execute('SELECT * FROM mesh_messages ORDER BY timestamp DESC LIMIT 20').fetchall()
-        mesh_msgs = [dict(r) for r in rows]
-    except Exception:
-        pass
-
-    db.close()
-    return jsonify({
+        return jsonify({
         'lan_peers': lan_peers,
         'mesh': {
             'status': mesh_status,
@@ -914,5 +929,5 @@ def api_comms_status_board():
             'mesh': mesh_status.get('node_count', 0),
             'federation': len(fed_peers),
             'frequencies': len(active_freqs),
-        },
-    })
+            },
+        })

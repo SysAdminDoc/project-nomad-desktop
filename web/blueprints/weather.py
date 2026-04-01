@@ -5,41 +5,42 @@ import math
 from datetime import datetime, timedelta
 
 from flask import Blueprint, request, jsonify
-from db import get_db
+from db import db_session
 
 weather_bp = Blueprint('weather', __name__)
 
 
 @weather_bp.route('/api/weather')
 def api_weather_list():
-    db = get_db()
-    limit = request.args.get('limit', 50, type=int)
-    rows = db.execute('SELECT * FROM weather_log ORDER BY created_at DESC LIMIT ?', (limit,)).fetchall()
-    db.close()
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM weather_log ORDER BY created_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 
 @weather_bp.route('/api/weather', methods=['POST'])
 def api_weather_create():
     data = request.get_json() or {}
-    db = get_db()
-    cur = db.execute(
-        'INSERT INTO weather_log (pressure_hpa, temp_f, wind_dir, wind_speed, clouds, precip, visibility, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        (data.get('pressure_hpa'), data.get('temp_f'), data.get('wind_dir', ''),
-         data.get('wind_speed', ''), data.get('clouds', ''), data.get('precip', ''),
-         data.get('visibility', ''), data.get('notes', '')))
-    db.commit()
-    row = db.execute('SELECT * FROM weather_log WHERE id = ?', (cur.lastrowid,)).fetchone()
-    db.close()
+    with db_session() as db:
+        cur = db.execute(
+            'INSERT INTO weather_log (pressure_hpa, temp_f, wind_dir, wind_speed, clouds, precip, visibility, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            (data.get('pressure_hpa'), data.get('temp_f'), data.get('wind_dir', ''),
+             data.get('wind_speed', ''), data.get('clouds', ''), data.get('precip', ''),
+             data.get('visibility', ''), data.get('notes', '')))
+        db.commit()
+        row = db.execute('SELECT * FROM weather_log WHERE id = ?', (cur.lastrowid,)).fetchone()
     return jsonify(dict(row)), 201
 
 
 @weather_bp.route('/api/weather/trend')
 def api_weather_trend():
     """Return pressure trend for weather prediction."""
-    db = get_db()
-    rows = db.execute('SELECT pressure_hpa, created_at FROM weather_log WHERE pressure_hpa IS NOT NULL ORDER BY created_at DESC LIMIT 10').fetchall()
-    db.close()
+    with db_session() as db:
+        rows = db.execute('SELECT pressure_hpa, created_at FROM weather_log WHERE pressure_hpa IS NOT NULL ORDER BY created_at DESC LIMIT 10').fetchall()
     if len(rows) < 2:
         return jsonify({'trend': 'insufficient', 'prediction': 'Need at least 2 pressure readings', 'readings': len(rows)})
     newest = rows[0]['pressure_hpa']
@@ -65,23 +66,17 @@ def api_weather_trend():
 def api_weather_readings():
     """Get weather readings history for pressure graph."""
     hours = request.args.get('hours', 48, type=int)
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute(
             "SELECT * FROM weather_readings WHERE created_at >= datetime('now', ? || ' hours') ORDER BY created_at ASC",
             (f'-{min(hours, 168)}',)
         ).fetchall()
         return jsonify([dict(r) for r in rows])
-    finally:
-        db.close()
-
-
 @weather_bp.route('/api/weather/readings', methods=['POST'])
 def api_weather_reading_add():
     """Add a weather reading (manual or from sensor)."""
     d = request.json or {}
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute(
             'INSERT INTO weather_readings (source, pressure_hpa, temp_f, humidity, wind_dir, wind_speed_mph) VALUES (?, ?, ?, ?, ?, ?)',
             (d.get('source', 'manual'), d.get('pressure_hpa'), d.get('temp_f'), d.get('humidity'), d.get('wind_dir', ''), d.get('wind_speed_mph'))
@@ -99,21 +94,12 @@ def api_weather_reading_add():
         except Exception:
             pass
         return jsonify({'status': 'ok', 'prediction': prediction})
-    finally:
-        db.close()
-
-
 @weather_bp.route('/api/weather/predict')
 def api_weather_predict():
     """Get current Zambretti weather prediction."""
-    db = get_db()
-    try:
+    with db_session() as db:
         prediction = _zambretti_predict(db)
         return jsonify(prediction or {'forecast': 'Insufficient data', 'trend': 'unknown', 'code': -1})
-    finally:
-        db.close()
-
-
 def _zambretti_predict(db):
     """Zambretti weather forecasting algorithm -- pure offline prediction from barometric pressure trend."""
     try:
@@ -240,8 +226,7 @@ def api_wind_chill():
 @weather_bp.route('/api/weather/check-alerts', methods=['POST'])
 def api_weather_check_alerts():
     """Check weather readings for alert conditions and auto-create alerts."""
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute(
             "SELECT pressure_hpa, temp_f, created_at FROM weather_readings WHERE pressure_hpa IS NOT NULL ORDER BY created_at DESC LIMIT 6"
         ).fetchall()
@@ -273,15 +258,11 @@ def api_weather_check_alerts():
                     alerts_created.append('extreme_cold')
         db.commit()
         return jsonify({'alerts_created': alerts_created})
-    finally:
-        db.close()
-
-
 # --- Weather-Triggered Actions (Phase 15) ---
 
 def _evaluate_weather_action_rules(db):
     """Evaluate all enabled weather action rules against current conditions. Internal helper."""
-    rules = db.execute('SELECT * FROM weather_action_rules WHERE enabled = 1').fetchall()
+    rules = db.execute('SELECT id, name, condition_type, threshold, comparison, action_type, action_data, cooldown_minutes, last_triggered FROM weather_action_rules WHERE enabled = 1').fetchall()
     if not rules:
         return []
 
@@ -380,9 +361,13 @@ def _evaluate_weather_action_rules(db):
 
 @weather_bp.route('/api/weather/action-rules')
 def api_weather_action_rules():
-    db = get_db()
     try:
-        rows = db.execute('SELECT * FROM weather_action_rules ORDER BY created_at DESC').fetchall()
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM weather_action_rules ORDER BY created_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
         result = []
         for r in rows:
             d = dict(r)
@@ -392,10 +377,6 @@ def api_weather_action_rules():
                 d['action_data'] = {}
             result.append(d)
         return jsonify(result)
-    finally:
-        db.close()
-
-
 @weather_bp.route('/api/weather/action-rules', methods=['POST'])
 def api_weather_action_rules_create():
     data = request.get_json() or {}
@@ -419,61 +400,103 @@ def api_weather_action_rules_create():
     action_data = data.get('action_data', {})
     cooldown = int(data.get('cooldown_minutes', 60))
 
-    db = get_db()
-    try:
+    with db_session() as db:
         cur = db.execute(
             'INSERT INTO weather_action_rules (name, condition_type, threshold, comparison, action_type, action_data, cooldown_minutes) VALUES (?,?,?,?,?,?,?)',
             (name, condition_type, threshold, comparison, action_type, json.dumps(action_data), cooldown))
         db.commit()
         return jsonify({'id': cur.lastrowid, 'name': name}), 201
-    finally:
-        db.close()
-
-
 @weather_bp.route('/api/weather/action-rules/<int:rid>', methods=['DELETE'])
 def api_weather_action_rules_delete(rid):
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('DELETE FROM weather_action_rules WHERE id = ?', (rid,))
         db.commit()
         return jsonify({'status': 'deleted'})
-    finally:
-        db.close()
-
-
 @weather_bp.route('/api/weather/action-rules/<int:rid>/toggle', methods=['POST'])
 def api_weather_action_rules_toggle(rid):
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('UPDATE weather_action_rules SET enabled = CASE WHEN enabled = 1 THEN 0 ELSE 1 END WHERE id = ?', (rid,))
         db.commit()
         row = db.execute('SELECT enabled FROM weather_action_rules WHERE id = ?', (rid,)).fetchone()
         return jsonify({'enabled': row['enabled'] if row else 0})
-    finally:
-        db.close()
-
-
 @weather_bp.route('/api/weather/evaluate-rules', methods=['POST'])
 def api_weather_evaluate_rules():
     """Evaluate all enabled weather action rules against current conditions."""
-    db = get_db()
-    try:
+    with db_session() as db:
         triggered = _evaluate_weather_action_rules(db)
         return jsonify({'triggered': triggered})
-    finally:
-        db.close()
+# --- Storm Lifecycle Tracking ---
 
+@weather_bp.route('/api/weather/storm-status', methods=['GET'])
+def api_storm_status():
+    with db_session() as db:
+        # Check recent pressure readings for storm indicators
+        readings = db.execute(
+            'SELECT pressure_hpa, wind_speed_mph, created_at FROM weather_readings ORDER BY created_at DESC LIMIT 12'
+        ).fetchall()
+        if len(readings) < 2:
+            return jsonify({'state': 'clear', 'confidence': 'low'})
 
+        # Calculate pressure change rate (hPa per 3 hours)
+        pressures = [(r['pressure_hpa'], r['created_at']) for r in readings if r['pressure_hpa']]
+        if len(pressures) < 2:
+            return jsonify({'state': 'clear', 'confidence': 'low'})
+
+        recent_p = pressures[0][0]
+        older_p = pressures[min(3, len(pressures) - 1)][0]
+        pressure_change = recent_p - older_p
+
+        max_wind = max((r['wind_speed_mph'] or 0) for r in readings)
+
+        # State machine
+        if pressure_change < -4 or max_wind > 50:
+            state = 'active'
+        elif pressure_change < -2 or max_wind > 30:
+            state = 'warning'
+        elif pressure_change < -1:
+            state = 'watch'
+        elif pressure_change > 1 and any(r['pressure_hpa'] and r['pressure_hpa'] < 1000 for r in readings[:3]):
+            state = 'clearing'
+        else:
+            state = 'clear'
+
+        # Check for active storm event
+        active_storm = db.execute("SELECT * FROM storm_events WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1").fetchone()
+
+        # Auto-create/close storm events
+        if state in ('warning', 'active') and not active_storm:
+            db.execute("INSERT INTO storm_events (started_at, storm_type, total_pressure_drop, min_pressure) VALUES (datetime('now'), ?, ?, ?)",
+                ('developing', abs(pressure_change), recent_p))
+            db.commit()
+        elif state == 'clear' and active_storm:
+            db.execute("UPDATE storm_events SET ended_at = datetime('now'), peak_intensity = ? WHERE id = ?",
+                (state, active_storm['id']))
+            db.commit()
+
+        return jsonify({
+            'state': state,
+            'pressure_change_3h': round(pressure_change, 2),
+            'current_pressure': recent_p,
+            'max_wind': max_wind,
+            'active_storm': dict(active_storm) if active_storm else None
+        })
+@weather_bp.route('/api/weather/storms', methods=['GET'])
+def api_storm_history():
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM storm_events ORDER BY started_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
+        return jsonify([dict(r) for r in rows])
 @weather_bp.route('/api/weather/history')
 def api_weather_history():
     """Get pressure history for graphing."""
     hours = request.args.get('hours', 48, type=int)
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute(
             "SELECT pressure_hpa, temp_f, humidity, wind_dir, wind_speed_mph, created_at FROM weather_readings WHERE created_at >= datetime('now', ? || ' hours') ORDER BY created_at ASC",
             (f'-{min(hours, 168)}',)
         ).fetchall()
         return jsonify([dict(r) for r in rows])
-    finally:
-        db.close()

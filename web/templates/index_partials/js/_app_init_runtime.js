@@ -92,10 +92,7 @@ function calcCompost() {
   const vol = parseFloat(document.getElementById('comp-vol').value) || 1;
   if (!browns && !greens) { document.getElementById('comp-result').innerHTML = ''; return; }
   // C:N ratios: browns ~50:1, greens ~15:1
-  const totalC = browns * 50 + greens * 0;
   const totalN = browns / 50 + greens / 15;
-  const cnRatio = greens > 0 || browns > 0 ? ((browns * 50 + greens * 15) / (browns + greens)) : 30;
-  // Weighted average C:N
   const cn = totalN > 0 ? Math.round((browns * 50 + greens * 15) / (browns + greens)) : 50;
   const ideal = cn >= 25 && cn <= 35;
   const tooCarbon = cn > 35;
@@ -592,11 +589,13 @@ let _skills = [];
 const PROF_COLORS = {none:'var(--text-muted)', basic:'var(--orange)', intermediate:'var(--yellow)', expert:'var(--green)'};
 const PROF_LABELS = {none:'None', basic:'Basic', intermediate:'Intermediate', expert:'Expert'};
 async function loadSkills(filterCat) {
-  const resp = await fetch('/api/skills');
-  _skills = await resp.json();
-  renderSkills(filterCat);
-  renderSkillSummary();
-  renderSkillFilterBtns();
+  try {
+    const resp = await fetch('/api/skills');
+    _skills = await resp.json();
+    renderSkills(filterCat);
+    renderSkillSummary();
+    renderSkillFilterBtns();
+  } catch(e) { console.warn('loadSkills failed:', e.message); }
 }
 function renderSkillFilterBtns() {
   const cats = [...new Set(_skills.map(s => s.category))].sort();
@@ -683,10 +682,12 @@ async function seedDefaultSkills() {
 // ═══════════════════════════════════════════════════════════════
 let _ammo = [];
 async function loadAmmo() {
-  const resp = await fetch('/api/ammo');
-  _ammo = await resp.json();
-  renderAmmo();
-  loadAmmoSummary();
+  try {
+    const resp = await fetch('/api/ammo');
+    _ammo = await resp.json();
+    renderAmmo();
+    loadAmmoSummary();
+  } catch(e) { console.warn('loadAmmo failed:', e.message); }
 }
 async function loadAmmoSummary() {
   const r = await fetch('/api/ammo/summary');
@@ -777,9 +778,11 @@ async function deleteAmmo(id) {
 let _community = [];
 const TRUST_COLORS = {unknown:'var(--text-muted)', acquaintance:'var(--text-dim)', trusted:'var(--orange)', 'inner-circle':'var(--green)'};
 async function loadCommunity() {
-  const r = await fetch('/api/community');
-  _community = await r.json();
-  renderCommunity();
+  try {
+    const r = await fetch('/api/community');
+    _community = await r.json();
+    renderCommunity();
+  } catch(e) { console.warn('loadCommunity failed:', e.message); }
 }
 function renderCommunity() {
   const el = document.getElementById('community-list');
@@ -789,8 +792,8 @@ function renderCommunity() {
     return;
   }
   el.innerHTML = _community.map(p => {
-    const skills = JSON.parse(p.skills || '[]');
-    const equip = JSON.parse(p.equipment || '[]');
+    let skills = []; try { skills = JSON.parse(p.skills || '[]'); } catch(_) {}
+    let equip = []; try { equip = JSON.parse(p.equipment || '[]'); } catch(_) {}
     const trustKey = (p.trust_level || 'unknown').toLowerCase();
     const trustLabel = trustKey.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
     const distance = Number(p.distance_mi);
@@ -814,7 +817,7 @@ function renderCommunity() {
     </div>`;
   }).join('');
   // Skills summary
-  const allSkills = _community.flatMap(p => JSON.parse(p.skills || '[]'));
+  const allSkills = _community.flatMap(p => { try { return JSON.parse(p.skills || '[]'); } catch(_) { return []; } });
   const skillCounts = {};
   allSkills.forEach(s => skillCounts[s] = (skillCounts[s]||0)+1);
   const sumEl = document.getElementById('community-skills-summary');
@@ -970,6 +973,7 @@ function printICS213() {
   const replyby = document.getElementById('ics213-replyby').value;
   const reply = document.getElementById('ics213-reply').value;
   const w = window.open('', '_blank');
+  if (!w) { showToast('Pop-up blocked — please allow pop-ups', 'warning'); return; }
   w.document.write(`<!DOCTYPE html><html><head><title>ICS-213</title>
   <style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px;}table{width:100%;border-collapse:collapse;}
   td,th{border:1px solid #000;padding:4px 6px;}h2{text-align:center;}
@@ -977,10 +981,10 @@ function printICS213() {
   @media print{body{margin:0.5in;}}</style></head><body>
   <h2>GENERAL MESSAGE (ICS-213)</h2>
   <table><tr><td class="header-row" colspan="4">ICS 213</td></tr>
-  <tr><td><strong>To:</strong> ${to}</td><td><strong>From:</strong> ${from}</td><td><strong>Date/Time:</strong> ${dt}</td><td><strong>Priority:</strong> ${priority}</td></tr>
-  <tr><td colspan="2"><strong>Incident Name:</strong> ${incident}</td><td colspan="2"><strong>Subject:</strong> ${subject}</td></tr>
-  <tr><td colspan="4"><strong>Message:</strong><br><br>${message.replace(/\n/g,'<br>')}<br><br><br></td></tr>
-  <tr><td colspan="2"><strong>Reply By:</strong> ${replyby}</td><td colspan="2"><strong>Reply:</strong> ${reply}</td></tr>
+  <tr><td><strong>To:</strong> ${escapeHtml(to)}</td><td><strong>From:</strong> ${escapeHtml(from)}</td><td><strong>Date/Time:</strong> ${escapeHtml(dt)}</td><td><strong>Priority:</strong> ${escapeHtml(priority)}</td></tr>
+  <tr><td colspan="2"><strong>Incident Name:</strong> ${escapeHtml(incident)}</td><td colspan="2"><strong>Subject:</strong> ${escapeHtml(subject)}</td></tr>
+  <tr><td colspan="4"><strong>Message:</strong><br><br>${escapeHtml(message).replace(/\n/g,'<br>')}<br><br><br></td></tr>
+  <tr><td colspan="2"><strong>Reply By:</strong> ${escapeHtml(replyby)}</td><td colspan="2"><strong>Reply:</strong> ${escapeHtml(reply)}</td></tr>
   <tr><td colspan="2"><strong>Approved by (Signature):</strong><br><br><br></td><td colspan="2"><strong>Position/Title:</strong><br></td></tr>
   </table><br><p class="text-size-10 text-center">ICS-213 — General Message Form — NIMS Compatible</p>
   <script>window.print();<\/script></body></html>`);
@@ -1024,14 +1028,14 @@ function printICS309() {
   const operator = document.getElementById('ics309-operator').value;
   const station = document.getElementById('ics309-station').value;
   const rows = _ics309Entries.map(e =>
-    `<tr><td>${e.time}</td><td>${e.from}</td><td>${e.to}</td><td>${e.msg}</td></tr>`).join('');
+    `<tr><td>${escapeHtml(e.time)}</td><td>${escapeHtml(e.from)}</td><td>${escapeHtml(e.to)}</td><td>${escapeHtml(e.msg)}</td></tr>`).join('');
   const w = window.open('', '_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>ICS-309</title>
   <style>body{font-family:Arial,sans-serif;font-size:11px;margin:20px;}table{width:100%;border-collapse:collapse;}
   td,th{border:1px solid #000;padding:4px 6px;}h2{text-align:center;}
   @media print{body{margin:0.5in;}}</style></head><body>
   <h2>COMMUNICATIONS LOG (ICS-309)</h2>
-  <table><tr><td><strong>Incident Name:</strong> ${incident}</td><td><strong>Operator:</strong> ${operator}</td><td><strong>Station/Freq:</strong> ${station}</td><td><strong>Date:</strong> ${new Date().toLocaleDateString()}</td></tr></table>
+  <table><tr><td><strong>Incident Name:</strong> ${escapeHtml(incident)}</td><td><strong>Operator:</strong> ${escapeHtml(operator)}</td><td><strong>Station/Freq:</strong> ${escapeHtml(station)}</td><td><strong>Date:</strong> ${new Date().toLocaleDateString()}</td></tr></table>
   <br><table><thead><tr><th>Time</th><th>From</th><th>To</th><th>Message/Traffic</th></tr></thead><tbody>${rows}</tbody></table>
   <br><p><strong>Operator Signature:</strong> ______________________ <strong>Date/Time:</strong> ______________</p>
   <p class="text-size-10 text-center">ICS-309 — Communications Log — NIMS Compatible</p>
@@ -1069,14 +1073,14 @@ function printICS214() {
   const unit = document.getElementById('ics214-unit').value;
   const leader = document.getElementById('ics214-leader').value;
   const period = document.getElementById('ics214-period').value;
-  const rows = _ics214Entries.map(e => `<tr><td>${e.time}</td><td>${e.activity}</td></tr>`).join('');
+  const rows = _ics214Entries.map(e => `<tr><td>${escapeHtml(e.time)}</td><td>${escapeHtml(e.activity)}</td></tr>`).join('');
   const w = window.open('', '_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>ICS-214</title>
   <style>body{font-family:Arial,sans-serif;font-size:11px;margin:20px;}table{width:100%;border-collapse:collapse;}
   td,th{border:1px solid #000;padding:4px 6px;}h2{text-align:center;}.time-col{width:100px;}
   @media print{body{margin:0.5in;}}</style></head><body>
   <h2>ACTIVITY LOG (ICS-214)</h2>
-  <table><tr><td><strong>Incident Name:</strong> ${incident}</td><td><strong>Unit/Team:</strong> ${unit}</td><td><strong>Leader:</strong> ${leader}</td><td><strong>Op Period:</strong> ${period}</td></tr></table>
+  <table><tr><td><strong>Incident Name:</strong> ${escapeHtml(incident)}</td><td><strong>Unit/Team:</strong> ${escapeHtml(unit)}</td><td><strong>Leader:</strong> ${escapeHtml(leader)}</td><td><strong>Op Period:</strong> ${escapeHtml(period)}</td></tr></table>
   <br><table><thead><tr><th class="time-col">Time</th><th>Notable Activity</th></tr></thead><tbody>${rows}</tbody></table>
   <br><p><strong>Prepared by:</strong> ______________________ <strong>Date/Time:</strong> ______________</p>
   <p class="text-size-10 text-center">ICS-214 — Activity Log — NIMS Compatible</p>
@@ -1236,7 +1240,7 @@ async function loadSavedRoutes() {
       return;
     }
     container.innerHTML = routes.map(r => {
-      const wpCount = JSON.parse(r.waypoint_ids || '[]').length;
+      let wpCount = 0; try { wpCount = JSON.parse(r.waypoint_ids || '[]').length; } catch(e) {}
       const difficulty = r.terrain_difficulty || 'moderate';
       const diffColor = difficulty === 'easy' ? 'var(--green)' : difficulty === 'hard' ? 'var(--red)' : 'var(--orange)';
       return '<div class="saved-route-row">' +
@@ -1259,7 +1263,8 @@ async function deleteSavedRoute(routeId) {
   if (!confirm('Delete this route?')) return;
   await safeFetch('/api/maps/routes/' + routeId, {method:'DELETE'});
   loadSavedRoutes();
-  document.getElementById('elevation-profile-panel').style.display = 'none';
+  const epPanel = document.getElementById('elevation-profile-panel');
+  if (epPanel) epPanel.style.display = 'none';
 }
 
 /* ─── Elevation Profile ─── */
@@ -2188,7 +2193,7 @@ function renderKIPersons() {
         <option value="infant" ${p.age==='infant'?'selected':''}>Infant <1 mo</option>
         <option value="pregnant" ${p.age==='pregnant'?'selected':''}>Pregnant/Nursing</option>
       </select>
-      ${_kiPersons.length > 1 ? `<button type="button" data-prep-action="remove-ki-person" data-ki-index="${i}" class="prep-calc-remove-btn">✕</button>` : ''}
+      ${_kiPersons.length > 1 ? `<button type="button" data-prep-action="remove-ki-person" data-ki-index="${i}" class="prep-calc-remove-btn" aria-label="Remove person">✕</button>` : ''}
     </div>`).join('');
   calcKIDosage();
 }
@@ -2289,7 +2294,7 @@ function renderShelterLayers() {
         ${Object.entries(_hvtData).map(([k,v])=>`<option value="${k}" ${l.material===k?'selected':''}>${v.label}</option>`).join('')}
       </select>
       <input type="number" value="${l.thickness}" min="1" max="120" data-input-action="update-shelter-layer" data-shelter-index="${i}" data-shelter-field="thickness" class="prep-calc-dynamic-input prep-calc-dynamic-input-measure">
-      <button type="button" data-prep-action="remove-shelter-layer" data-shelter-index="${i}" class="prep-calc-remove-btn">✕</button>
+      <button type="button" data-prep-action="remove-shelter-layer" data-shelter-index="${i}" class="prep-calc-remove-btn" aria-label="Remove layer">✕</button>
     </div>`).join('') || '<div class="prep-calc-empty">Add layers above to calculate protection.</div>';
   calcShelterPF();
 }
@@ -2363,7 +2368,7 @@ function renderCropRows() {
       </select>
       <input type="number" value="${r.sqft}" min="1" max="100000" placeholder="sq ft…" data-input-action="update-crop-row" data-crop-index="${i}" data-crop-field="sqft" class="prep-calc-dynamic-input prep-calc-dynamic-input-wide">
       <span class="prep-calc-dynamic-note">${_cropData[r.crop]?.notes||''}</span>
-      <button type="button" data-prep-action="remove-crop-row" data-crop-index="${i}" class="prep-calc-remove-btn">✕</button>
+      <button type="button" data-prep-action="remove-crop-row" data-crop-index="${i}" class="prep-calc-remove-btn" aria-label="Remove crop">✕</button>
     </div>`).join('') || '<div class="prep-calc-empty">Add crops above.</div>';
   calcCropCalories();
 }
@@ -2724,7 +2729,7 @@ function renderTCCCQuizStep() {
   if (prevBtn) prevBtn.hidden = !(_tcccIdx > 0);
 
   if (step.id === 'done') {
-    el.innerHTML = '<div class="prep-tccc-complete-icon">&#10003;</div><div class="prep-tccc-complete-title">' + step.title + '</div><div class="prep-reference-note prep-reference-note-tight">' + step.question + '</div>';
+    el.innerHTML = '<div class="prep-tccc-complete-icon">&#10003;</div><div class="prep-tccc-complete-title">' + escapeHtml(step.title) + '</div><div class="prep-reference-note prep-reference-note-tight">' + escapeHtml(step.question) + '</div>';
     return;
   }
 
@@ -2734,13 +2739,13 @@ function renderTCCCQuizStep() {
       <div class="prep-tccc-header-copy">
         <div class="prep-tccc-step-badge">${step.id}</div>
         <div>
-          <div class="prep-tccc-step-title">${step.title}</div>
+          <div class="prep-tccc-step-title">${escapeHtml(step.title)}</div>
           <div class="prep-tccc-meta">Step ${_tcccIdx + 1} of 5</div>
         </div>
       </div>
     </div>
     <div class="prep-tccc-body">
-      <div class="prep-tccc-action-copy">${step.question}</div>
+      <div class="prep-tccc-action-copy">${escapeHtml(step.question)}</div>
       <div class="prep-tccc-footer prep-tccc-footer-center">
         <button type="button" class="btn btn-primary prep-tccc-action-btn" data-prep-action="tccc-quiz-answer" data-tccc-answer="yes">YES</button>
         <button type="button" class="btn prep-tccc-action-btn" data-prep-action="tccc-quiz-answer" data-tccc-answer="no">NO</button>
@@ -2891,7 +2896,7 @@ function calcGenerator() {
   // 8-hr/day operation
   const daily8hrFuel = consumptionPerHr * 8;
 
-  el.innerHTML = `<div class="prep-calc-result-shell" style="--prep-result-tone:#f59e0b;">
+  el.innerHTML = `<div class="prep-calc-result-shell" style="--prep-result-tone:var(--warning);">
     <div class="prep-calc-result-head prep-calc-result-head-toned">Generator Runtime Estimate</div>
     <div class="prep-calc-result-line">Running load: <strong>${actualLoad.toFixed(0)}W</strong> (${loadPct}% of ${watts}W)</div>
     <div class="prep-calc-result-line">Fuel burn rate: <strong>${consumptionPerHr.toFixed(3)} ${fd.unitShort}/hr</strong></div>
@@ -3804,7 +3809,7 @@ async function runSelfTest() {
     if (Array.isArray(checks)) {
       el.innerHTML = renderSystemHealthChecks(checks);
     } else {
-      el.innerHTML = renderSettingsInlineStatus(`Self-test complete: ${JSON.stringify(results)}`, 'success');
+      el.innerHTML = renderSettingsInlineStatus(`Self-test complete: ${escapeHtml(JSON.stringify(results))}`, 'success');
     }
     toast('Self-test complete', 'success');
   } catch(e) { el.innerHTML = renderSettingsInlineStatus('Self-test failed.', 'error'); toast('Self-test failed', 'error'); }
@@ -3816,7 +3821,7 @@ async function runDBCheck() {
   try {
     const result = await (await fetch('/api/system/db-check', { method: 'POST' })).json();
     const ok = result.integrity === 'ok' || result.status === 'ok' || result.result === 'ok';
-    el.innerHTML = renderSettingsInlineStatus(ok ? 'Database integrity check passed.' : `Database integrity issue: ${JSON.stringify(result)}`, ok ? 'success' : 'error');
+    el.innerHTML = renderSettingsInlineStatus(ok ? 'Database integrity check passed.' : `Database integrity issue: ${escapeHtml(JSON.stringify(result))}`, ok ? 'success' : 'error');
     toast(ok ? 'Database OK' : 'Database issue detected', ok ? 'success' : 'error');
   } catch(e) { el.innerHTML = renderSettingsInlineStatus('Database check failed.', 'error'); }
 }
@@ -3922,8 +3927,11 @@ if (aiMemoryInput) {
 
 /* ─── Init new features on load ─── */
 setTimeout(() => {
-  loadTasks();
-  loadWatchSchedules();
+  const activeWs = document.querySelector('.workspace-panel.active');
+  if (activeWs) {
+    loadTasks();
+    loadWatchSchedules();
+  }
   loadSunData();
   loadSensorDevices();
 }, 2000);
@@ -3943,6 +3951,7 @@ function playDTMF(key) {
   gain.gain.value = 0.2;
   osc1.connect(gain); osc2.connect(gain); gain.connect(_dtmfCtx.destination);
   osc1.start(); osc2.start();
+  osc1.onended = () => { osc1.disconnect(); osc2.disconnect(); gain.disconnect(); };
   setTimeout(() => { osc1.stop(); osc2.stop(); }, 200);
   const input = document.getElementById('dtmf-sequence');
   if (input) input.value += key;

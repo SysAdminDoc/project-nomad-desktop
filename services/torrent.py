@@ -290,8 +290,9 @@ class TorrentManager:
             # Stop monitor when nothing is downloading or pending
             with self._lock:
                 active = bool(self._handles)
+                if not active:
+                    self._monitor_active = False
             if not active:
-                self._monitor_active = False
                 break
 
         log.debug('Torrent monitor thread exited')

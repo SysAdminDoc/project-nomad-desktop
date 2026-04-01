@@ -1,5 +1,5 @@
 /* ─── Family Emergency Plan ─── */
-let _fepMembers = JSON.parse(localStorage.getItem('nomad-fep-members') || '[]');
+let _fepMembers; try { _fepMembers = JSON.parse(localStorage.getItem('nomad-fep-members') || '[]'); } catch(e) { _fepMembers = []; }
 
 function saveFEP() {
   const fields = ['meet1','meet2','meet3','ooa','route1','route2','route3','dest','ins-home','ins-auto','doctor','vet','utility','safe'];

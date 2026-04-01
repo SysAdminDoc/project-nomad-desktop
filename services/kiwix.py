@@ -729,6 +729,8 @@ def get_catalog_flat():
 
 def download_zim(url: str, filename: str = None):
     """Download a ZIM file to the library directory."""
+    if not url.startswith(('http://', 'https://')):
+        raise ValueError('Only HTTP/HTTPS URLs are supported')
     if not filename:
         filename = url.split('/')[-1]
     # Sanitize filename to prevent path traversal
@@ -799,6 +801,7 @@ def start():
             return proc.pid
         time.sleep(1)
 
+    log.warning('Kiwix started but port %d not yet responding (PID %d)', KIWIX_PORT, proc.pid)
     return proc.pid
 
 

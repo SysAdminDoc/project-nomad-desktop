@@ -560,15 +560,17 @@
   height: calc(100vh - 40px);
   border: none;
   display: block;
-  background: #0a0a0c;
+  background: var(--bg);
 }
 
 /* Floating action panels hidden globally — declutter all pages */
 #quick-actions-menu,
 #timer-panel,
-#lan-chat-panel,
-#copilot-dock {
+#lan-chat-panel {
   display: none !important;
+}
+#copilot-dock:not(.active) {
+  display: none;
 }
 
 /* Workspace context bar + inspector hidden globally — declutter all pages */
@@ -1039,7 +1041,7 @@
 /* ─── Cards ─── */
 .services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
 .service-card {
-  background: var(--surface); backdrop-filter: blur(16px);
+  background: var(--surface); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   border: 1px solid var(--border); border-radius: var(--radius); padding: 24px;
   transition: transform 0.25s ease, border-color 0.25s, box-shadow 0.25s;
   animation: cardEntrance 0.4s ease backwards;
@@ -1107,7 +1109,7 @@
 /* ─── Gauge ─── */
 .gauge-row { display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
 .gauge-card {
-  flex: 1; min-width: 140px; background: var(--surface); backdrop-filter: blur(16px);
+  flex: 1; min-width: 140px; background: var(--surface); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; text-align: center;
   transition: transform 0.2s;
 }

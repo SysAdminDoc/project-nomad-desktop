@@ -2023,46 +2023,46 @@ function openSearchResult(type, id) {
   hideSearchResults();
   document.getElementById('unified-search').value = '';
   if (type === 'conversation') {
-    document.querySelector('[data-tab="ai-chat"]').click();
+    document.querySelector('[data-tab="ai-chat"]')?.click();
     setTimeout(() => selectConvo(id), 200);
   } else if (type === 'note') {
-    document.querySelector('[data-tab="notes"]').click();
+    document.querySelector('[data-tab="notes"]')?.click();
     setTimeout(() => { loadNotes().then(() => selectNote(id)); }, 200);
   } else if (type === 'document') {
-    document.querySelector('[data-tab="kiwix-library"]').click();
+    document.querySelector('[data-tab="kiwix-library"]')?.click();
     setTimeout(() => { loadPDFList(); toast('Document found in library', 'info'); }, 200);
   } else if (type === 'inventory') {
-    document.querySelector('[data-tab="preparedness"]').click();
+    document.querySelector('[data-tab="preparedness"]')?.click();
     setTimeout(() => switchPrepSub('inventory'), 200);
   } else if (type === 'contact') {
-    document.querySelector('[data-tab="preparedness"]').click();
+    document.querySelector('[data-tab="preparedness"]')?.click();
     setTimeout(() => switchPrepSub('contacts'), 200);
   } else if (type === 'checklist') {
-    document.querySelector('[data-tab="preparedness"]').click();
+    document.querySelector('[data-tab="preparedness"]')?.click();
     setTimeout(() => { switchPrepSub('checklists'); selectChecklist(id); }, 200);
   } else if (type === 'skill') {
-    document.querySelector('[data-tab="preparedness"]').click();
+    document.querySelector('[data-tab="preparedness"]')?.click();
     setTimeout(() => switchPrepSub('skills'), 200);
   } else if (type === 'ammo') {
-    document.querySelector('[data-tab="preparedness"]').click();
+    document.querySelector('[data-tab="preparedness"]')?.click();
     setTimeout(() => switchPrepSub('ammo'), 200);
   } else if (type === 'equipment') {
-    document.querySelector('[data-tab="preparedness"]').click();
+    document.querySelector('[data-tab="preparedness"]')?.click();
     setTimeout(() => switchPrepSub('equipment'), 200);
   } else if (type === 'waypoint') {
-    document.querySelector('[data-tab="maps"]').click();
+    document.querySelector('[data-tab="maps"]')?.click();
     toast('Waypoint: navigate to it on the map', 'info');
   } else if (type === 'frequency') {
-    document.querySelector('[data-tab="preparedness"]').click();
+    document.querySelector('[data-tab="preparedness"]')?.click();
     setTimeout(() => switchPrepSub('radio'), 200);
   } else if (type === 'patient') {
-    document.querySelector('[data-tab="preparedness"]').click();
+    document.querySelector('[data-tab="preparedness"]')?.click();
     setTimeout(() => switchPrepSub('medical'), 200);
   } else if (type === 'incident') {
-    document.querySelector('[data-tab="preparedness"]').click();
+    document.querySelector('[data-tab="preparedness"]')?.click();
     setTimeout(() => switchPrepSub('incidents'), 200);
   } else if (type === 'fuel') {
-    document.querySelector('[data-tab="preparedness"]').click();
+    document.querySelector('[data-tab="preparedness"]')?.click();
     setTimeout(() => switchPrepSub('fuel'), 200);
   }
 }
@@ -2132,8 +2132,10 @@ async function loadDataSummary() {
 
 async function loadDiskMonitor() {
   try {
-    const sys = await (await fetch('/api/system')).json();
-    const summary = await (await fetch('/api/content-summary')).json();
+    const [sys, summary] = await Promise.all([
+      fetch('/api/system').then(r => r.json()),
+      fetch('/api/content-summary').then(r => r.json())
+    ]);
     const el = document.getElementById('disk-monitor');
 
     // Calculate usage breakdown
@@ -2375,8 +2377,10 @@ async function updateZimContent(url, filename) {
 /* ─── Wikipedia Tier Selector ─── */
 async function loadWikipediaTiers() {
   try {
-    const options = await (await fetch('/api/kiwix/wikipedia-options')).json();
-    const installed = await (await fetch('/api/kiwix/zims')).json();
+    const [options, installed] = await Promise.all([
+      fetch('/api/kiwix/wikipedia-options').then(r => r.json()),
+      fetch('/api/kiwix/zims').then(r => r.json())
+    ]);
     const installedNames = new Set(installed.map(z => typeof z === 'string' ? z : z.name || ''));
     const el = document.getElementById('wiki-tier-options');
     if (!options.length) { el.innerHTML = '<div class="settings-empty-state">Install Kiwix first to download Wikipedia.</div>'; return; }

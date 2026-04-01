@@ -14,7 +14,7 @@ from html import escape as esc
 from flask import Blueprint, request, jsonify, Response
 from werkzeug.utils import secure_filename
 
-from db import get_db, log_activity
+from db import db_session, log_activity
 from services.manager import format_size, get_services_dir
 from config import get_data_dir
 from web.print_templates import render_print_document
@@ -395,11 +395,13 @@ def _download_map_region_thread(region_id, bbox, maps_dir):
         _map_downloads[region_id] = {'progress': 0, 'status': 'Preparing...', 'error': None}
     try:
         # Get or install pmtiles CLI
-        _map_downloads[region_id]['status'] = 'Installing pmtiles tool...'
-        _map_downloads[region_id]['progress'] = 5
+        with _state_lock:
+            _map_downloads[region_id]['status'] = 'Installing pmtiles tool...'
+            _map_downloads[region_id]['progress'] = 5
         pmtiles_exe = _get_pmtiles_cli()
         if not pmtiles_exe:
-            _map_downloads[region_id] = {'progress': 0, 'status': 'Error', 'error': 'Failed to download pmtiles CLI'}
+            with _state_lock:
+                _map_downloads[region_id] = {'progress': 0, 'status': 'Error', 'error': 'Failed to download pmtiles CLI'}
             return
 
         output_file = os.path.join(maps_dir, f'{region_id}.pmtiles')
@@ -420,8 +422,9 @@ def _download_map_region_thread(region_id, bbox, maps_dir):
 
         bbox_str = f'{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}'
 
-        _map_downloads[region_id]['status'] = f'Extracting region (bbox: {bbox_str})...'
-        _map_downloads[region_id]['progress'] = 10
+        with _state_lock:
+            _map_downloads[region_id]['status'] = f'Extracting region (bbox: {bbox_str})...'
+            _map_downloads[region_id]['progress'] = 10
 
         # Run pmtiles extract with bbox
         cmd = [pmtiles_exe, 'extract', source_url, temp_file, f'--bbox={bbox_str}', '--maxzoom=12']
@@ -439,10 +442,12 @@ def _download_map_region_thread(region_id, bbox, maps_dir):
                 if '%' in line:
                     try:
                         pct = int(float(line.split('%')[0].split()[-1]))
-                        _map_downloads[region_id]['progress'] = min(10 + int(pct * 0.85), 95)
+                        with _state_lock:
+                            _map_downloads[region_id]['progress'] = min(10 + int(pct * 0.85), 95)
                     except (ValueError, IndexError):
                         pass
-                _map_downloads[region_id]['status'] = f'Downloading tiles... {line.strip()}'
+                with _state_lock:
+                    _map_downloads[region_id]['status'] = f'Downloading tiles... {line.strip()}'
 
             proc.wait()
         except Exception:
@@ -458,7 +463,8 @@ def _download_map_region_thread(region_id, bbox, maps_dir):
             err = '\n'.join(lines[-5:]) if lines else 'Unknown error'
             if 'permission denied' in err.lower() or 'access is denied' in err.lower():
                 err = 'Permission denied. Your antivirus may be blocking pmtiles.exe. Add it to your antivirus exclusions, or try running NOMAD Field Desk as Administrator.'
-            _map_downloads[region_id] = {'progress': 0, 'status': 'Error', 'error': f'pmtiles extract failed: {err}'}
+            with _state_lock:
+                _map_downloads[region_id] = {'progress': 0, 'status': 'Error', 'error': f'pmtiles extract failed: {err}'}
             if os.path.isfile(temp_file):
                 os.remove(temp_file)
             return
@@ -478,25 +484,30 @@ def _download_map_region_thread(region_id, bbox, maps_dir):
                         os.remove(output_file)
                     os.rename(temp_file, output_file)
                 except PermissionError as pe:
-                    _map_downloads[region_id] = {'progress': 0, 'status': 'Error',
-                        'error': f'Permission denied when saving map file. Close any programs using the maps folder and try again. ({pe})'}
+                    with _state_lock:
+                        _map_downloads[region_id] = {'progress': 0, 'status': 'Error',
+                            'error': f'Permission denied when saving map file. Close any programs using the maps folder and try again. ({pe})'}
                     return
             size = format_size(os.path.getsize(output_file))
-            _map_downloads[region_id] = {'progress': 100, 'status': f'Complete ({size})', 'error': None}
+            with _state_lock:
+                _map_downloads[region_id] = {'progress': 100, 'status': f'Complete ({size})', 'error': None}
             log.info('Map region %s downloaded: %s', region_id, size)
         else:
-            _map_downloads[region_id] = {'progress': 0, 'status': 'Error', 'error': 'No output file produced'}
+            with _state_lock:
+                _map_downloads[region_id] = {'progress': 0, 'status': 'Error', 'error': 'No output file produced'}
 
     except PermissionError as e:
         log.exception('Map download permission error for %s', region_id)
-        _map_downloads[region_id] = {'progress': 0, 'status': 'Error',
-            'error': 'Permission denied. Try running NOMAD Field Desk as Administrator, or check that your antivirus is not blocking pmtiles.exe.'}
+        with _state_lock:
+            _map_downloads[region_id] = {'progress': 0, 'status': 'Error',
+                'error': 'Permission denied. Try running NOMAD Field Desk as Administrator, or check that your antivirus is not blocking pmtiles.exe.'}
     except Exception as e:
         log.exception('Map download error for %s', region_id)
         err_msg = str(e)
         if 'WinError 5' in err_msg or 'Permission denied' in err_msg or 'Access is denied' in err_msg:
             err_msg = 'Permission denied. Try running NOMAD Field Desk as Administrator, or check that your antivirus is not blocking pmtiles.exe.'
-        _map_downloads[region_id] = {'progress': 0, 'status': 'Error', 'error': err_msg}
+        with _state_lock:
+            _map_downloads[region_id] = {'progress': 0, 'status': 'Error', 'error': err_msg}
 
 @maps_bp.route('/api/maps/download-region', methods=['POST'])
 def api_maps_download_region():
@@ -506,9 +517,10 @@ def api_maps_download_region():
         return jsonify({'error': 'Missing region_id'}), 400
 
     # Check if already downloading
-    if region_id in _map_downloads and _map_downloads[region_id].get('progress', 0) > 0 \
-            and _map_downloads[region_id].get('progress', 0) < 100:
-        return jsonify({'error': 'Already downloading'}), 409
+    with _state_lock:
+        if region_id in _map_downloads and _map_downloads[region_id].get('progress', 0) > 0 \
+                and _map_downloads[region_id].get('progress', 0) < 100:
+            return jsonify({'error': 'Already downloading'}), 409
 
     # Find region
     region = next((r for r in MAP_REGIONS if r['id'] == region_id), None)
@@ -545,13 +557,15 @@ def api_maps_download_url():
         return jsonify({'error': 'Invalid filename'}), 400
 
     dl_id = f'url-{filename}'
-    if dl_id in _map_downloads and _map_downloads[dl_id].get('progress', 0) > 0 \
-            and _map_downloads[dl_id].get('progress', 0) < 100:
-        return jsonify({'error': 'Already downloading'}), 409
+    with _state_lock:
+        if dl_id in _map_downloads and _map_downloads[dl_id].get('progress', 0) > 0 \
+                and _map_downloads[dl_id].get('progress', 0) < 100:
+            return jsonify({'error': 'Already downloading'}), 409
 
     def _dl_thread():
         import urllib.request
-        _map_downloads[dl_id] = {'progress': 0, 'status': 'Connecting...', 'error': None}
+        with _state_lock:
+            _map_downloads[dl_id] = {'progress': 0, 'status': 'Connecting...', 'error': None}
         try:
             maps_dir = get_maps_dir()
             dest = os.path.join(maps_dir, filename)
@@ -569,12 +583,16 @@ def api_maps_download_url():
                         if total > 0:
                             pct = int(downloaded / total * 100)
                             speed = format_size(downloaded)
-                            _map_downloads[dl_id] = {'progress': pct, 'status': f'{speed} / {format_size(total)}', 'error': None}
+                            with _state_lock:
+                                _map_downloads[dl_id] = {'progress': pct, 'status': f'{speed} / {format_size(total)}', 'error': None}
                         else:
-                            _map_downloads[dl_id] = {'progress': 50, 'status': f'{format_size(downloaded)} downloaded', 'error': None}
-            _map_downloads[dl_id] = {'progress': 100, 'status': f'Complete ({format_size(os.path.getsize(dest))})', 'error': None}
+                            with _state_lock:
+                                _map_downloads[dl_id] = {'progress': 50, 'status': f'{format_size(downloaded)} downloaded', 'error': None}
+            with _state_lock:
+                _map_downloads[dl_id] = {'progress': 100, 'status': f'Complete ({format_size(os.path.getsize(dest))})', 'error': None}
         except Exception as e:
-            _map_downloads[dl_id] = {'progress': 0, 'status': 'Error', 'error': str(e)}
+            with _state_lock:
+                _map_downloads[dl_id] = {'progress': 0, 'status': 'Error', 'error': str(e)}
 
     threading.Thread(target=_dl_thread, daemon=True).start()
     return jsonify({'status': 'started', 'dl_id': dl_id})
@@ -614,9 +632,13 @@ WAYPOINT_COLORS = {'rally': '#5b9fff', 'water': '#4fc3f7', 'cache': '#ff9800', '
 
 @maps_bp.route('/api/waypoints')
 def api_waypoints_list():
-    db = get_db()
-    rows = db.execute('SELECT * FROM waypoints ORDER BY created_at DESC').fetchall()
-    db.close()
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM waypoints ORDER BY created_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 @maps_bp.route('/api/waypoints', methods=['POST'])
@@ -624,37 +646,59 @@ def api_waypoints_create():
     data = request.get_json() or {}
     cat = data.get('category', 'general')
     color = WAYPOINT_COLORS.get(cat, '#9e9e9e')
-    db = get_db()
-    cur = db.execute('INSERT INTO waypoints (name, lat, lng, category, color, notes) VALUES (?, ?, ?, ?, ?, ?)',
-                     (data.get('name', 'Waypoint'), data.get('lat', 0), data.get('lng', 0),
-                      cat, color, data.get('notes', '')))
-    db.commit()
-    row = db.execute('SELECT * FROM waypoints WHERE id = ?', (cur.lastrowid,)).fetchone()
-    db.close()
+    with db_session() as db:
+        cur = db.execute('INSERT INTO waypoints (name, lat, lng, category, color, notes) VALUES (?, ?, ?, ?, ?, ?)',
+                         (data.get('name', 'Waypoint'), data.get('lat', 0), data.get('lng', 0),
+                          cat, color, data.get('notes', '')))
+        db.commit()
+        row = db.execute('SELECT * FROM waypoints WHERE id = ?', (cur.lastrowid,)).fetchone()
     return jsonify(dict(row)), 201
 
 @maps_bp.route('/api/waypoints/<int:wid>', methods=['DELETE'])
 def api_waypoints_delete(wid):
-    db = get_db()
-    db.execute('DELETE FROM waypoints WHERE id = ?', (wid,))
-    db.commit()
-    db.close()
+    with db_session() as db:
+        db.execute('DELETE FROM waypoints WHERE id = ?', (wid,))
+        db.commit()
     return jsonify({'status': 'deleted'})
+
+@maps_bp.route('/api/waypoints/<int:wid>', methods=['PUT'])
+def api_waypoint_update(wid):
+    """Update a waypoint. Accepts any of: name, lat, lng, category, notes, elevation_m, icon."""
+    data = request.get_json() or {}
+    allowed = {'name', 'lat', 'lng', 'category', 'notes', 'elevation_m', 'icon'}
+    fields = {k: v for k, v in data.items() if k in allowed}
+    if not fields:
+        return jsonify({'error': 'No valid fields provided'}), 400
+    # Auto-set color when category changes
+    if 'category' in fields:
+        fields['color'] = WAYPOINT_COLORS.get(fields['category'], '#9e9e9e')
+    set_clause = ', '.join(f'{k} = ?' for k in fields)
+    values = list(fields.values()) + [wid]
+    with db_session() as db:
+        db.execute(f'UPDATE waypoints SET {set_clause} WHERE id = ?', values)
+        db.commit()
+        row = db.execute('SELECT * FROM waypoints WHERE id = ?', (wid,)).fetchone()
+        if not row:
+            return jsonify({'error': 'Waypoint not found'}), 404
+        return jsonify(dict(row))
 
 # ─── Map Routes & Annotations API ────────────────────────────────
 
 @maps_bp.route('/api/maps/routes')
 def api_map_routes_list():
-    db = get_db()
-    rows = db.execute('SELECT * FROM map_routes ORDER BY created_at DESC LIMIT 500').fetchall()
-    db.close()
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM map_routes ORDER BY created_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 @maps_bp.route('/api/maps/routes', methods=['POST'])
 def api_map_routes_create():
     data = request.get_json() or {}
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('INSERT INTO map_routes (name, waypoint_ids, distance_km, estimated_time_min, terrain_difficulty, notes) VALUES (?,?,?,?,?,?)',
                    (data.get('name', 'New Route'), json.dumps(data.get('waypoint_ids', [])),
                     data.get('distance_km', 0), data.get('estimated_time_min', 0),
@@ -662,22 +706,17 @@ def api_map_routes_create():
         db.commit()
         rid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
         return jsonify({'status': 'created', 'id': rid})
-    finally:
-        db.close()
-
 @maps_bp.route('/api/maps/routes/<int:rid>', methods=['DELETE'])
 def api_map_routes_delete(rid):
-    db = get_db()
-    db.execute('DELETE FROM map_routes WHERE id = ?', (rid,))
-    db.commit()
-    db.close()
+    with db_session() as db:
+        db.execute('DELETE FROM map_routes WHERE id = ?', (rid,))
+        db.commit()
     return jsonify({'status': 'deleted'})
 
 @maps_bp.route('/api/maps/elevation-profile/<int:route_id>')
 def api_elevation_profile(route_id):
     """Get elevation profile for a map route using waypoint elevations."""
-    db = get_db()
-    try:
+    with db_session() as db:
         route = db.execute('SELECT waypoint_ids FROM map_routes WHERE id = ?', (route_id,)).fetchone()
         if not route:
             return jsonify({'error': 'Route not found'}), 404
@@ -729,36 +768,32 @@ def api_elevation_profile(route_id):
             'total_descent': round(total_descent, 1),
             'total_distance_m': round(total_dist),
         })
-    finally:
-        db.close()
-
 @maps_bp.route('/api/maps/annotations')
 def api_map_annotations_list():
-    db = get_db()
-    rows = db.execute('SELECT * FROM map_annotations ORDER BY created_at DESC LIMIT 500').fetchall()
-    db.close()
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM map_annotations ORDER BY created_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 @maps_bp.route('/api/maps/annotations', methods=['POST'])
 def api_map_annotations_create():
     data = request.get_json() or {}
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('INSERT INTO map_annotations (type, geojson, label, color, notes) VALUES (?,?,?,?,?)',
                    (data.get('type', 'polygon'), json.dumps(data.get('geojson', {})),
                     data.get('label', ''), data.get('color', '#ff0000'), data.get('notes', '')))
         db.commit()
         aid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
         return jsonify({'status': 'created', 'id': aid})
-    finally:
-        db.close()
-
 @maps_bp.route('/api/maps/annotations/<int:aid>', methods=['DELETE'])
 def api_map_annotations_delete(aid):
-    db = get_db()
-    db.execute('DELETE FROM map_annotations WHERE id = ?', (aid,))
-    db.commit()
-    db.close()
+    with db_session() as db:
+        db.execute('DELETE FROM map_annotations WHERE id = ?', (aid,))
+        db.commit()
     return jsonify({'status': 'deleted'})
 
 # ─── Contour Line Generation API ──────────────────────────────────
@@ -860,8 +895,7 @@ def api_maps_contours():
     # Convert radius to approximate degree offset
     deg_offset = radius_km / 111.0
 
-    db = get_db()
-    try:
+    with db_session() as db:
         # Query waypoints with elevation data within radius
         wps = db.execute(
             '''SELECT lat, lng, elevation_m FROM waypoints
@@ -872,9 +906,6 @@ def api_maps_contours():
         ).fetchall()
 
         points = [{'lat': w['lat'], 'lng': w['lng'], 'elevation': w['elevation_m']} for w in wps]
-    finally:
-        db.close()
-
     if len(points) < 3:
         return jsonify({
             'type': 'FeatureCollection',
@@ -906,11 +937,10 @@ def api_maps_contours():
 @maps_bp.route('/api/maps/minimap-data')
 def api_maps_minimap_data():
     """Returns waypoints + annotations for the dashboard mini-map widget."""
-    db = get_db()
-    waypoints = [dict(r) for r in db.execute('SELECT id, name, lat, lng, category, icon, color FROM waypoints ORDER BY name').fetchall()]
-    routes = [dict(r) for r in db.execute('SELECT id, name, waypoint_ids, distance_km FROM map_routes ORDER BY created_at DESC LIMIT 10').fetchall()]
-    annotations = [dict(r) for r in db.execute('SELECT id, type, label, color FROM map_annotations ORDER BY created_at DESC LIMIT 20').fetchall()]
-    db.close()
+    with db_session() as db:
+        waypoints = [dict(r) for r in db.execute('SELECT id, name, lat, lng, category, icon, color FROM waypoints ORDER BY name LIMIT 50000').fetchall()]
+        routes = [dict(r) for r in db.execute('SELECT id, name, waypoint_ids, distance_km FROM map_routes ORDER BY created_at DESC LIMIT 10').fetchall()]
+        annotations = [dict(r) for r in db.execute('SELECT id, type, label, color FROM map_annotations ORDER BY created_at DESC LIMIT 20').fetchall()]
     return jsonify({'waypoints': waypoints, 'routes': routes, 'annotations': annotations})
 
 WAYPOINT_ICONS = {
@@ -954,8 +984,7 @@ def api_maps_atlas():
 
     pages = []
     page_num = 1
-    db = get_db()
-    try:
+    with db_session() as db:
         for zoom in zoom_levels:
             n = 2 ** zoom
             lat_per_tile = 360 / n * 0.7
@@ -996,9 +1025,6 @@ def api_maps_atlas():
                         'waypoints': [dict(r) for r in nearby],
                     })
                     page_num += 1
-    finally:
-        db.close()
-
     generated_at = time.strftime('%Y-%m-%d %H:%M')
     zoom_summary = ', '.join(str(z) for z in zoom_levels)
     waypoint_hits = sum(len(page['waypoints']) for page in pages)
@@ -1136,38 +1162,39 @@ def api_geocode_search():
     q = request.args.get('q', '').strip()
     if not q or len(q) < 2:
         return jsonify([])
-    db = get_db()
-    results = []
-    # Search waypoints
-    wps = db.execute("SELECT id, name, lat, lng, category, icon FROM waypoints WHERE name LIKE ? LIMIT 20",
-                     (f'%{q}%',)).fetchall()
-    for w in wps:
-        results.append({'type': 'waypoint', 'name': w['name'], 'lat': w['lat'], 'lng': w['lng'],
-                       'category': w['category'], 'icon': w['icon'], 'id': w['id']})
+    with db_session() as db:
+        results = []
+        q_escaped = q.replace('%', '\\%').replace('_', '\\_')
+        like_pattern = f'%{q_escaped}%'
+        # Search waypoints
+        wps = db.execute("SELECT id, name, lat, lng, category, icon FROM waypoints WHERE name LIKE ? ESCAPE '\\' LIMIT 20",
+                         (like_pattern,)).fetchall()
+        for w in wps:
+            results.append({'type': 'waypoint', 'name': w['name'], 'lat': w['lat'], 'lng': w['lng'],
+                           'category': w['category'], 'icon': w['icon'], 'id': w['id']})
 
-    # Search annotations
-    anns = db.execute("SELECT id, name, lat, lng, type FROM map_annotations WHERE name LIKE ? LIMIT 20",
-                      (f'%{q}%',)).fetchall()
-    for a in anns:
-        results.append({'type': 'annotation', 'name': a['name'], 'lat': a['lat'], 'lng': a['lng'],
-                       'category': a['type'], 'id': a['id']})
+        # Search annotations
+        anns = db.execute("SELECT id, name, lat, lng, type FROM map_annotations WHERE name LIKE ? ESCAPE '\\' LIMIT 20",
+                          (like_pattern,)).fetchall()
+        for a in anns:
+            results.append({'type': 'annotation', 'name': a['name'], 'lat': a['lat'], 'lng': a['lng'],
+                           'category': a['type'], 'id': a['id']})
 
-    # Search garden plots with coordinates
-    plots = db.execute("SELECT id, name, lat, lng FROM garden_plots WHERE name LIKE ? AND lat IS NOT NULL LIMIT 10",
-                       (f'%{q}%',)).fetchall()
-    for p in plots:
-        if p['lat']:
-            results.append({'type': 'garden_plot', 'name': p['name'], 'lat': p['lat'], 'lng': p['lng'], 'id': p['id']})
+        # Search garden plots with coordinates
+        plots = db.execute("SELECT id, name, lat, lng FROM garden_plots WHERE name LIKE ? ESCAPE '\\' AND lat IS NOT NULL LIMIT 10",
+                           (like_pattern,)).fetchall()
+        for p in plots:
+            if p['lat']:
+                results.append({'type': 'garden_plot', 'name': p['name'], 'lat': p['lat'], 'lng': p['lng'], 'id': p['id']})
 
-    # Search contacts with coordinates (from waypoints linked by name)
-    contacts = db.execute("SELECT c.id, c.name, c.role, w.lat, w.lng FROM contacts c LEFT JOIN waypoints w ON w.name LIKE '%' || c.name || '%' WHERE c.name LIKE ? AND w.lat IS NOT NULL LIMIT 10",
-                          (f'%{q}%',)).fetchall()
-    for c in contacts:
-        if c['lat']:
-            results.append({'type': 'contact', 'name': c['name'], 'lat': c['lat'], 'lng': c['lng'],
-                           'category': c['role'], 'id': c['id']})
+        # Search contacts with coordinates (from waypoints linked by name)
+        contacts = db.execute("SELECT c.id, c.name, c.role, w.lat, w.lng FROM contacts c LEFT JOIN waypoints w ON w.name LIKE '%' || c.name || '%' WHERE c.name LIKE ? ESCAPE '\\' AND w.lat IS NOT NULL LIMIT 10",
+                              (like_pattern,)).fetchall()
+        for c in contacts:
+            if c['lat']:
+                results.append({'type': 'contact', 'name': c['name'], 'lat': c['lat'], 'lng': c['lng'],
+                               'category': c['role'], 'id': c['id']})
 
-    db.close()
     return jsonify(results[:50])
 
 @maps_bp.route('/api/geocode/reverse')
@@ -1179,48 +1206,364 @@ def api_geocode_reverse():
     except (ValueError, TypeError):
         return jsonify([])
 
-    db = get_db()
-    # Simple distance-based search (approximate, using degree difference)
-    # 1 degree latitude ≈ 111km, so 0.01 degree ≈ 1.1km
-    search_radius = 0.05  # ~5.5km
-    results = []
+    with db_session() as db:
+        # Simple distance-based search (approximate, using degree difference)
+        # 1 degree latitude ≈ 111km, so 0.01 degree ≈ 1.1km
+        search_radius = 0.05  # ~5.5km
+        results = []
 
-    wps = db.execute("""SELECT id, name, lat, lng, category, icon,
-        ((lat - ?) * (lat - ?) + (lng - ?) * (lng - ?)) as dist_sq
-        FROM waypoints
-        WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?
-        ORDER BY dist_sq LIMIT 10""",
-        (lat, lat, lng, lng,
-         lat - search_radius, lat + search_radius, lng - search_radius, lng + search_radius)).fetchall()
+        wps = db.execute("""SELECT id, name, lat, lng, category, icon,
+            ((lat - ?) * (lat - ?) + (lng - ?) * (lng - ?)) as dist_sq
+            FROM waypoints
+            WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?
+            ORDER BY dist_sq LIMIT 10""",
+            (lat, lat, lng, lng,
+             lat - search_radius, lat + search_radius, lng - search_radius, lng + search_radius)).fetchall()
 
-    import math
-    for w in wps:
-        # Haversine distance
-        R = 6371000
-        dLat = math.radians(w['lat'] - lat)
-        dLon = math.radians(w['lng'] - lng)
-        a = math.sin(dLat/2)**2 + math.cos(math.radians(lat)) * math.cos(math.radians(w['lat'])) * math.sin(dLon/2)**2
-        dist_m = R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-        results.append({'type': 'waypoint', 'name': w['name'], 'lat': w['lat'], 'lng': w['lng'],
-                       'category': w['category'], 'distance_m': round(dist_m), 'id': w['id']})
+        import math
+        for w in wps:
+            # Haversine distance
+            R = 6371000
+            dLat = math.radians(w['lat'] - lat)
+            dLon = math.radians(w['lng'] - lng)
+            a = math.sin(dLat/2)**2 + math.cos(math.radians(lat)) * math.cos(math.radians(w['lat'])) * math.sin(dLon/2)**2
+            dist_m = R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+            results.append({'type': 'waypoint', 'name': w['name'], 'lat': w['lat'], 'lng': w['lng'],
+                           'category': w['category'], 'distance_m': round(dist_m), 'id': w['id']})
 
-    anns = db.execute("""SELECT id, name, lat, lng, type,
-        ((lat - ?) * (lat - ?) + (lng - ?) * (lng - ?)) as dist_sq
-        FROM map_annotations
-        WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?
-        ORDER BY dist_sq LIMIT 10""",
-        (lat, lat, lng, lng,
-         lat - search_radius, lat + search_radius, lng - search_radius, lng + search_radius)).fetchall()
-    for a in anns:
-        dLat = math.radians(a['lat'] - lat)
-        dLon = math.radians(a['lng'] - lng)
-        aa = math.sin(dLat/2)**2 + math.cos(math.radians(lat)) * math.cos(math.radians(a['lat'])) * math.sin(dLon/2)**2
-        dist_m = R * 2 * math.atan2(math.sqrt(aa), math.sqrt(1-aa))
-        results.append({'type': 'annotation', 'name': a['name'], 'lat': a['lat'], 'lng': a['lng'],
-                       'category': a['type'], 'distance_m': round(dist_m), 'id': a['id']})
+        anns = db.execute("""SELECT id, name, lat, lng, type,
+            ((lat - ?) * (lat - ?) + (lng - ?) * (lng - ?)) as dist_sq
+            FROM map_annotations
+            WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?
+            ORDER BY dist_sq LIMIT 10""",
+            (lat, lat, lng, lng,
+             lat - search_radius, lat + search_radius, lng - search_radius, lng + search_radius)).fetchall()
+        for a in anns:
+            dLat = math.radians(a['lat'] - lat)
+            dLon = math.radians(a['lng'] - lng)
+            aa = math.sin(dLat/2)**2 + math.cos(math.radians(lat)) * math.cos(math.radians(a['lat'])) * math.sin(dLon/2)**2
+            dist_m = R * 2 * math.atan2(math.sqrt(aa), math.sqrt(1-aa))
+            results.append({'type': 'annotation', 'name': a['name'], 'lat': a['lat'], 'lng': a['lng'],
+                           'category': a['type'], 'distance_m': round(dist_m), 'id': a['id']})
 
-    results.sort(key=lambda x: x.get('distance_m', 999999))
-    db.close()
+        results.sort(key=lambda x: x.get('distance_m', 999999))
     return jsonify(results[:20])
+
+
+# ─── Haversine Helper ────────────────────────────────────────────
+
+def _haversine(lat1, lon1, lat2, lon2):
+    """Return distance in meters between two lat/lng points."""
+    R = 6371000  # Earth radius in meters
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return R * 2 * math.asin(math.sqrt(a))
+
+
+# ─── Track Recording API ─────────────────────────────────────────
+
+@maps_bp.route('/api/tracks', methods=['GET'])
+def api_tracks_list():
+    """Return all GPS tracks ordered by created_at DESC."""
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM gps_tracks ORDER BY created_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+@maps_bp.route('/api/tracks', methods=['POST'])
+def api_tracks_start():
+    """Create a new track recording session."""
+    data = request.get_json() or {}
+    name = data.get('name', 'Track')
+    empty_geojson = json.dumps({
+        'type': 'Feature',
+        'geometry': {'type': 'LineString', 'coordinates': []},
+        'properties': {}
+    })
+    with db_session() as db:
+        cur = db.execute(
+            'INSERT INTO gps_tracks (name, geojson, started_at) VALUES (?, ?, CURRENT_TIMESTAMP)',
+            (name, empty_geojson)
+        )
+        db.commit()
+        row = db.execute('SELECT * FROM gps_tracks WHERE id = ?', (cur.lastrowid,)).fetchone()
+        return jsonify(dict(row)), 201
+
+@maps_bp.route('/api/tracks/<int:tid>/point', methods=['POST'])
+def api_tracks_add_point(tid):
+    """Append a point to a track. Accepts {lat, lng, alt, timestamp}."""
+    data = request.get_json() or {}
+    lat = data.get('lat')
+    lng = data.get('lng')
+    alt = data.get('alt', 0) or 0
+    if lat is None or lng is None:
+        return jsonify({'error': 'lat and lng are required'}), 400
+
+    with db_session() as db:
+        row = db.execute('SELECT * FROM gps_tracks WHERE id = ?', (tid,)).fetchone()
+        if not row:
+            return jsonify({'error': 'Track not found'}), 404
+        if row['ended_at']:
+            return jsonify({'error': 'Track already stopped'}), 400
+
+        geojson = json.loads(row['geojson'])
+        coords = geojson.get('geometry', {}).get('coordinates', [])
+
+        total_distance = row['total_distance_m'] or 0
+        total_ascent = row['total_ascent_m'] or 0
+
+        if coords:
+            last = coords[-1]  # [lng, lat, alt]
+            seg_dist = _haversine(last[1], last[0], lat, lng)
+            total_distance += seg_dist
+            if len(last) >= 3 and alt > last[2]:
+                total_ascent += (alt - last[2])
+
+        coords.append([lng, lat, alt])
+        geojson['geometry']['coordinates'] = coords
+        updated_json = json.dumps(geojson)
+
+        db.execute(
+            'UPDATE gps_tracks SET geojson = ?, total_distance_m = ?, total_ascent_m = ? WHERE id = ?',
+            (updated_json, total_distance, total_ascent, tid)
+        )
+        db.commit()
+        row = db.execute('SELECT * FROM gps_tracks WHERE id = ?', (tid,)).fetchone()
+        return jsonify(dict(row))
+
+@maps_bp.route('/api/tracks/<int:tid>/stop', methods=['POST'])
+def api_tracks_stop(tid):
+    """Stop a track recording session."""
+    with db_session() as db:
+        row = db.execute('SELECT * FROM gps_tracks WHERE id = ?', (tid,)).fetchone()
+        if not row:
+            return jsonify({'error': 'Track not found'}), 404
+        if row['ended_at']:
+            return jsonify({'error': 'Track already stopped'}), 400
+
+        # Calculate duration from started_at to now
+        started = row['started_at']
+        db.execute(
+            "UPDATE gps_tracks SET ended_at = CURRENT_TIMESTAMP, "
+            "duration_sec = CAST((julianday(CURRENT_TIMESTAMP) - julianday(started_at)) * 86400 AS INTEGER) "
+            "WHERE id = ?",
+            (tid,)
+        )
+        db.commit()
+        row = db.execute('SELECT * FROM gps_tracks WHERE id = ?', (tid,)).fetchone()
+        return jsonify(dict(row))
+
+@maps_bp.route('/api/tracks/<int:tid>', methods=['DELETE'])
+def api_tracks_delete(tid):
+    """Delete a track."""
+    with db_session() as db:
+        db.execute('DELETE FROM gps_tracks WHERE id = ?', (tid,))
+        db.commit()
+        return jsonify({'status': 'deleted'})
+
+@maps_bp.route('/api/tracks/<int:tid>/gpx', methods=['GET'])
+def api_tracks_export_gpx(tid):
+    """Export a single track as GPX XML."""
+    with db_session() as db:
+        row = db.execute('SELECT * FROM gps_tracks WHERE id = ?', (tid,)).fetchone()
+        if not row:
+            return jsonify({'error': 'Track not found'}), 404
+
+        geojson = json.loads(row['geojson'])
+        coords = geojson.get('geometry', {}).get('coordinates', [])
+
+        gpx = '<?xml version="1.0" encoding="UTF-8"?>\n'
+        gpx += '<gpx version="1.1" creator="NOMADFieldDesk">\n'
+        gpx += f'  <trk>\n    <name>{esc(row["name"])}</name>\n    <trkseg>\n'
+        for pt in coords:
+            lng_v, lat_v = pt[0], pt[1]
+            alt_v = pt[2] if len(pt) >= 3 else 0
+            gpx += f'      <trkpt lat="{lat_v}" lon="{lng_v}">\n'
+            gpx += f'        <ele>{alt_v}</ele>\n'
+            gpx += f'      </trkpt>\n'
+        gpx += '    </trkseg>\n  </trk>\n</gpx>'
+
+        return Response(gpx, mimetype='application/gpx+xml',
+                        headers={'Content-Disposition': f'attachment; filename="track-{tid}.gpx"'})
+
+
+# ─── Geofencing API ──────────────────────────────────────────────
+
+@maps_bp.route('/api/geofences', methods=['GET'])
+def api_geofences_list():
+    """List all active geofences (annotation-based and waypoint-based)."""
+    with db_session() as db:
+        rows = db.execute(
+            'SELECT * FROM map_annotations WHERE is_geofence = 1 ORDER BY created_at DESC'
+        ).fetchall()
+        results = []
+        for r in rows:
+            item = dict(r)
+            try:
+                item['properties'] = json.loads(item.get('properties') or '{}')
+            except (json.JSONDecodeError, TypeError):
+                item['properties'] = {}
+            results.append(item)
+        return jsonify(results)
+
+@maps_bp.route('/api/geofences', methods=['POST'])
+def api_geofences_create():
+    """Create a geofence linked to a waypoint.
+
+    Accepts {waypoint_id, radius_m, alert_type (enter/exit/both), message}.
+    """
+    data = request.get_json() or {}
+    waypoint_id = data.get('waypoint_id')
+    radius_m = data.get('radius_m', 500)
+    alert_type = data.get('alert_type', 'both')
+    message = data.get('message', '')
+
+    if alert_type not in ('enter', 'exit', 'both'):
+        return jsonify({'error': 'alert_type must be enter, exit, or both'}), 400
+
+    with db_session() as db:
+        # Look up waypoint for lat/lng
+        wp = None
+        if waypoint_id:
+            wp = db.execute('SELECT * FROM waypoints WHERE id = ?', (waypoint_id,)).fetchone()
+            if not wp:
+                return jsonify({'error': 'Waypoint not found'}), 404
+
+        lat = data.get('lat', wp['lat'] if wp else 0)
+        lng = data.get('lng', wp['lng'] if wp else 0)
+        name = data.get('name', wp['name'] if wp else 'Geofence')
+
+        props = json.dumps({
+            'waypoint_id': waypoint_id,
+            'alert_type': alert_type,
+            'message': message,
+        })
+
+        geojson = json.dumps({
+            'type': 'Feature',
+            'geometry': {'type': 'Point', 'coordinates': [lng, lat]},
+            'properties': {'radius_m': radius_m}
+        })
+
+        cur = db.execute(
+            'INSERT INTO map_annotations (type, geojson, label, name, lat, lng, is_geofence, properties, radius_m, color, notes) '
+            'VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)',
+            ('geofence', geojson, name, name, lat, lng, props, radius_m, '#ff5722', message)
+        )
+        db.commit()
+        aid = cur.lastrowid
+        row = db.execute('SELECT * FROM map_annotations WHERE id = ?', (aid,)).fetchone()
+        result = dict(row)
+        try:
+            result['properties'] = json.loads(result.get('properties') or '{}')
+        except (json.JSONDecodeError, TypeError):
+            result['properties'] = {}
+        return jsonify(result), 201
+
+@maps_bp.route('/api/geofences/check', methods=['POST'])
+def api_geofences_check():
+    """Check a position against all active geofences.
+
+    Accepts {lat, lng}. Returns list of triggered geofences.
+    """
+    data = request.get_json() or {}
+    lat = data.get('lat')
+    lng = data.get('lng')
+    if lat is None or lng is None:
+        return jsonify({'error': 'lat and lng are required'}), 400
+
+    with db_session() as db:
+        fences = db.execute(
+            'SELECT * FROM map_annotations WHERE is_geofence = 1'
+        ).fetchall()
+
+        triggered = []
+        for f in fences:
+            f_lat = f['lat']
+            f_lng = f['lng']
+            radius = f['radius_m'] or 500
+            if f_lat is None or f_lng is None:
+                continue
+            dist = _haversine(lat, lng, f_lat, f_lng)
+            if dist <= radius:
+                item = dict(f)
+                item['distance_m'] = round(dist, 1)
+                try:
+                    item['properties'] = json.loads(item.get('properties') or '{}')
+                except (json.JSONDecodeError, TypeError):
+                    item['properties'] = {}
+                triggered.append(item)
+
+        return jsonify({'triggered': triggered, 'checked_count': len(fences)})
+
+
+# ─── Full GPX Export (waypoints + routes + tracks) ────────────────
+
+@maps_bp.route('/api/maps/export-gpx', methods=['GET'])
+def api_maps_export_gpx():
+    """Export all waypoints as <wpt>, routes as <rte>, and tracks as <trk> in one GPX file."""
+    with db_session() as db:
+        gpx = '<?xml version="1.0" encoding="UTF-8"?>\n'
+        gpx += '<gpx version="1.1" creator="NOMADFieldDesk"\n'
+        gpx += '     xmlns="http://www.topografix.com/GPX/1/1">\n'
+
+        # Waypoints
+        waypoints = db.execute('SELECT * FROM waypoints ORDER BY created_at LIMIT 50000').fetchall()
+        for w in waypoints:
+            gpx += f'  <wpt lat="{w["lat"]}" lon="{w["lng"]}">\n'
+            if w['elevation_m']:
+                gpx += f'    <ele>{w["elevation_m"]}</ele>\n'
+            gpx += f'    <name>{esc(w["name"])}</name>\n'
+            gpx += f'    <desc>{esc(w["notes"] or "")}</desc>\n'
+            gpx += f'    <type>{esc(w["category"] or "general")}</type>\n'
+            gpx += f'  </wpt>\n'
+
+        # Routes (from map_routes using waypoint_ids)
+        routes = db.execute('SELECT * FROM map_routes ORDER BY created_at LIMIT 50000').fetchall()
+        for rt in routes:
+            gpx += f'  <rte>\n    <name>{esc(rt["name"])}</name>\n'
+            if rt['notes']:
+                gpx += f'    <desc>{esc(rt["notes"])}</desc>\n'
+            wp_ids = json.loads(rt['waypoint_ids'] or '[]')
+            if wp_ids:
+                placeholders = ','.join(['?' for _ in wp_ids])
+                rte_wps = db.execute(
+                    f'SELECT * FROM waypoints WHERE id IN ({placeholders})', wp_ids
+                ).fetchall()
+                # Maintain order from waypoint_ids
+                wp_map = {w['id']: w for w in rte_wps}
+                for wid in wp_ids:
+                    w = wp_map.get(wid)
+                    if w:
+                        gpx += f'    <rtept lat="{w["lat"]}" lon="{w["lng"]}">\n'
+                        if w['elevation_m']:
+                            gpx += f'      <ele>{w["elevation_m"]}</ele>\n'
+                        gpx += f'      <name>{esc(w["name"])}</name>\n'
+                        gpx += f'    </rtept>\n'
+            gpx += f'  </rte>\n'
+
+        # Tracks
+        tracks = db.execute('SELECT * FROM gps_tracks ORDER BY created_at LIMIT 50000').fetchall()
+        for trk in tracks:
+            gpx += f'  <trk>\n    <name>{esc(trk["name"])}</name>\n    <trkseg>\n'
+            geojson = json.loads(trk['geojson'])
+            coords = geojson.get('geometry', {}).get('coordinates', [])
+            for pt in coords:
+                lng_v, lat_v = pt[0], pt[1]
+                alt_v = pt[2] if len(pt) >= 3 else 0
+                gpx += f'      <trkpt lat="{lat_v}" lon="{lng_v}">\n'
+                gpx += f'        <ele>{alt_v}</ele>\n'
+                gpx += f'      </trkpt>\n'
+            gpx += '    </trkseg>\n  </trk>\n'
+
+        gpx += '</gpx>'
+
+        return Response(gpx, mimetype='application/gpx+xml',
+                        headers={'Content-Disposition': 'attachment; filename="nomad-full-export.gpx"'})
 
 # ─── LoRA Fine-Tuning Pipeline ───────────────────────────────────

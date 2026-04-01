@@ -3077,8 +3077,10 @@ async function loadSitroomCII() {
   const el = document.getElementById('sr-cii-list');
   if (!el) return;
   // Compute CII from events + news signal density per country
-  const events = await safeFetch('/api/sitroom/events?limit=500', {}, null);
-  const newsData = await safeFetch('/api/sitroom/news?limit=200', {}, null);
+  const [events, newsData] = await Promise.all([
+    safeFetch('/api/sitroom/events?limit=500', {}, null),
+    safeFetch('/api/sitroom/news?limit=200', {}, null)
+  ]);
   if ((!events || !events.events?.length) && (!newsData || !newsData.articles?.length)) {
     el.innerHTML = '<div class="sr-empty">No data for CII</div>'; return;
   }
@@ -3527,7 +3529,7 @@ function _initSitroomWorldClock() {
 function _initSitroomSearch() {
   document.addEventListener('keydown', e => {
     // Don't handle shortcuts when typing in inputs
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT' || e.target.isContentEditable) {
       if (e.key === 'Escape') {
         _toggleSitroomSearch(false);
         _closeStoryModal();
@@ -3566,8 +3568,10 @@ async function _sitroomDoSearch(query) {
   if (!results) return;
   if (!query || query.length < 2) { results.innerHTML = ''; return; }
 
-  const d = await safeFetch('/api/sitroom/news?limit=20&category=', {}, null);
-  const ev = await safeFetch('/api/sitroom/events?limit=100', {}, null);
+  const [d, ev] = await Promise.all([
+    safeFetch('/api/sitroom/news?limit=20&category=', {}, null),
+    safeFetch('/api/sitroom/events?limit=100', {}, null)
+  ]);
   const q = query.toLowerCase();
   let html = '';
 
@@ -5109,9 +5113,11 @@ function _renderWorkerClusters(clusters) {
 /* ─── P4: Smart Poll Loop ─── */
 let _sitroomPollInterval = 60000;
 let _sitroomPollFailures = 0;
+let _smartPollListenerAdded = false;
 function _initSmartPollLoop() {
   if (_sitroomAutoTimer) clearInterval(_sitroomAutoTimer);
-  // Pause when tab is hidden
+  if (_smartPollListenerAdded) { _sitroomAutoTimer = setInterval(_smartPoll, _sitroomPollInterval); return; }
+  _smartPollListenerAdded = true;
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       if (_sitroomAutoTimer) { clearInterval(_sitroomAutoTimer); _sitroomAutoTimer = null; }
@@ -5171,6 +5177,7 @@ function _playAlertTone() {
       gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
       osc2.stop(ctx.currentTime + 0.5);
     }, 200);
+    setTimeout(() => ctx.close(), 1500);
   } catch (e) { /* AudioContext not available */ }
 }
 

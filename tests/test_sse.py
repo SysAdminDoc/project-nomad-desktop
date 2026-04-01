@@ -2,6 +2,7 @@
 
 import queue
 import threading
+import time
 
 
 class TestSSEEndpoint:
@@ -97,3 +98,83 @@ class TestBroadcastEvent:
             with _sse_lock:
                 if full_q in _sse_clients:
                     _sse_clients.remove(full_q)
+
+
+class TestSSEClientLifecycle:
+    def test_register_and_unregister_client(self, app):
+        from web.state import (
+            sse_register_client, sse_unregister_client,
+            _sse_clients, _sse_client_last_active, _sse_lock,
+        )
+        q = queue.Queue(maxsize=50)
+        sse_register_client(q)
+        try:
+            with _sse_lock:
+                assert q in _sse_clients
+                assert id(q) in _sse_client_last_active
+            sse_unregister_client(q)
+            with _sse_lock:
+                assert q not in _sse_clients
+                assert id(q) not in _sse_client_last_active
+        finally:
+            with _sse_lock:
+                if q in _sse_clients:
+                    _sse_clients.remove(q)
+                _sse_client_last_active.pop(id(q), None)
+
+    def test_touch_updates_timestamp(self, app):
+        from web.state import (
+            sse_register_client, sse_unregister_client, sse_touch_client,
+            _sse_client_last_active, _sse_lock,
+        )
+        q = queue.Queue(maxsize=50)
+        sse_register_client(q)
+        try:
+            with _sse_lock:
+                ts1 = _sse_client_last_active[id(q)]
+            time.sleep(0.05)
+            sse_touch_client(q)
+            with _sse_lock:
+                ts2 = _sse_client_last_active[id(q)]
+            assert ts2 > ts1
+        finally:
+            sse_unregister_client(q)
+
+    def test_cleanup_stale_removes_old_clients(self, app):
+        from web.state import (
+            sse_register_client, sse_cleanup_stale_clients,
+            _sse_clients, _sse_client_last_active, _sse_lock,
+            SSE_STALE_TIMEOUT,
+        )
+        q = queue.Queue(maxsize=50)
+        sse_register_client(q)
+        # Backdate the timestamp to simulate staleness
+        with _sse_lock:
+            _sse_client_last_active[id(q)] = time.time() - SSE_STALE_TIMEOUT - 10
+        removed = sse_cleanup_stale_clients()
+        assert removed >= 1
+        with _sse_lock:
+            assert q not in _sse_clients
+
+    def test_cleanup_keeps_active_clients(self, app):
+        from web.state import (
+            sse_register_client, sse_unregister_client,
+            sse_cleanup_stale_clients, _sse_clients, _sse_lock,
+        )
+        q = queue.Queue(maxsize=50)
+        sse_register_client(q)
+        try:
+            removed = sse_cleanup_stale_clients()
+            assert removed == 0
+            with _sse_lock:
+                assert q in _sse_clients
+        finally:
+            sse_unregister_client(q)
+
+    def test_unregister_idempotent(self, app):
+        from web.state import sse_register_client, sse_unregister_client
+        q = queue.Queue(maxsize=50)
+        sse_register_client(q)
+        sse_unregister_client(q)
+        # Second call should not raise
+        sse_unregister_client(q)

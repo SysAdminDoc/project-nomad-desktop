@@ -33,7 +33,7 @@
 .toast {
   position: fixed; bottom: 20px; right: 20px;
   background: var(--surface-solid); border: 1px solid var(--border);
-  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   padding: 10px 18px; border-radius: var(--radius);
   font-size: 12px; box-shadow: var(--shadow); z-index: 9999;
   opacity: 0; transform: translateY(12px) scale(0.95);
@@ -224,7 +224,7 @@
 }
 .msg-action-btn:hover { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
 .msg-action-btn.whatif-btn { color: var(--orange, #e08020); border-color: var(--orange, #e08020); }
-.msg-action-btn.whatif-btn:hover { background: rgba(224,128,32,0.12); color: var(--orange, #e08020); border-color: var(--orange, #e08020); }
+.msg-action-btn.whatif-btn:hover { background: var(--orange-dim); color: var(--orange, #e08020); border-color: var(--orange, #e08020); }
 .chat-source-row {
   display: flex;
   gap: 4px;
@@ -314,7 +314,7 @@
 .rag-citation-link:hover,
 .rag-citation-link:focus-visible {
   filter: brightness(1.04);
-  outline: 1px solid rgba(255,255,255,0.32);
+  outline: 1px solid var(--border-hover);
   outline-offset: 1px;
 }
 
@@ -322,8 +322,8 @@
 .branch-banner {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 16px; font-size: 11px; font-weight: 500;
-  background: linear-gradient(90deg, rgba(224,128,32,0.12) 0%, rgba(224,128,32,0.04) 100%);
-  border-bottom: 1px solid rgba(224,128,32,0.25);
+  background: var(--orange-dim);
+  border-bottom: 1px solid color-mix(in srgb, var(--orange) 25%, transparent);
   color: var(--orange, #e08020);
 }
 .branch-banner .branch-return-btn {
@@ -394,7 +394,7 @@
 
 /* ─── Branch Count Badge ─── */
 .convo-branch-badge {
-  background: rgba(224,128,32,0.15); color: var(--orange, #e08020);
+  background: var(--orange-dim); color: var(--orange, #e08020);
   font-size: 9px; padding: 1px 5px; border-radius: 8px;
   font-weight: 600; flex-shrink: 0; margin-left: 4px;
 }

@@ -9,7 +9,7 @@ import logging
 
 from flask import Blueprint, request, jsonify
 
-from db import get_db, log_activity
+from db import db_session, log_activity
 from services import ollama, kiwix, cyberchef, kolibri, qdrant, stirling, flatnotes
 from services.manager import (
     get_download_progress, get_dir_size, format_size, uninstall_service,
@@ -204,11 +204,9 @@ def api_services_health_summary():
             'port_responding': mod.running() if installed else False,
         })
     # Uptime
-    from db import get_db as gdb
-    db = gdb()
-    recent_crashes = db.execute("SELECT service, COUNT(*) as c FROM activity_log WHERE event = 'service_crash_detected' AND created_at >= datetime('now', '-24 hours') GROUP BY service").fetchall()
-    recent_restarts = db.execute("SELECT service, COUNT(*) as c FROM activity_log WHERE event = 'service_autorestarted' AND created_at >= datetime('now', '-24 hours') GROUP BY service").fetchall()
-    db.close()
+    with db_session() as db:
+        recent_crashes = db.execute("SELECT service, COUNT(*) as c FROM activity_log WHERE event = 'service_crash_detected' AND created_at >= datetime('now', '-24 hours') GROUP BY service").fetchall()
+        recent_restarts = db.execute("SELECT service, COUNT(*) as c FROM activity_log WHERE event = 'service_autorestarted' AND created_at >= datetime('now', '-24 hours') GROUP BY service").fetchall()
     crash_map = {r['service']: r['c'] for r in recent_crashes}
     restart_map = {r['service']: r['c'] for r in recent_restarts}
     for s in services:

@@ -116,7 +116,12 @@ def start():
     """Start Qdrant server."""
     if running():
         log.info('Qdrant is already running')
-        return
+        db = get_db()
+        try:
+            row = db.execute('SELECT pid FROM services WHERE id = ?', (SERVICE_ID,)).fetchone()
+        finally:
+            db.close()
+        return row['pid'] if row and row['pid'] else None
     if not is_installed():
         raise RuntimeError('Qdrant is not installed')
 
@@ -210,16 +215,19 @@ def upsert_vectors(points: list[dict]):
         return False
 
 
-def search(vector: list[float], limit: int = 5) -> list[dict]:
+def search(vector: list[float], limit: int = 5, filter_params: dict | None = None) -> list[dict]:
     """Search the KB collection by vector similarity."""
     try:
+        body = {
+            'vector': vector,
+            'limit': limit,
+            'with_payload': True,
+        }
+        if filter_params:
+            body['filter'] = filter_params
         r = req.post(
             f'http://localhost:{QDRANT_PORT}/collections/{COLLECTION_NAME}/points/search',
-            json={
-                'vector': vector,
-                'limit': limit,
-                'with_payload': True,
-            },
+            json=body,
             timeout=10,
         )
         if r.ok:

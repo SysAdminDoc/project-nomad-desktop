@@ -9,6 +9,8 @@ import sys
 import logging
 from logging.handlers import RotatingFileHandler
 
+from log_utils import install_scrubbing_filter
+
 LOG_FORMAT = '%(asctime)s [%(name)s] %(levelname)s: %(message)s'
 
 logging.basicConfig(
@@ -16,6 +18,7 @@ logging.basicConfig(
     format=LOG_FORMAT,
     handlers=[logging.StreamHandler()],
 )
+install_scrubbing_filter()
 log = logging.getLogger('nomad.headless')
 
 # Set headless flag before imports

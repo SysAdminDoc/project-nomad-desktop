@@ -80,7 +80,7 @@ def find_system_python() -> str | None:
         path = shutil.which(name)
         if path:
             try:
-                result = subprocess.run([path, '--version'], capture_output=True, text=True, timeout=5)
+                result = subprocess.run([path, '--version'], **run_kwargs(capture_output=True, text=True, timeout=5))
                 if result.returncode == 0 and 'Python 3' in result.stdout:
                     return path
             except Exception:
@@ -93,11 +93,9 @@ def open_folder(path: str):
     if IS_WINDOWS:
         os.startfile(path)
     elif IS_MACOS:
-        proc = subprocess.Popen(['open', path])
-        proc.wait()
+        subprocess.Popen(['open', path])
     else:
-        proc = subprocess.Popen(['xdg-open', path])
-        proc.wait()
+        subprocess.Popen(['xdg-open', path])
 
 
 # ─── Process Management ──────────────────────────────────────────────
@@ -421,15 +419,17 @@ def _safe_zip_extract(zf, dest_dir: str):
 def _safe_tar_extract(tf, dest_dir: str):
     """Extract tar with path traversal protection — reject entries that escape dest_dir."""
     dest = os.path.realpath(dest_dir)
+    safe_members = []
     for member in tf.getmembers():
         member_path = os.path.realpath(os.path.join(dest, member.name))
         if not member_path.startswith(dest + os.sep) and member_path != dest:
             raise ValueError(f'Path traversal detected: {member.name} escapes {dest_dir}')
         if member.issym() or member.islnk():
-            link_target = os.path.realpath(os.path.join(dest, member.linkname))
+            link_target = os.path.realpath(os.path.join(dest, os.path.dirname(member.name), member.linkname))
             if not link_target.startswith(dest + os.sep) and link_target != dest:
                 raise ValueError(f'Symlink traversal detected: {member.name} -> {member.linkname}')
-    tf.extractall(dest_dir)
+        safe_members.append(member)
+    tf.extractall(dest_dir, members=safe_members)
 
 
 def extract_archive(archive_path: str, dest_dir: str):

@@ -224,6 +224,7 @@ def start():
     # Stirling PDF (Spring Boot) takes longer to start
     for _ in range(60):
         if proc.poll() is not None:
+            stop_process(SERVICE_ID)
             raise RuntimeError(f'Stirling-PDF exited immediately (exit code {proc.returncode})')
         if check_port(STIRLING_PORT):
             log.info(f'Stirling-PDF running on port {STIRLING_PORT} (PID {proc.pid})')

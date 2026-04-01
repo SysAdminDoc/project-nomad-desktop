@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from flask import Blueprint, request, jsonify
 
-from db import get_db, log_activity
+from db import db_session, log_activity
 from web.state import broadcast_event
 
 power_bp = Blueprint('power', __name__)
@@ -18,9 +18,8 @@ power_bp = Blueprint('power', __name__)
 
 @power_bp.route('/api/power/devices')
 def api_power_devices():
-    db = get_db()
-    rows = db.execute('SELECT * FROM power_devices ORDER BY device_type, name').fetchall()
-    db.close()
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM power_devices ORDER BY device_type, name LIMIT 10000').fetchall()
     return jsonify([{**dict(r), 'specs': json.loads(r['specs'] or '{}')} for r in rows])
 
 
@@ -29,20 +28,18 @@ def api_power_devices_create():
     data = request.get_json() or {}
     if not data.get('name') or not data.get('device_type'):
         return jsonify({'error': 'Name and type required'}), 400
-    db = get_db()
-    db.execute('INSERT INTO power_devices (device_type, name, specs, notes) VALUES (?,?,?,?)',
-               (data['device_type'], data['name'], json.dumps(data.get('specs', {})), data.get('notes', '')))
-    db.commit()
-    db.close()
+    with db_session() as db:
+        db.execute('INSERT INTO power_devices (device_type, name, specs, notes) VALUES (?,?,?,?)',
+                   (data['device_type'], data['name'], json.dumps(data.get('specs', {})), data.get('notes', '')))
+        db.commit()
     return jsonify({'status': 'created'}), 201
 
 
 @power_bp.route('/api/power/devices/<int:did>', methods=['DELETE'])
 def api_power_devices_delete(did):
-    db = get_db()
-    db.execute('DELETE FROM power_devices WHERE id = ?', (did,))
-    db.commit()
-    db.close()
+    with db_session() as db:
+        db.execute('DELETE FROM power_devices WHERE id = ?', (did,))
+        db.commit()
     return jsonify({'status': 'deleted'})
 
 
@@ -50,22 +47,25 @@ def api_power_devices_delete(did):
 
 @power_bp.route('/api/power/log')
 def api_power_log():
-    db = get_db()
-    rows = db.execute('SELECT * FROM power_log ORDER BY created_at DESC LIMIT 100').fetchall()
-    db.close()
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM power_log ORDER BY created_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 
 @power_bp.route('/api/power/log', methods=['POST'])
 def api_power_log_create():
     data = request.get_json() or {}
-    db = get_db()
-    db.execute('INSERT INTO power_log (battery_voltage, battery_soc, solar_watts, solar_wh_today, load_watts, load_wh_today, generator_running, notes) VALUES (?,?,?,?,?,?,?,?)',
-               (data.get('battery_voltage'), data.get('battery_soc'), data.get('solar_watts'),
-                data.get('solar_wh_today'), data.get('load_watts'), data.get('load_wh_today'),
-                1 if data.get('generator_running') else 0, data.get('notes', '')))
-    db.commit()
-    db.close()
+    with db_session() as db:
+        db.execute('INSERT INTO power_log (battery_voltage, battery_soc, solar_watts, solar_wh_today, load_watts, load_wh_today, generator_running, notes) VALUES (?,?,?,?,?,?,?,?)',
+                   (data.get('battery_voltage'), data.get('battery_soc'), data.get('solar_watts'),
+                    data.get('solar_wh_today'), data.get('load_watts'), data.get('load_wh_today'),
+                    1 if data.get('generator_running') else 0, data.get('notes', '')))
+        db.commit()
     return jsonify({'status': 'logged'}), 201
 
 
@@ -74,10 +74,9 @@ def api_power_log_create():
 @power_bp.route('/api/power/dashboard')
 def api_power_dashboard():
     """Power budget summary with autonomy projection."""
-    db = get_db()
-    devices = db.execute('SELECT * FROM power_devices WHERE status = ?', ('active',)).fetchall()
-    logs = [dict(r) for r in db.execute('SELECT * FROM power_log ORDER BY created_at DESC LIMIT 24').fetchall()]
-    db.close()
+    with db_session() as db:
+        devices = db.execute('SELECT * FROM power_devices WHERE status = ?', ('active',)).fetchall()
+        logs = [dict(r) for r in db.execute('SELECT * FROM power_log ORDER BY created_at DESC LIMIT 24').fetchall()]
 
     # Calculate totals from device registry
     total_solar_w = 0
@@ -133,10 +132,9 @@ def api_power_history():
     period = request.args.get('period', '24h')
     period_map = {'24h': '-24 hours', '7d': '-7 days', '30d': '-30 days'}
     interval = period_map.get(period, '-24 hours')
-    db = get_db()
-    rows = db.execute(f"SELECT battery_soc, solar_watts, load_watts, created_at FROM power_log WHERE created_at >= datetime('now', ?) ORDER BY created_at",
-                      (interval,)).fetchall()
-    db.close()
+    with db_session() as db:
+        rows = db.execute(f"SELECT battery_soc, solar_watts, load_watts, created_at FROM power_log WHERE created_at >= datetime('now', ?) ORDER BY created_at",
+                          (interval,)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 
@@ -145,8 +143,7 @@ def api_power_history():
 @power_bp.route('/api/power/autonomy-forecast')
 def api_power_autonomy():
     """Projected days of autonomy based on recent trends."""
-    db = get_db()
-    try:
+    with db_session() as db:
         # Get last 24h of power data
         rows = db.execute("SELECT battery_soc, solar_watts, load_watts FROM power_log WHERE created_at >= datetime('now', '-24 hours') ORDER BY created_at DESC").fetchall()
         if not rows:
@@ -154,8 +151,17 @@ def api_power_autonomy():
         avg_load = sum(r['load_watts'] or 0 for r in rows) / len(rows)
         avg_solar = sum(r['solar_watts'] or 0 for r in rows) / len(rows)
         current_soc = rows[0]['battery_soc'] or 0
-        # Assume 5kWh battery bank, rough estimate
-        battery_wh = 5000 * (current_soc / 100)
+        # Sum actual battery capacity from registered devices, fallback to 5kWh
+        bat_rows = db.execute(
+            "SELECT specs FROM power_devices WHERE device_type = 'battery' AND status = 'active'"
+        ).fetchall()
+        total_battery_wh = 0
+        for br in bat_rows:
+            specs = json.loads(br['specs'] or '{}')
+            total_battery_wh += specs.get('capacity_wh', 0) * specs.get('count', 1)
+        if total_battery_wh <= 0:
+            total_battery_wh = 5000  # fallback default
+        battery_wh = total_battery_wh * (current_soc / 100)
         net_drain = max(0.1, avg_load - avg_solar)  # watts net drain
         hours = battery_wh / net_drain if net_drain > 0 else 999
         return jsonify({
@@ -166,10 +172,6 @@ def api_power_autonomy():
             'avg_solar_w': round(avg_solar, 1),
             'net_drain_w': round(net_drain, 1),
         })
-    finally:
-        db.close()
-
-
 # ─── Solar Forecast Helper ──────────────────────────────────────────
 
 def _calculate_solar(lat, lng, date_str, panel_watts=100, panel_count=1, efficiency=0.85):
@@ -240,13 +242,10 @@ def _calculate_solar(lat, lng, date_str, panel_watts=100, panel_count=1, efficie
     # Cloud cover factor from recent weather observations
     cloud_factor = 1.0
     try:
-        db = get_db()
-        try:
+        with db_session() as db:
             wx = db.execute(
                 "SELECT clouds FROM weather_log WHERE created_at >= datetime('now', '-48 hours') ORDER BY created_at DESC LIMIT 10"
             ).fetchall()
-        finally:
-            db.close()
         if wx:
             cloud_map = {'clear': 1.0, 'few': 0.9, 'scattered': 0.75, 'broken': 0.55, 'overcast': 0.3,
                          'heavy': 0.2, 'partly': 0.7, 'mostly': 0.45}
@@ -288,28 +287,24 @@ def api_solar_forecast():
 
     # Auto-detect from settings or waypoints if not provided
     if lat is None or lng is None:
-        db = get_db()
-        try:
+        with db_session() as db:
             mc = db.execute("SELECT value FROM settings WHERE key = 'map_center'").fetchone()
             if mc and mc['value']:
                 try:
                     parts = json.loads(mc['value'])
                     if isinstance(parts, list) and len(parts) >= 2:
-                        lat = lat or float(parts[0])
-                        lng = lng or float(parts[1])
+                        lat = lat if lat is not None else float(parts[0])
+                        lng = lng if lng is not None else float(parts[1])
                     elif isinstance(parts, dict):
-                        lat = lat or float(parts.get('lat', 0))
-                        lng = lng or float(parts.get('lng', 0))
+                        lat = lat if lat is not None else float(parts.get('lat', 0))
+                        lng = lng if lng is not None else float(parts.get('lng', 0))
                 except (json.JSONDecodeError, ValueError):
                     pass
             if lat is None or lng is None:
                 wp = db.execute("SELECT lat, lng FROM waypoints ORDER BY created_at DESC LIMIT 1").fetchone()
                 if wp:
-                    lat = lat or wp['lat']
-                    lng = lng or wp['lng']
-        finally:
-            db.close()
-
+                    lat = lat if lat is not None else wp['lat']
+                    lng = lng if lng is not None else wp['lng']
     if lat is None or lng is None:
         return jsonify({'error': 'lat and lng required \u2014 set a map center or add a waypoint'}), 400
 
@@ -378,29 +373,21 @@ def api_solar_history():
     efficiency = request.args.get('efficiency', 0.85, type=float)
 
     if lat is None or lng is None:
-        db = get_db()
-        try:
+        with db_session() as db:
             mc = db.execute("SELECT value FROM settings WHERE key = 'map_center'").fetchone()
             if mc and mc['value']:
                 try:
                     parts = json.loads(mc['value'])
                     if isinstance(parts, list) and len(parts) >= 2:
-                        lat = lat or float(parts[0])
-                        lng = lng or float(parts[1])
+                        lat = lat if lat is not None else float(parts[0])
+                        lng = lng if lng is not None else float(parts[1])
                 except (json.JSONDecodeError, ValueError):
                     pass
-        finally:
-            db.close()
-
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute(
             "SELECT solar_wh_today, solar_watts, created_at FROM power_log "
             "WHERE created_at >= datetime('now', '-30 days') ORDER BY created_at"
         ).fetchall()
-    finally:
-        db.close()
-
     by_date = defaultdict(list)
     for r in rows:
         try:
@@ -446,33 +433,35 @@ def api_solar_history():
 
 @power_bp.route('/api/sensors/devices')
 def api_sensor_devices_list():
-    db = get_db()
-    rows = db.execute('SELECT * FROM sensor_devices ORDER BY name').fetchall()
-    db.close()
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM sensor_devices ORDER BY name LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 
 @power_bp.route('/api/sensors/devices', methods=['POST'])
 def api_sensor_devices_create():
     data = request.get_json() or {}
-    db = get_db()
-    db.execute('INSERT INTO sensor_devices (device_type, name, connection_type, connection_config, polling_interval_sec, status) VALUES (?,?,?,?,?,?)',
-               (data.get('device_type', 'manual'), data.get('name', 'New Sensor'),
-                data.get('connection_type', 'manual'), json.dumps(data.get('connection_config', {})),
-                data.get('polling_interval_sec', 300), data.get('status', 'active')))
-    db.commit()
-    sid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
-    db.close()
+    with db_session() as db:
+        db.execute('INSERT INTO sensor_devices (device_type, name, connection_type, connection_config, polling_interval_sec, status) VALUES (?,?,?,?,?,?)',
+                   (data.get('device_type', 'manual'), data.get('name', 'New Sensor'),
+                    data.get('connection_type', 'manual'), json.dumps(data.get('connection_config', {})),
+                    data.get('polling_interval_sec', 300), data.get('status', 'active')))
+        db.commit()
+        sid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
     return jsonify({'status': 'created', 'id': sid})
 
 
 @power_bp.route('/api/sensors/devices/<int:sid>', methods=['DELETE'])
 def api_sensor_devices_delete(sid):
-    db = get_db()
-    db.execute('DELETE FROM sensor_devices WHERE id = ?', (sid,))
-    db.execute('DELETE FROM sensor_readings WHERE device_id = ?', (sid,))
-    db.commit()
-    db.close()
+    with db_session() as db:
+        db.execute('DELETE FROM sensor_devices WHERE id = ?', (sid,))
+        db.execute('DELETE FROM sensor_readings WHERE device_id = ?', (sid,))
+        db.commit()
     return jsonify({'status': 'deleted'})
 
 
@@ -483,24 +472,22 @@ def api_sensor_readings(device_id):
     period = request.args.get('period', '24h')
     period_map = {'24h': '-24 hours', '7d': '-7 days', '30d': '-30 days'}
     interval = period_map.get(period, '-24 hours')
-    db = get_db()
-    rows = db.execute(f"SELECT * FROM sensor_readings WHERE device_id = ? AND created_at >= datetime('now', ?) ORDER BY created_at",
-                      (device_id, interval)).fetchall()
-    db.close()
+    with db_session() as db:
+        rows = db.execute(f"SELECT * FROM sensor_readings WHERE device_id = ? AND created_at >= datetime('now', ?) ORDER BY created_at",
+                          (device_id, interval)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 
 @power_bp.route('/api/sensors/readings', methods=['POST'])
 def api_sensor_readings_create():
     data = request.get_json() or {}
-    db = get_db()
-    db.execute('INSERT INTO sensor_readings (device_id, reading_type, value, unit) VALUES (?,?,?,?)',
-               (data.get('device_id'), data.get('reading_type', ''), data.get('value', 0), data.get('unit', '')))
-    # Update device last_reading
-    db.execute('UPDATE sensor_devices SET last_reading = ? WHERE id = ?',
-               (json.dumps({'type': data.get('reading_type'), 'value': data.get('value'), 'unit': data.get('unit')}), data.get('device_id')))
-    db.commit()
-    db.close()
+    with db_session() as db:
+        db.execute('INSERT INTO sensor_readings (device_id, reading_type, value, unit) VALUES (?,?,?,?)',
+                   (data.get('device_id'), data.get('reading_type', ''), data.get('value', 0), data.get('unit', '')))
+        # Update device last_reading
+        db.execute('UPDATE sensor_devices SET last_reading = ? WHERE id = ?',
+                   (json.dumps({'type': data.get('reading_type'), 'value': data.get('value'), 'unit': data.get('unit')}), data.get('device_id')))
+        db.commit()
     return jsonify({'status': 'recorded'})
 
 
@@ -509,81 +496,80 @@ def api_sensor_readings_create():
 @power_bp.route('/api/sensors/chart/<int:device_id>')
 def api_sensors_chart(device_id):
     """Return time-series data for charting, aggregated by hour/day/week."""
-    db = get_db()
-    range_param = request.args.get('range', '24h')
-    reading_type = request.args.get('type', '')
+    with db_session() as db:
+        range_param = request.args.get('range', '24h')
+        reading_type = request.args.get('type', '')
 
-    # Determine time window and aggregation
-    now = datetime.now()
-    if range_param == '1h':
-        since = (now - timedelta(hours=1)).strftime('%Y-%m-%d %H:%M:%S')
-        agg = None  # raw data
-    elif range_param == '24h':
-        since = (now - timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
-        agg = 'hour'
-    elif range_param == '7d':
-        since = (now - timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
-        agg = 'hour'
-    elif range_param == '30d':
-        since = (now - timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
-        agg = 'day'
-    elif range_param == '90d':
-        since = (now - timedelta(days=90)).strftime('%Y-%m-%d %H:%M:%S')
-        agg = 'week'
-    else:
-        since = (now - timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
-        agg = 'hour'
+        # Determine time window and aggregation
+        now = datetime.now()
+        if range_param == '1h':
+            since = (now - timedelta(hours=1)).strftime('%Y-%m-%d %H:%M:%S')
+            agg = None  # raw data
+        elif range_param == '24h':
+            since = (now - timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
+            agg = 'hour'
+        elif range_param == '7d':
+            since = (now - timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
+            agg = 'hour'
+        elif range_param == '30d':
+            since = (now - timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
+            agg = 'day'
+        elif range_param == '90d':
+            since = (now - timedelta(days=90)).strftime('%Y-%m-%d %H:%M:%S')
+            agg = 'week'
+        else:
+            since = (now - timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
+            agg = 'hour'
 
-    query_params = [device_id, since]
-    type_filter = ''
-    if reading_type:
-        type_filter = ' AND reading_type = ?'
-        query_params.append(reading_type)
+        query_params = [device_id, since]
+        type_filter = ''
+        if reading_type:
+            type_filter = ' AND reading_type = ?'
+            query_params.append(reading_type)
 
-    if agg == 'hour':
-        rows = db.execute(f'''
-            SELECT strftime('%Y-%m-%d %H:00:00', created_at) as timestamp,
-                   reading_type, unit,
-                   AVG(value) as avg_value, MIN(value) as min_value, MAX(value) as max_value,
-                   COUNT(*) as sample_count
-            FROM sensor_readings
-            WHERE device_id = ? AND created_at >= ?{type_filter}
-            GROUP BY strftime('%Y-%m-%d %H', created_at), reading_type
-            ORDER BY timestamp ASC
-        ''', query_params).fetchall()
-    elif agg == 'day':
-        rows = db.execute(f'''
-            SELECT strftime('%Y-%m-%d', created_at) as timestamp,
-                   reading_type, unit,
-                   AVG(value) as avg_value, MIN(value) as min_value, MAX(value) as max_value,
-                   COUNT(*) as sample_count
-            FROM sensor_readings
-            WHERE device_id = ? AND created_at >= ?{type_filter}
-            GROUP BY strftime('%Y-%m-%d', created_at), reading_type
-            ORDER BY timestamp ASC
-        ''', query_params).fetchall()
-    elif agg == 'week':
-        rows = db.execute(f'''
-            SELECT strftime('%Y-W%W', created_at) as timestamp,
-                   reading_type, unit,
-                   AVG(value) as avg_value, MIN(value) as min_value, MAX(value) as max_value,
-                   COUNT(*) as sample_count
-            FROM sensor_readings
-            WHERE device_id = ? AND created_at >= ?{type_filter}
-            GROUP BY strftime('%Y-W%W', created_at), reading_type
-            ORDER BY timestamp ASC
-        ''', query_params).fetchall()
-    else:
-        rows = db.execute(f'''
-            SELECT created_at as timestamp, reading_type, value as avg_value, value as min_value, value as max_value, unit, 1 as sample_count
-            FROM sensor_readings
-            WHERE device_id = ? AND created_at >= ?{type_filter}
-            ORDER BY created_at ASC
-        ''', query_params).fetchall()
+        if agg == 'hour':
+            rows = db.execute(f'''
+                SELECT strftime('%Y-%m-%d %H:00:00', created_at) as timestamp,
+                       reading_type, unit,
+                       AVG(value) as avg_value, MIN(value) as min_value, MAX(value) as max_value,
+                       COUNT(*) as sample_count
+                FROM sensor_readings
+                WHERE device_id = ? AND created_at >= ?{type_filter}
+                GROUP BY strftime('%Y-%m-%d %H', created_at), reading_type
+                ORDER BY timestamp ASC
+            ''', query_params).fetchall()
+        elif agg == 'day':
+            rows = db.execute(f'''
+                SELECT strftime('%Y-%m-%d', created_at) as timestamp,
+                       reading_type, unit,
+                       AVG(value) as avg_value, MIN(value) as min_value, MAX(value) as max_value,
+                       COUNT(*) as sample_count
+                FROM sensor_readings
+                WHERE device_id = ? AND created_at >= ?{type_filter}
+                GROUP BY strftime('%Y-%m-%d', created_at), reading_type
+                ORDER BY timestamp ASC
+            ''', query_params).fetchall()
+        elif agg == 'week':
+            rows = db.execute(f'''
+                SELECT strftime('%Y-W%W', created_at) as timestamp,
+                       reading_type, unit,
+                       AVG(value) as avg_value, MIN(value) as min_value, MAX(value) as max_value,
+                       COUNT(*) as sample_count
+                FROM sensor_readings
+                WHERE device_id = ? AND created_at >= ?{type_filter}
+                GROUP BY strftime('%Y-W%W', created_at), reading_type
+                ORDER BY timestamp ASC
+            ''', query_params).fetchall()
+        else:
+            rows = db.execute(f'''
+                SELECT created_at as timestamp, reading_type, value as avg_value, value as min_value, value as max_value, unit, 1 as sample_count
+                FROM sensor_readings
+                WHERE device_id = ? AND created_at >= ?{type_filter}
+                ORDER BY created_at ASC
+            ''', query_params).fetchall()
 
-    # Get device info
-    device = db.execute('SELECT * FROM sensor_devices WHERE id = ?', (device_id,)).fetchone()
-    db.close()
+        # Get device info
+        device = db.execute('SELECT * FROM sensor_devices WHERE id = ?', (device_id,)).fetchone()
 
     series = {}
     for r in rows:
@@ -605,3 +591,296 @@ def api_sensors_chart(device_id):
         'aggregation': agg or 'raw',
         'series': list(series.values()),
     })
+
+
+# ─── Generator Management ─────────────────────────────────────────
+
+@power_bp.route('/api/power/generators', methods=['GET'])
+def api_generators_list():
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM generators ORDER BY name LIMIT 10000').fetchall()
+        return jsonify([dict(r) for r in rows])
+
+
+@power_bp.route('/api/power/generators', methods=['POST'])
+def api_generators_create():
+    data = request.get_json() or {}
+    if not data.get('name'):
+        return jsonify({'error': 'Name is required'}), 400
+    with db_session() as db:
+        db.execute(
+            'INSERT INTO generators (name, rated_watts, fuel_type, tank_capacity_gal, fuel_consumption_gph, oil_change_interval_hours, notes) VALUES (?,?,?,?,?,?,?)',
+            (data['name'], data.get('rated_watts', 0), data.get('fuel_type', 'gasoline'),
+             data.get('tank_capacity_gal', 0), data.get('fuel_consumption_gph', 0),
+             data.get('oil_change_interval_hours', 100), data.get('notes', '')))
+        db.commit()
+        gid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        return jsonify({'status': 'created', 'id': gid}), 201
+
+
+@power_bp.route('/api/power/generators/<int:gid>', methods=['PUT'])
+def api_generators_update(gid):
+    data = request.get_json() or {}
+    with db_session() as db:
+        gen = db.execute('SELECT * FROM generators WHERE id = ?', (gid,)).fetchone()
+        if not gen:
+            return jsonify({'error': 'Generator not found'}), 404
+        fields = ['name', 'rated_watts', 'fuel_type', 'tank_capacity_gal',
+                  'fuel_consumption_gph', 'oil_change_interval_hours', 'notes']
+        updates = []
+        values = []
+        for f in fields:
+            if f in data:
+                updates.append(f'{f} = ?')
+                values.append(data[f])
+        if not updates:
+            return jsonify({'error': 'No fields to update'}), 400
+        values.append(gid)
+        db.execute(f"UPDATE generators SET {', '.join(updates)} WHERE id = ?", values)
+        db.commit()
+        return jsonify({'status': 'updated'})
+
+
+@power_bp.route('/api/power/generators/<int:gid>', methods=['DELETE'])
+def api_generators_delete(gid):
+    with db_session() as db:
+        db.execute('DELETE FROM generator_sessions WHERE generator_id = ?', (gid,))
+        db.execute('DELETE FROM generators WHERE id = ?', (gid,))
+        db.commit()
+        return jsonify({'status': 'deleted'})
+
+
+@power_bp.route('/api/power/generators/<int:gid>/start', methods=['POST'])
+def api_generator_start(gid):
+    with db_session() as db:
+        gen = db.execute('SELECT * FROM generators WHERE id = ?', (gid,)).fetchone()
+        if not gen:
+            return jsonify({'error': 'Generator not found'}), 404
+        # Check for already-open session
+        open_session = db.execute(
+            'SELECT id FROM generator_sessions WHERE generator_id = ? AND ended_at IS NULL', (gid,)
+        ).fetchone()
+        if open_session:
+            return jsonify({'error': 'Generator already running'}), 409
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        db.execute('INSERT INTO generator_sessions (generator_id, started_at) VALUES (?, ?)', (gid, now))
+        db.execute('UPDATE generators SET last_started = ? WHERE id = ?', (now, gid))
+        db.commit()
+        return jsonify({'status': 'started', 'started_at': now})
+
+
+@power_bp.route('/api/power/generators/<int:gid>/stop', methods=['POST'])
+def api_generator_stop(gid):
+    with db_session() as db:
+        gen = db.execute('SELECT * FROM generators WHERE id = ?', (gid,)).fetchone()
+        if not gen:
+            return jsonify({'error': 'Generator not found'}), 404
+        session = db.execute(
+            'SELECT * FROM generator_sessions WHERE generator_id = ? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1',
+            (gid,)
+        ).fetchone()
+        if not session:
+            return jsonify({'error': 'Generator is not running'}), 409
+        now = datetime.now()
+        started = datetime.strptime(session['started_at'], '%Y-%m-%d %H:%M:%S')
+        runtime_hours = (now - started).total_seconds() / 3600.0
+        fuel_consumption_gph = gen['fuel_consumption_gph'] or 0
+        fuel_used_gal = fuel_consumption_gph * runtime_hours
+        now_str = now.strftime('%Y-%m-%d %H:%M:%S')
+        db.execute(
+            'UPDATE generator_sessions SET ended_at = ?, runtime_hours = ?, fuel_used_gal = ? WHERE id = ?',
+            (now_str, round(runtime_hours, 3), round(fuel_used_gal, 3), session['id']))
+        new_total = (gen['total_runtime_hours'] or 0) + runtime_hours
+        db.execute('UPDATE generators SET total_runtime_hours = ? WHERE id = ?', (round(new_total, 3), gid))
+        db.commit()
+        return jsonify({
+            'status': 'stopped',
+            'runtime_hours': round(runtime_hours, 3),
+            'fuel_used_gal': round(fuel_used_gal, 3),
+            'total_runtime_hours': round(new_total, 3),
+        })
+
+
+@power_bp.route('/api/power/generators/<int:gid>/status', methods=['GET'])
+def api_generator_status(gid):
+    with db_session() as db:
+        gen = db.execute('SELECT * FROM generators WHERE id = ?', (gid,)).fetchone()
+        if not gen:
+            return jsonify({'error': 'Generator not found'}), 404
+        gen_dict = dict(gen)
+        session = db.execute(
+            'SELECT * FROM generator_sessions WHERE generator_id = ? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1',
+            (gid,)
+        ).fetchone()
+        running = session is not None
+        current_runtime_hours = 0
+        if running:
+            started = datetime.strptime(session['started_at'], '%Y-%m-%d %H:%M:%S')
+            current_runtime_hours = (datetime.now() - started).total_seconds() / 3600.0
+
+        tank_gal = gen_dict['tank_capacity_gal'] or 0
+        consumption_gph = gen_dict['fuel_consumption_gph'] or 0
+        total_runtime = gen_dict['total_runtime_hours'] or 0
+        oil_interval = gen_dict['oil_change_interval_hours'] or 100
+
+        # Estimate fuel remaining (assumes full tank at start of current session)
+        fuel_remaining_gal = max(0, tank_gal - (consumption_gph * current_runtime_hours)) if running else tank_gal
+        estimated_runtime_hours = fuel_remaining_gal / consumption_gph if consumption_gph > 0 else None
+        hours_until_oil_change = max(0, oil_interval - (total_runtime % oil_interval))
+
+        return jsonify({
+            'generator': gen_dict,
+            'running': running,
+            'current_runtime_hours': round(current_runtime_hours, 3),
+            'fuel_remaining_gal': round(fuel_remaining_gal, 2),
+            'estimated_runtime_hours': round(estimated_runtime_hours, 1) if estimated_runtime_hours is not None else None,
+            'hours_until_oil_change': round(hours_until_oil_change, 1),
+        })
+
+
+# ─── Battery Health ────────────────────────────────────────────────
+
+@power_bp.route('/api/power/battery-health', methods=['GET'])
+def api_battery_health():
+    """Battery health analysis based on historical power log data."""
+    with db_session() as db:
+        rows = db.execute(
+            "SELECT battery_voltage, battery_soc, created_at FROM power_log "
+            "WHERE battery_soc IS NOT NULL ORDER BY created_at ASC"
+        ).fetchall()
+
+        if not rows:
+            return jsonify({'error': 'No battery data available'}), 404
+
+        # Count charge cycles: SOC dropping below 30% then rising above 80%
+        cycle_count = 0
+        was_low = False
+        for r in rows:
+            soc = r['battery_soc'] or 0
+            if soc < 30:
+                was_low = True
+            elif soc > 80 and was_low:
+                cycle_count += 1
+                was_low = False
+
+        # Voltage trend analysis for capacity estimation
+        # Compare average voltage of first 10% of readings vs last 10%
+        voltages = [r['battery_voltage'] for r in rows if r['battery_voltage']]
+        estimated_capacity_pct = 100.0
+        if len(voltages) >= 20:
+            chunk = max(1, len(voltages) // 10)
+            early_avg = sum(voltages[:chunk]) / chunk
+            recent_avg = sum(voltages[-chunk:]) / chunk
+            if early_avg > 0:
+                # Voltage degradation roughly correlates with capacity loss
+                voltage_ratio = recent_avg / early_avg
+                estimated_capacity_pct = round(min(100, max(0, voltage_ratio * 100)), 1)
+
+        # Replacement forecast based on typical LiFePO4 ~3000 cycles
+        typical_cycle_life = 3000
+        remaining_cycles = max(0, typical_cycle_life - cycle_count)
+        # Estimate cycles per year from data span
+        if len(rows) >= 2:
+            first_dt = datetime.strptime(rows[0]['created_at'][:19], '%Y-%m-%d %H:%M:%S')
+            last_dt = datetime.strptime(rows[-1]['created_at'][:19], '%Y-%m-%d %H:%M:%S')
+            span_days = max(1, (last_dt - first_dt).days)
+            cycles_per_year = (cycle_count / span_days) * 365 if span_days > 0 else 0
+            years_remaining = remaining_cycles / cycles_per_year if cycles_per_year > 0 else None
+        else:
+            cycles_per_year = 0
+            years_remaining = None
+
+        return jsonify({
+            'cycle_count': cycle_count,
+            'estimated_capacity_pct': estimated_capacity_pct,
+            'total_readings': len(rows),
+            'cycles_per_year': round(cycles_per_year, 1) if cycles_per_year else 0,
+            'replacement_forecast': {
+                'typical_cycle_life': typical_cycle_life,
+                'remaining_cycles': remaining_cycles,
+                'estimated_years_remaining': round(years_remaining, 1) if years_remaining is not None else None,
+            },
+        })
+
+
+# ─── Load Scheduling ──────────────────────────────────────────────
+
+@power_bp.route('/api/power/load-schedule', methods=['GET'])
+def api_power_load_schedule():
+    """Optimal load scheduling based on device priorities and solar forecast."""
+    with db_session() as db:
+        devices = db.execute(
+            "SELECT * FROM power_devices WHERE status = 'active' ORDER BY device_type, name"
+        ).fetchall()
+
+        # Categorize devices by priority based on device_type
+        priority_map = {
+            'inverter': 'critical', 'charge_controller': 'critical', 'battery': 'critical',
+            'fridge': 'high', 'router': 'high', 'water_pump': 'high',
+            'laptop': 'medium', 'fan': 'medium', 'light': 'medium',
+            'tv': 'low', 'heater': 'low', 'air_conditioner': 'low',
+        }
+
+        categorized = {'critical': [], 'high': [], 'medium': [], 'low': []}
+        total_load_w = 0
+        for d in devices:
+            d_dict = dict(d)
+            specs = json.loads(d_dict.get('specs') or '{}')
+            watts = specs.get('watts', 0) * specs.get('count', 1)
+            d_dict['watts'] = watts
+            d_dict['specs'] = specs
+            priority = priority_map.get(d_dict['device_type'], 'medium')
+            d_dict['priority'] = priority
+            categorized[priority].append(d_dict)
+            total_load_w += watts
+
+        # Get solar production estimate per hour (use recent averages)
+        logs = db.execute(
+            "SELECT solar_watts, load_watts, created_at FROM power_log "
+            "WHERE created_at >= datetime('now', '-7 days') ORDER BY created_at"
+        ).fetchall()
+
+        # Build hourly solar profile from historical data
+        hourly_solar = defaultdict(list)
+        hourly_load = defaultdict(list)
+        for log in logs:
+            try:
+                hour = int(log['created_at'][11:13])
+                if log['solar_watts']:
+                    hourly_solar[hour].append(log['solar_watts'])
+                if log['load_watts']:
+                    hourly_load[hour].append(log['load_watts'])
+            except (ValueError, IndexError):
+                pass
+
+        # Generate 24-hour schedule
+        schedule = []
+        for hour in range(24):
+            solar_readings = hourly_solar.get(hour, [])
+            load_readings = hourly_load.get(hour, [])
+            avg_solar = sum(solar_readings) / len(solar_readings) if solar_readings else 0
+            avg_load = sum(load_readings) / len(load_readings) if load_readings else 0
+            surplus = avg_solar - avg_load
+
+            # Determine which priority levels can run
+            recommended = ['critical']
+            if surplus > 0:
+                recommended.append('high')
+            if surplus > total_load_w * 0.3:
+                recommended.append('medium')
+            if surplus > total_load_w * 0.6:
+                recommended.append('low')
+
+            schedule.append({
+                'hour': hour,
+                'avg_solar_w': round(avg_solar, 1),
+                'avg_load_w': round(avg_load, 1),
+                'surplus_w': round(surplus, 1),
+                'recommended_priorities': recommended,
+            })
+
+        return jsonify({
+            'devices': categorized,
+            'total_load_w': total_load_w,
+            'schedule': schedule,
+        })

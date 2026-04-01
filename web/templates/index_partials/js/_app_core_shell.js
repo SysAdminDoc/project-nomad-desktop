@@ -1,5 +1,13 @@
 const VERSION = '{{ version }}';
 
+let _settingsDebounceMap = {};
+function _debouncedSettingSave(key, value) {
+    clearTimeout(_settingsDebounceMap[key]);
+    _settingsDebounceMap[key] = setTimeout(() => {
+        fetch('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({[key]: value})}).catch(()=>{});
+    }, 500);
+}
+
 /* ─── Theme ─── */
 const THEME_NAMES = {
   nomad: 'Atlas (Light)',
@@ -41,6 +49,12 @@ function getThemePalette() {
   };
 }
 
+/* ─── Skeleton Loading ─── */
+function showSkeleton(container, count = 6) {
+  if (!container) return;
+  container.innerHTML = Array(count).fill('<div class="skeleton-card"><div class="skeleton-line" style="width:60%"></div><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:40%"></div></div>').join('');
+}
+
 function setShellVisibility(el, visible) {
   if (!el) return;
   el.classList.toggle('is-hidden', !visible);
@@ -48,6 +62,7 @@ function setShellVisibility(el, visible) {
     el.hidden = false;
     if (el.style.display === 'none') el.style.removeProperty('display');
   } else {
+    el.hidden = true;
     el.style.removeProperty('display');
   }
   if (typeof syncViewportChrome === 'function') {
@@ -182,7 +197,7 @@ function setTheme(theme) {
   if (typeof updateCustomizeTheme === 'function') {
     updateCustomizeTheme();
   }
-  fetch('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({theme})}).catch(() => {});
+  _debouncedSettingSave('theme', theme);
   // Auto-switch map tiles if tile selector is on "auto"
   const tileSelector = document.getElementById('map-tile-selector');
   if (tileSelector && tileSelector.value === 'auto') {
@@ -252,7 +267,7 @@ async function setMode(mode) {
     b.classList.toggle('active', active);
     b.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
-  fetch('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({dashboard_mode: mode})}).catch(() => {});
+  _debouncedSettingSave('dashboard_mode', mode);
   // Fetch mode config and apply
   try {
     const data = await safeFetch('/api/dashboard/mode', {}, {mode:'command',config:{}});
@@ -558,7 +573,8 @@ const FormStateRecovery = {
 };
 
 /* ─── Helpers ─── */
-function escapeHtml(s) { if (s == null) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+let _escDiv = null;
+function escapeHtml(s) { if (s == null) return ''; if (!_escDiv) _escDiv = document.createElement('div'); _escDiv.textContent = s; return _escDiv.innerHTML; }
 function escapeAttr(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;'); }
 function showModal(html, {size, title, onClose} = {}) {
   const triggerEl = document.activeElement;
@@ -614,14 +630,14 @@ function copyCode(btn) {
   navigator.clipboard.writeText(code).then(() => {
     btn.textContent = 'Copied!'; btn.classList.add('copied');
     setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
-  });
+  }).catch(() => { /* clipboard API not available */ });
 }
 function copyMsg(btn) {
   const msg = btn.closest('.message').dataset.content;
   navigator.clipboard.writeText(msg).then(() => {
     btn.textContent = 'Copied!';
     setTimeout(() => btn.textContent = 'Copy', 2000);
-  });
+  }).catch(() => { /* clipboard API not available */ });
 }
 function formatBytes(b) {
   if (b >= 1073741824) return (b/1073741824).toFixed(1)+' GB';
@@ -753,3 +769,21 @@ function renderMarkdown(text) {
   codeBlocks.forEach((block, i) => { h = h.split('\x00CB' + i + '\x00').join(block); });
   return '<p>' + h + '</p>';
 }
+
+/* ─── Global Keyboard Shortcuts ─── */
+document.addEventListener('keydown', e => {
+  // Esc — close topmost modal/overlay
+  if (e.key === 'Escape') {
+    const modal = document.querySelector('.modal-overlay:not(.hidden), .modal-overlay[style*="flex"], .wizard-overlay:not(.hidden)');
+    if (modal) { modal.style.display = 'none'; e.preventDefault(); return; }
+    // Close utility panel
+    const util = document.querySelector('.utility-panel-shell:not(.is-hidden)');
+    if (util) { util.classList.add('is-hidden'); e.preventDefault(); return; }
+  }
+  // Ctrl/Cmd+K — open command palette
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    const cp = document.getElementById('command-palette');
+    if (cp) { cp.style.display = cp.style.display === 'none' ? 'flex' : 'none'; const inp = cp.querySelector('input'); if (inp) inp.focus(); }
+  }
+});

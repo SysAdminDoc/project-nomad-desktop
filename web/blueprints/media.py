@@ -12,7 +12,8 @@ import shutil
 from flask import Blueprint, request, jsonify, Response
 from werkzeug.utils import secure_filename
 
-from db import get_db, log_activity
+from web.blueprints import error_response
+from db import db_session, log_activity
 from services import ollama
 from services.manager import format_size, get_services_dir
 from config import get_data_dir
@@ -63,16 +64,15 @@ media_bp = Blueprint('media', __name__)
 @media_bp.route('/api/media/video/<int:vid>/thumbnail', methods=['POST'])
 def api_video_thumbnail(vid):
     """Generate a thumbnail for a video using FFmpeg."""
-    db = get_db()
-    try:
+    with db_session() as db:
         row = db.execute('SELECT filename, folder FROM videos WHERE id = ?', (vid,)).fetchone()
         if not row:
-            return jsonify({'error': 'Video not found'}), 404
+            return error_response('Video not found', 404)
 
         videos_dir = os.path.join(get_data_dir(), 'videos')
         video_path = os.path.join(videos_dir, row['folder'] or '', row['filename'])
         if not os.path.isfile(video_path):
-            return jsonify({'error': 'Video file not found on disk'}), 404
+            return error_response('Video file not found on disk', 404)
 
         thumb_dir = os.path.join(get_data_dir(), 'thumbnails')
         os.makedirs(thumb_dir, exist_ok=True)
@@ -87,16 +87,13 @@ def api_video_thumbnail(vid):
                 '-vf', 'scale=320:-1', '-y', thumb_path
             ], capture_output=True, timeout=15, **_CREATION_FLAGS)
         except (FileNotFoundError, subprocess.TimeoutExpired):
-            return jsonify({'error': 'FFmpeg not available'}), 500
+            return error_response('FFmpeg not available', 500)
 
         if os.path.isfile(thumb_path):
             db.execute('UPDATE videos SET thumbnail = ? WHERE id = ?', (f'/api/media/thumbnail/{thumb_file}', vid))
             db.commit()
             return jsonify({'status': 'ok', 'thumbnail': f'/api/media/thumbnail/{thumb_file}'})
-        return jsonify({'error': 'Thumbnail generation failed'}), 500
-    finally:
-        db.close()
-
+        return error_response('Thumbnail generation failed', 500)
 @media_bp.route('/api/media/thumbnail/<filename>')
 def api_media_thumbnail_serve(filename):
     """Serve a generated thumbnail."""
@@ -306,14 +303,17 @@ PREPPER_CATALOG = [
 
 @media_bp.route('/api/videos')
 def api_videos_list():
-    db = get_db()
-    rows = db.execute('SELECT * FROM videos ORDER BY folder, category, title').fetchall()
-    db.close()
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM videos ORDER BY folder, category, title LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     videos = []
     vdir = get_video_dir()
     for r in rows:
         v = dict(r)
-        # Verify file still exists on disk
         v['exists'] = os.path.isfile(os.path.join(vdir, r['filename']))
         videos.append(v)
     return jsonify(videos)
@@ -321,56 +321,57 @@ def api_videos_list():
 @media_bp.route('/api/videos/upload', methods=['POST'])
 def api_videos_upload():
     if 'file' not in request.files:
-        return jsonify({'error': 'No file'}), 400
+        return error_response('No file')
     file = request.files['file']
+    # Check file size (max 500MB per upload)
+    file.seek(0, 2)
+    size = file.tell()
+    file.seek(0)
+    if size > 500 * 1024 * 1024:
+        return error_response('File too large (max 500MB)', 413)
     filename = secure_filename(file.filename)
     if not filename:
-        return jsonify({'error': 'Invalid filename'}), 400
+        return error_response('Invalid filename')
     filepath = os.path.join(get_video_dir(), filename)
     file.save(filepath)
     filesize = os.path.getsize(filepath) if os.path.isfile(filepath) else 0
     category = request.form.get('category', 'general')
-    folder = request.form.get('folder', '')
+    folder = request.form.get('folder', '').replace('..', '').strip('/')
     title = request.form.get('title', filename.rsplit('.', 1)[0])
-    db = get_db()
-    cur = db.execute('INSERT INTO videos (title, filename, category, folder, filesize) VALUES (?, ?, ?, ?, ?)',
-                     (title, filename, category, folder, filesize))
-    db.commit()
-    db.close()
+    with db_session() as db:
+        cur = db.execute('INSERT INTO videos (title, filename, category, folder, filesize) VALUES (?, ?, ?, ?, ?)',
+                         (title, filename, category, folder, filesize))
+        db.commit()
     log_activity('video_upload', 'media', title)
     return jsonify({'status': 'uploaded', 'id': cur.lastrowid}), 201
 
 @media_bp.route('/api/videos/<int:vid>', methods=['DELETE'])
 def api_videos_delete(vid):
-    db = get_db()
-    row = db.execute('SELECT filename, title FROM videos WHERE id = ?', (vid,)).fetchone()
-    if row:
-        filepath = os.path.join(get_video_dir(), row['filename'])
-        if os.path.isfile(filepath):
-            try:
-                os.remove(filepath)
-            except Exception:
-                pass
-        db.execute('DELETE FROM videos WHERE id = ?', (vid,))
-        db.commit()
-        log_activity('video_delete', 'media', row['title'])
-    db.close()
-    return jsonify({'status': 'deleted'})
-
+    with db_session() as db:
+        row = db.execute('SELECT filename, title FROM videos WHERE id = ?', (vid,)).fetchone()
+        if row:
+            filepath = os.path.join(get_video_dir(), row['filename'])
+            if os.path.isfile(filepath):
+                try:
+                    os.remove(filepath)
+                except Exception:
+                    pass
+            db.execute('DELETE FROM videos WHERE id = ?', (vid,))
+            db.commit()
+            log_activity('video_delete', 'media', row['title'])
+        return jsonify({'status': 'deleted'})
 @media_bp.route('/api/videos/<int:vid>', methods=['PATCH'])
 def api_videos_update(vid):
     data = request.get_json() or {}
-    db = get_db()
-    if 'title' in data:
-        db.execute('UPDATE videos SET title = ? WHERE id = ?', (data['title'], vid))
-    if 'folder' in data:
-        db.execute('UPDATE videos SET folder = ? WHERE id = ?', (data['folder'], vid))
-    if 'category' in data:
-        db.execute('UPDATE videos SET category = ? WHERE id = ?', (data['category'], vid))
-    db.commit()
-    db.close()
-    return jsonify({'status': 'updated'})
-
+    with db_session() as db:
+        if 'title' in data:
+            db.execute('UPDATE videos SET title = ? WHERE id = ?', (data['title'], vid))
+        if 'folder' in data:
+            db.execute('UPDATE videos SET folder = ? WHERE id = ?', (data['folder'], vid))
+        if 'category' in data:
+            db.execute('UPDATE videos SET category = ? WHERE id = ?', (data['category'], vid))
+        db.commit()
+        return jsonify({'status': 'updated'})
 @media_bp.route('/api/videos/serve/<path:filename>')
 def api_videos_serve(filename):
     vdir = get_video_dir()
@@ -386,18 +387,15 @@ def api_videos_categories():
 
 @media_bp.route('/api/videos/folders')
 def api_videos_folders():
-    db = get_db()
-    rows = db.execute('SELECT DISTINCT folder FROM videos WHERE folder != "" ORDER BY folder').fetchall()
-    db.close()
-    return jsonify([r['folder'] for r in rows])
-
+    with db_session() as db:
+        rows = db.execute('SELECT DISTINCT folder FROM videos WHERE folder != "" ORDER BY folder').fetchall()
+        return jsonify([r['folder'] for r in rows])
 @media_bp.route('/api/videos/stats')
 def api_videos_stats():
-    db = get_db()
-    total = db.execute('SELECT COUNT(*) as c FROM videos').fetchone()['c']
-    total_size = db.execute('SELECT COALESCE(SUM(filesize),0) as s FROM videos').fetchone()['s']
-    by_folder = db.execute('SELECT folder, COUNT(*) as c FROM videos GROUP BY folder ORDER BY folder').fetchall()
-    db.close()
+    with db_session() as db:
+        total = db.execute('SELECT COUNT(*) as c FROM videos').fetchone()['c']
+        total_size = db.execute('SELECT COALESCE(SUM(filesize),0) as s FROM videos').fetchone()['s']
+        by_folder = db.execute('SELECT folder, COUNT(*) as c FROM videos GROUP BY folder ORDER BY folder').fetchall()
     return jsonify({
         'total': total,
         'total_size': total_size,
@@ -545,10 +543,8 @@ def api_audio_catalog():
 
 @media_bp.route('/api/channels/catalog')
 def api_channels_catalog():
-    # Filter out dead channels
-    db = get_db()
-    dead_row = db.execute("SELECT value FROM settings WHERE key = 'dead_channels'").fetchone()
-    db.close()
+    with db_session() as db:
+        dead_row = db.execute("SELECT value FROM settings WHERE key = 'dead_channels'").fetchone()
     dead_urls = set(json.loads(dead_row['value']) if dead_row and dead_row['value'] else [])
     live = [c for c in CHANNEL_CATALOG if c['url'] not in dead_urls]
     category = request.args.get('category', '')
@@ -559,9 +555,8 @@ def api_channels_catalog():
 @media_bp.route('/api/channels/categories')
 def api_channels_categories():
     from collections import Counter
-    db = get_db()
-    dead_row = db.execute("SELECT value FROM settings WHERE key = 'dead_channels'").fetchone()
-    db.close()
+    with db_session() as db:
+        dead_row = db.execute("SELECT value FROM settings WHERE key = 'dead_channels'").fetchone()
     dead_urls = set(json.loads(dead_row['value']) if dead_row and dead_row['value'] else [])
     live = [c for c in CHANNEL_CATALOG if c['url'] not in dead_urls]
     counts = Counter(c['category'] for c in live)
@@ -585,17 +580,16 @@ def api_channels_validate():
         )
         alive = result.returncode == 0 and bool(result.stdout.strip())
         if not alive:
-            db = get_db()
-            row = db.execute("SELECT value FROM settings WHERE key = 'dead_channels'").fetchone()
-            dead = json.loads(row['value']) if row and row['value'] else []
-            if url not in dead:
-                dead.append(url)
-                if row:
-                    db.execute("UPDATE settings SET value = ? WHERE key = 'dead_channels'", (json.dumps(dead),))
-                else:
-                    db.execute("INSERT INTO settings (key, value) VALUES ('dead_channels', ?)", (json.dumps(dead),))
-                db.commit()
-            db.close()
+            with db_session() as db:
+                row = db.execute("SELECT value FROM settings WHERE key = 'dead_channels'").fetchone()
+                dead = json.loads(row['value']) if row and row['value'] else []
+                if url not in dead:
+                    dead.append(url)
+                    if row:
+                        db.execute("UPDATE settings SET value = ? WHERE key = 'dead_channels'", (json.dumps(dead),))
+                    else:
+                        db.execute("INSERT INTO settings (key, value) VALUES ('dead_channels', ?)", (json.dumps(dead),))
+                    db.commit()
         return jsonify({'url': url, 'alive': alive})
     except subprocess.TimeoutExpired:
         return jsonify({'url': url, 'alive': True})
@@ -700,11 +694,14 @@ def api_youtube_channel_videos():
 # ─── Channel Subscriptions ──────────────────────────────────────
 @media_bp.route('/api/subscriptions')
 def api_subscriptions_list():
-    db = get_db()
-    rows = db.execute('SELECT * FROM subscriptions ORDER BY channel_name').fetchall()
-    db.close()
-    return jsonify([dict(r) for r in rows])
-
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM subscriptions ORDER BY channel_name LIMIT ? OFFSET ?', (limit, offset)).fetchall()
+        return jsonify([dict(r) for r in rows])
 @media_bp.route('/api/subscriptions', methods=['POST'])
 def api_subscriptions_add():
     data = request.get_json() or {}
@@ -713,24 +710,19 @@ def api_subscriptions_add():
     category = data.get('category', '')
     if not name or not url:
         return jsonify({'error': 'Name and URL required'}), 400
-    db = get_db()
-    try:
+    with db_session() as db:
+      try:
         db.execute('INSERT INTO subscriptions (channel_name, channel_url, category) VALUES (?, ?, ?)', (name, url, category))
         db.commit()
-    except Exception:
-        db.close()
+        return jsonify({'status': 'subscribed'})
+      except Exception:
         return jsonify({'error': 'Already subscribed'}), 409
-    db.close()
-    return jsonify({'status': 'subscribed'})
-
 @media_bp.route('/api/subscriptions/<int:sid>', methods=['DELETE'])
 def api_subscriptions_delete(sid):
-    db = get_db()
-    db.execute('DELETE FROM subscriptions WHERE id = ?', (sid,))
-    db.commit()
-    db.close()
-    return jsonify({'status': 'unsubscribed'})
-
+    with db_session() as db:
+        db.execute('DELETE FROM subscriptions WHERE id = ?', (sid,))
+        db.commit()
+        return jsonify({'status': 'unsubscribed'})
 # ─── Media Shared Endpoints (favorites, batch) ────────────────────
 
 @media_bp.route('/api/media/favorite', methods=['POST'])
@@ -743,8 +735,7 @@ def api_media_favorite():
     table = safe_table(table_map.get(media_type, ''), _MEDIA_TABLES) if table_map.get(media_type) else None
     if not table or not media_id:
         return jsonify({'error': 'Invalid request'}), 400
-    db = get_db()
-    try:
+    with db_session() as db:
         row = db.execute(f'SELECT favorited FROM {table} WHERE id = ?', (media_id,)).fetchone()
         new_val = 0
         if row:
@@ -752,9 +743,6 @@ def api_media_favorite():
             db.execute(f'UPDATE {table} SET favorited = ? WHERE id = ?', (new_val, media_id))
             db.commit()
         return jsonify({'status': 'toggled', 'favorited': new_val})
-    finally:
-        db.close()
-
 @media_bp.route('/api/media/batch-delete', methods=['POST'])
 def api_media_batch_delete():
     data = request.get_json() or {}
@@ -769,8 +757,7 @@ def api_media_batch_delete():
     get_dir = dir_map.get(media_type)
     if not table or not get_dir:
         return jsonify({'error': 'Invalid type'}), 400
-    db = get_db()
-    try:
+    with db_session() as db:
         media_dir = get_dir()
         deleted = 0
         for mid in ids:
@@ -786,9 +773,6 @@ def api_media_batch_delete():
                 deleted += 1
         db.commit()
         return jsonify({'status': 'deleted', 'count': deleted})
-    finally:
-        db.close()
-
 @media_bp.route('/api/media/batch-move', methods=['POST'])
 def api_media_batch_move():
     data = request.get_json() or {}
@@ -800,15 +784,11 @@ def api_media_batch_move():
     table = safe_table(table_map.get(media_type, ''), _MEDIA_TABLES) if table_map.get(media_type) else None
     if not table or not ids:
         return jsonify({'error': 'Invalid request'}), 400
-    db = get_db()
-    try:
+    with db_session() as db:
         for mid in ids:
             db.execute(f'UPDATE {table} SET folder = ? WHERE id = ?', (folder, mid))
         db.commit()
         return jsonify({'status': 'moved', 'count': len(ids)})
-    finally:
-        db.close()
-
 # ─── yt-dlp Integration ──────────────────────────────────────────
 
 @media_bp.route('/api/ytdlp/status')
@@ -876,15 +856,36 @@ def api_ytdlp_download():
     if not url:
         return jsonify({'error': 'No URL provided'}), 400
 
+    # Check for duplicate
+    with db_session() as db:
+        existing = db.execute('SELECT id FROM videos WHERE url = ?', (url,)).fetchone()
+        if existing:
+            return jsonify({'status': 'already_exists', 'id': existing['id']})
     with _ytdlp_dl_lock:
         _state._ytdlp_dl_counter += 1
         dl_id = str(_state._ytdlp_dl_counter)
 
+    # Clean up completed/failed entries if too many accumulate
+    if len(_ytdlp_downloads) > 100:
+        to_remove = [k for k, v in _ytdlp_downloads.items() if v.get('status') in ('complete', 'error')]
+        for k in to_remove:
+            del _ytdlp_downloads[k]
+
     _ytdlp_downloads[dl_id] = {'status': 'starting', 'percent': 0, 'title': '', 'speed': '', 'error': ''}
 
+    # Persist to download queue
+    with db_session() as db:
+        db.execute('INSERT INTO download_queue (url, category, folder, status) VALUES (?, ?, ?, ?)',
+                   (url, category, folder, 'queued'))
+        db.commit()
+        queue_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
     def do_download():
         vdir = get_video_dir()
         dl_url = url
+        # Update queue status to downloading
+        with db_session() as _db:
+            _db.execute('UPDATE download_queue SET status = "downloading" WHERE id = ?', (queue_id,))
+            _db.commit()
         try:
             # Get video info first
             _ytdlp_downloads[dl_id]['status'] = 'fetching info'
@@ -897,6 +898,9 @@ def api_ytdlp_download():
                 _ytdlp_downloads[dl_id] = {'status': 'error', 'percent': 0,
                     'title': 'Video unavailable', 'speed': '',
                     'error': 'This video is unavailable on YouTube. Try searching for it by name.'}
+                with db_session() as _db:
+                    _db.execute('UPDATE download_queue SET status = "failed", error = "Video unavailable", retries = retries + 1 WHERE id = ?', (queue_id,))
+                    _db.commit()
                 return
             parts = info_result.stdout.strip().split('|||')
             video_title = parts[0] if parts else dl_url
@@ -938,6 +942,9 @@ def api_ytdlp_download():
                 # Capture stderr for error details
                 err_detail = 'Download failed (exit code %d)' % proc.returncode
                 _ytdlp_downloads[dl_id] = {'status': 'error', 'percent': 0, 'title': video_title, 'speed': '', 'error': err_detail}
+                with db_session() as _db:
+                    _db.execute('UPDATE download_queue SET status = "failed", error = ?, retries = retries + 1 WHERE id = ?', (err_detail, queue_id))
+                    _db.commit()
                 return
 
             # Find the downloaded file
@@ -974,21 +981,31 @@ def api_ytdlp_download():
                     if f2.startswith(base_name) and f2.endswith('.srt'):
                         srt_file = f2
                         break
-                db = get_db()
-                db.execute('INSERT INTO videos (title, filename, category, folder, duration, url, filesize, thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                           (video_title, downloaded_file, category, folder, video_duration, dl_url, filesize, thumb_file))
-                db.commit()
-                db.close()
+                with db_session() as db:
+                    db.execute('INSERT INTO videos (title, filename, category, folder, duration, url, filesize, thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                               (video_title, downloaded_file, category, folder, video_duration, dl_url, filesize, thumb_file))
+                    db.commit()
                 log_activity('video_download', 'media', video_title)
                 _ytdlp_downloads[dl_id] = {'status': 'complete', 'percent': 100, 'title': video_title, 'speed': '', 'error': ''}
+                # Update queue status to completed
+                with db_session() as _db:
+                    _db.execute('UPDATE download_queue SET status = "completed", title = ? WHERE id = ?', (video_title, queue_id))
+                    _db.commit()
             else:
                 _ytdlp_downloads[dl_id] = {'status': 'error', 'percent': 0, 'title': video_title, 'speed': '', 'error': 'File not found after download'}
-
+                with db_session() as _db:
+                    _db.execute('UPDATE download_queue SET status = "failed", error = "File not found after download", retries = retries + 1 WHERE id = ?', (queue_id,))
+                    _db.commit()
         except subprocess.TimeoutExpired:
             _ytdlp_downloads[dl_id] = {'status': 'error', 'percent': 0, 'title': '', 'speed': '', 'error': 'Download timed out'}
+            with db_session() as _db:
+                _db.execute('UPDATE download_queue SET status = "failed", error = "Download timed out", retries = retries + 1 WHERE id = ?', (queue_id,))
+                _db.commit()
         except Exception as e:
             _ytdlp_downloads[dl_id] = {'status': 'error', 'percent': 0, 'title': '', 'speed': '', 'error': str(e)}
-
+            with db_session() as _db:
+                _db.execute('UPDATE download_queue SET status = "failed", error = ?, retries = retries + 1 WHERE id = ?', (str(e), queue_id))
+                _db.commit()
     threading.Thread(target=do_download, daemon=True).start()
     return jsonify({'status': 'started', 'id': dl_id})
 
@@ -1022,9 +1039,8 @@ def api_ytdlp_download_catalog():
         return jsonify({'error': 'No items selected'}), 400
 
     # Check which are already downloaded
-    db = get_db()
-    existing_urls = set(r['url'] for r in db.execute('SELECT url FROM videos WHERE url != ""').fetchall())
-    db.close()
+    with db_session() as db:
+        existing_urls = set(r['url'] for r in db.execute('SELECT url FROM videos WHERE url != ""').fetchall())
     to_download = [it for it in items if it.get('url') not in existing_urls]
     if not to_download:
         return jsonify({'status': 'all_downloaded', 'count': 0})
@@ -1111,11 +1127,10 @@ def api_ytdlp_download_catalog():
                                 if os.path.isfile(os.path.join(vdir, base + tx)):
                                     thumb = base + tx
                                     break
-                            db = get_db()
-                            db.execute('INSERT INTO videos (title, filename, category, folder, url, filesize, thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                                       (title, f, item.get('category', 'general'), item.get('folder', ''), url, filesize, thumb))
-                            db.commit()
-                            db.close()
+                            with db_session() as db:
+                                db.execute('INSERT INTO videos (title, filename, category, folder, url, filesize, thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                                           (title, f, item.get('category', 'general'), item.get('folder', ''), url, filesize, thumb))
+                                db.commit()
                             break
             except Exception as e:
                 log.error(f'Catalog download failed for {item.get("title")}: {e}')
@@ -1153,9 +1168,13 @@ def get_ffmpeg_path():
 
 @media_bp.route('/api/audio')
 def api_audio_list():
-    db = get_db()
-    rows = db.execute('SELECT * FROM audio ORDER BY folder, title').fetchall()
-    db.close()
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM audio ORDER BY folder, title LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     adir = get_audio_dir()
     return jsonify([{**dict(r), 'exists': os.path.isfile(os.path.join(adir, r['filename']))} for r in rows])
 
@@ -1164,6 +1183,12 @@ def api_audio_upload():
     if 'file' not in request.files:
         return jsonify({'error': 'No file'}), 400
     file = request.files['file']
+    # Check file size (max 500MB per upload)
+    file.seek(0, 2)
+    size = file.tell()
+    file.seek(0)
+    if size > 500 * 1024 * 1024:
+        return jsonify({'error': 'File too large (max 500MB)'}), 413
     filename = secure_filename(file.filename)
     if not filename:
         return jsonify({'error': 'Invalid filename'}), 400
@@ -1172,32 +1197,29 @@ def api_audio_upload():
     filesize = os.path.getsize(filepath) if os.path.isfile(filepath) else 0
     title = request.form.get('title', filename.rsplit('.', 1)[0])
     category = request.form.get('category', 'general')
-    folder = request.form.get('folder', '')
+    folder = request.form.get('folder', '').replace('..', '').strip('/')
     artist = request.form.get('artist', '')
-    db = get_db()
-    cur = db.execute('INSERT INTO audio (title, filename, category, folder, artist, filesize) VALUES (?, ?, ?, ?, ?, ?)',
-                     (title, filename, category, folder, artist, filesize))
-    db.commit()
-    db.close()
+    with db_session() as db:
+        cur = db.execute('INSERT INTO audio (title, filename, category, folder, artist, filesize) VALUES (?, ?, ?, ?, ?, ?)',
+                         (title, filename, category, folder, artist, filesize))
+        db.commit()
     log_activity('audio_upload', 'media', title)
     return jsonify({'status': 'uploaded', 'id': cur.lastrowid}), 201
 
 @media_bp.route('/api/audio/<int:aid>', methods=['DELETE'])
 def api_audio_delete(aid):
-    db = get_db()
-    row = db.execute('SELECT filename, title FROM audio WHERE id = ?', (aid,)).fetchone()
-    if row:
-        filepath = os.path.join(get_audio_dir(), row['filename'])
-        if os.path.isfile(filepath):
-            try:
-                os.remove(filepath)
-            except Exception:
-                pass
-        db.execute('DELETE FROM audio WHERE id = ?', (aid,))
-        db.commit()
-    db.close()
-    return jsonify({'status': 'deleted'})
-
+    with db_session() as db:
+        row = db.execute('SELECT filename, title FROM audio WHERE id = ?', (aid,)).fetchone()
+        if row:
+            filepath = os.path.join(get_audio_dir(), row['filename'])
+            if os.path.isfile(filepath):
+                try:
+                    os.remove(filepath)
+                except Exception:
+                    pass
+            db.execute('DELETE FROM audio WHERE id = ?', (aid,))
+            db.commit()
+        return jsonify({'status': 'deleted'})
 @media_bp.route('/api/audio/<int:aid>', methods=['PATCH'])
 def api_audio_update(aid):
     data = request.get_json() or {}
@@ -1206,12 +1228,10 @@ def api_audio_update(aid):
     if not filtered:
         return jsonify({'status': 'no changes'})
     sql, params = build_update('audio', filtered, ALLOWED_COLS, where_val=aid)
-    db = get_db()
-    db.execute(sql, params)
-    db.commit()
-    db.close()
-    return jsonify({'status': 'updated'})
-
+    with db_session() as db:
+        db.execute(sql, params)
+        db.commit()
+        return jsonify({'status': 'updated'})
 @media_bp.route('/api/audio/serve/<path:filename>')
 def api_audio_serve(filename):
     adir = get_audio_dir()
@@ -1223,21 +1243,18 @@ def api_audio_serve(filename):
 
 @media_bp.route('/api/audio/stats')
 def api_audio_stats():
-    db = get_db()
-    total = db.execute('SELECT COUNT(*) as c FROM audio').fetchone()['c']
-    total_size = db.execute('SELECT COALESCE(SUM(filesize),0) as s FROM audio').fetchone()['s']
-    by_folder = db.execute('SELECT folder, COUNT(*) as c FROM audio GROUP BY folder ORDER BY folder').fetchall()
-    db.close()
+    with db_session() as db:
+        total = db.execute('SELECT COUNT(*) as c FROM audio').fetchone()['c']
+        total_size = db.execute('SELECT COALESCE(SUM(filesize),0) as s FROM audio').fetchone()['s']
+        by_folder = db.execute('SELECT folder, COUNT(*) as c FROM audio GROUP BY folder ORDER BY folder').fetchall()
     return jsonify({'total': total, 'total_size': total_size, 'total_size_fmt': format_size(total_size),
                     'by_folder': [{'folder': r['folder'] or 'Unsorted', 'count': r['c']} for r in by_folder]})
 
 @media_bp.route('/api/audio/folders')
 def api_audio_folders():
-    db = get_db()
-    rows = db.execute('SELECT DISTINCT folder FROM audio WHERE folder != "" ORDER BY folder').fetchall()
-    db.close()
-    return jsonify([r['folder'] for r in rows])
-
+    with db_session() as db:
+        rows = db.execute('SELECT DISTINCT folder FROM audio WHERE folder != "" ORDER BY folder').fetchall()
+        return jsonify([r['folder'] for r in rows])
 @media_bp.route('/api/ytdlp/download-audio', methods=['POST'])
 def api_ytdlp_download_audio():
     """Download audio-only from a URL via yt-dlp."""
@@ -1306,11 +1323,10 @@ def api_ytdlp_download_audio():
                     fpath = os.path.join(adir, f)
                     if os.path.isfile(fpath) and time.time() - os.path.getmtime(fpath) < 120:
                         filesize = os.path.getsize(fpath)
-                        db = get_db()
-                        db.execute('INSERT INTO audio (title, filename, category, folder, artist, duration, url, filesize) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                                   (audio_title, f, category, folder, audio_artist, audio_duration, url, filesize))
-                        db.commit()
-                        db.close()
+                        with db_session() as db:
+                            db.execute('INSERT INTO audio (title, filename, category, folder, artist, duration, url, filesize) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                                       (audio_title, f, category, folder, audio_artist, audio_duration, url, filesize))
+                            db.commit()
                         _ytdlp_downloads[dl_id] = {'status': 'complete', 'percent': 100, 'title': audio_title, 'speed': '', 'error': ''}
                         return
             _ytdlp_downloads[dl_id] = {'status': 'error', 'percent': 0, 'title': audio_title, 'speed': '', 'error': f'Download failed (exit code {proc.returncode})'}
@@ -1730,9 +1746,13 @@ REFERENCE_CATALOG = [
 
 @media_bp.route('/api/books')
 def api_books_list():
-    db = get_db()
-    rows = db.execute('SELECT * FROM books ORDER BY folder, title').fetchall()
-    db.close()
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM books ORDER BY folder, title LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     bdir = get_books_dir()
     return jsonify([{**dict(r), 'exists': os.path.isfile(os.path.join(bdir, r['filename']))} for r in rows])
 
@@ -1741,6 +1761,12 @@ def api_books_upload():
     if 'file' not in request.files:
         return jsonify({'error': 'No file'}), 400
     file = request.files['file']
+    # Check file size (max 500MB per upload)
+    file.seek(0, 2)
+    size = file.tell()
+    file.seek(0)
+    if size > 500 * 1024 * 1024:
+        return jsonify({'error': 'File too large (max 500MB)'}), 413
     filename = secure_filename(file.filename)
     if not filename:
         return jsonify({'error': 'Invalid filename'}), 400
@@ -1752,31 +1778,28 @@ def api_books_upload():
     title = request.form.get('title', filename.rsplit('.', 1)[0])
     author = request.form.get('author', '')
     category = request.form.get('category', 'general')
-    folder = request.form.get('folder', '')
-    db = get_db()
-    cur = db.execute('INSERT INTO books (title, author, filename, format, category, folder, filesize) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                     (title, author, filename, fmt, category, folder, filesize))
-    db.commit()
-    db.close()
+    folder = request.form.get('folder', '').replace('..', '').strip('/')
+    with db_session() as db:
+        cur = db.execute('INSERT INTO books (title, author, filename, format, category, folder, filesize) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                         (title, author, filename, fmt, category, folder, filesize))
+        db.commit()
     log_activity('book_upload', 'media', title)
     return jsonify({'status': 'uploaded', 'id': cur.lastrowid}), 201
 
 @media_bp.route('/api/books/<int:bid>', methods=['DELETE'])
 def api_books_delete(bid):
-    db = get_db()
-    row = db.execute('SELECT filename FROM books WHERE id = ?', (bid,)).fetchone()
-    if row:
-        filepath = os.path.join(get_books_dir(), row['filename'])
-        if os.path.isfile(filepath):
-            try:
-                os.remove(filepath)
-            except Exception:
-                pass
-        db.execute('DELETE FROM books WHERE id = ?', (bid,))
-        db.commit()
-    db.close()
-    return jsonify({'status': 'deleted'})
-
+    with db_session() as db:
+        row = db.execute('SELECT filename FROM books WHERE id = ?', (bid,)).fetchone()
+        if row:
+            filepath = os.path.join(get_books_dir(), row['filename'])
+            if os.path.isfile(filepath):
+                try:
+                    os.remove(filepath)
+                except Exception:
+                    pass
+            db.execute('DELETE FROM books WHERE id = ?', (bid,))
+            db.commit()
+        return jsonify({'status': 'deleted'})
 @media_bp.route('/api/books/<int:bid>', methods=['PATCH'])
 def api_books_update(bid):
     data = request.get_json() or {}
@@ -1785,12 +1808,10 @@ def api_books_update(bid):
     if not filtered:
         return jsonify({'status': 'no changes'})
     sql, params = build_update('books', filtered, ALLOWED_COLS, where_val=bid)
-    db = get_db()
-    db.execute(sql, params)
-    db.commit()
-    db.close()
-    return jsonify({'status': 'updated'})
-
+    with db_session() as db:
+        db.execute(sql, params)
+        db.commit()
+        return jsonify({'status': 'updated'})
 @media_bp.route('/api/books/serve/<path:filename>')
 def api_books_serve(filename):
     bdir = get_books_dir()
@@ -1802,11 +1823,10 @@ def api_books_serve(filename):
 
 @media_bp.route('/api/books/stats')
 def api_books_stats():
-    db = get_db()
-    total = db.execute('SELECT COUNT(*) as c FROM books').fetchone()['c']
-    total_size = db.execute('SELECT COALESCE(SUM(filesize),0) as s FROM books').fetchone()['s']
-    by_folder = db.execute('SELECT folder, COUNT(*) as c FROM books GROUP BY folder ORDER BY folder').fetchall()
-    db.close()
+    with db_session() as db:
+        total = db.execute('SELECT COUNT(*) as c FROM books').fetchone()['c']
+        total_size = db.execute('SELECT COALESCE(SUM(filesize),0) as s FROM books').fetchone()['s']
+        by_folder = db.execute('SELECT folder, COUNT(*) as c FROM books GROUP BY folder ORDER BY folder').fetchall()
     return jsonify({'total': total, 'total_size': total_size, 'total_size_fmt': format_size(total_size),
                     'by_folder': [{'folder': r['folder'] or 'Unsorted', 'count': r['c']} for r in by_folder]})
 
@@ -1829,9 +1849,8 @@ def api_books_download_ref():
         return jsonify({'error': 'No URL'}), 400
 
     # Check if already downloaded
-    db = get_db()
-    existing = db.execute('SELECT id FROM books WHERE url = ?', (url,)).fetchone()
-    db.close()
+    with db_session() as db:
+        existing = db.execute('SELECT id FROM books WHERE url = ?', (url,)).fetchone()
     if existing:
         return jsonify({'status': 'already_downloaded'})
 
@@ -1858,11 +1877,10 @@ def api_books_download_ref():
                     if total > 0:
                         _ytdlp_downloads[dl_id]['percent'] = int(downloaded / total * 100)
             filesize = os.path.getsize(filepath)
-            db = get_db()
-            db.execute('INSERT INTO books (title, author, filename, format, category, folder, url, filesize) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                       (title, author, filename, fmt, category, folder, url, filesize))
-            db.commit()
-            db.close()
+            with db_session() as db:
+                db.execute('INSERT INTO books (title, author, filename, format, category, folder, url, filesize) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                           (title, author, filename, fmt, category, folder, url, filesize))
+                db.commit()
             _ytdlp_downloads[dl_id] = {'status': 'complete', 'percent': 100, 'title': title, 'speed': '', 'error': ''}
             log_activity('book_download', 'media', title)
         except Exception as e:
@@ -1875,9 +1893,8 @@ def api_books_download_ref():
 def api_books_download_all_refs():
     """Download all reference catalog books sequentially."""
 
-    db = get_db()
-    existing_urls = set(r['url'] for r in db.execute('SELECT url FROM books WHERE url != ""').fetchall())
-    db.close()
+    with db_session() as db:
+        existing_urls = set(r['url'] for r in db.execute('SELECT url FROM books WHERE url != ""').fetchall())
     to_download = [b for b in REFERENCE_CATALOG if b['url'] not in existing_urls]
     if not to_download:
         return jsonify({'status': 'all_downloaded', 'count': 0})
@@ -1917,12 +1934,11 @@ def api_books_download_all_refs():
                         if total > 0:
                             _ytdlp_downloads[queue_id]['percent'] = int(downloaded / total * 100)
                 filesize = os.path.getsize(filepath)
-                db = get_db()
-                db.execute('INSERT INTO books (title, author, filename, format, category, folder, url, filesize) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                           (item['title'], item.get('author',''), filename, item.get('format','pdf'),
-                            item.get('category','reference'), item.get('folder',''), item['url'], filesize))
-                db.commit()
-                db.close()
+                with db_session() as db:
+                    db.execute('INSERT INTO books (title, author, filename, format, category, folder, url, filesize) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                               (item['title'], item.get('author',''), filename, item.get('format','pdf'),
+                                item.get('category','reference'), item.get('folder',''), item['url'], filesize))
+                    db.commit()
             except Exception as e:
                 log.error(f'Reference download failed for {item["title"]}: {e}')
 
@@ -1935,14 +1951,13 @@ def api_books_download_all_refs():
 @media_bp.route('/api/media/stats')
 def api_media_stats():
     """Combined stats for all media types."""
-    db = get_db()
-    v_count = db.execute('SELECT COUNT(*) as c FROM videos').fetchone()['c']
-    v_size = db.execute('SELECT COALESCE(SUM(filesize),0) as s FROM videos').fetchone()['s']
-    a_count = db.execute('SELECT COUNT(*) as c FROM audio').fetchone()['c']
-    a_size = db.execute('SELECT COALESCE(SUM(filesize),0) as s FROM audio').fetchone()['s']
-    b_count = db.execute('SELECT COUNT(*) as c FROM books').fetchone()['c']
-    b_size = db.execute('SELECT COALESCE(SUM(filesize),0) as s FROM books').fetchone()['s']
-    db.close()
+    with db_session() as db:
+        v_count = db.execute('SELECT COUNT(*) as c FROM videos').fetchone()['c']
+        v_size = db.execute('SELECT COALESCE(SUM(filesize),0) as s FROM videos').fetchone()['s']
+        a_count = db.execute('SELECT COUNT(*) as c FROM audio').fetchone()['c']
+        a_size = db.execute('SELECT COALESCE(SUM(filesize),0) as s FROM audio').fetchone()['s']
+        b_count = db.execute('SELECT COUNT(*) as c FROM books').fetchone()['c']
+        b_size = db.execute('SELECT COALESCE(SUM(filesize),0) as s FROM books').fetchone()['s']
     total_size = v_size + a_size + b_size
     return jsonify({
         'videos': {'count': v_count, 'size': v_size, 'size_fmt': format_size(v_size)},
@@ -1958,21 +1973,16 @@ def api_media_progress_get(media_type, media_id):
     """Get playback progress for a media item."""
     if media_type not in ('video', 'audio', 'book'):
         return jsonify({'error': 'Invalid media type'}), 400
-    db = get_db()
-    try:
+    with db_session() as db:
         row = db.execute('SELECT * FROM media_progress WHERE media_type = ? AND media_id = ?', (media_type, media_id)).fetchone()
         return jsonify(dict(row) if row else {'position_sec': 0, 'duration_sec': 0, 'completed': 0})
-    finally:
-        db.close()
-
 @media_bp.route('/api/media/progress/<media_type>/<int:media_id>', methods=['PUT'])
 def api_media_progress_update(media_type, media_id):
     """Update playback progress for a media item."""
     if media_type not in ('video', 'audio', 'book'):
         return jsonify({'error': 'Invalid media type'}), 400
     d = request.json or {}
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute(
             '''INSERT INTO media_progress (media_type, media_id, position_sec, duration_sec, completed, updated_at)
                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -1983,14 +1993,10 @@ def api_media_progress_update(media_type, media_id):
         )
         db.commit()
         return jsonify({'status': 'ok'})
-    finally:
-        db.close()
-
 @media_bp.route('/api/media/resume')
 def api_media_resume_list():
     """Get all in-progress media for 'Continue Watching/Listening' section."""
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute(
             '''SELECT mp.*,
                CASE mp.media_type
@@ -2003,45 +2009,33 @@ def api_media_resume_list():
                ORDER BY mp.updated_at DESC LIMIT 20'''
         ).fetchall()
         return jsonify([dict(r) for r in rows])
-    finally:
-        db.close()
-
 @media_bp.route('/api/playlists', methods=['GET'])
 def api_playlists():
     """List all playlists."""
     media_type = request.args.get('type', '')
-    db = get_db()
-    try:
+    with db_session() as db:
         if media_type:
             rows = db.execute('SELECT * FROM playlists WHERE media_type = ? ORDER BY updated_at DESC', (media_type,)).fetchall()
         else:
             rows = db.execute('SELECT * FROM playlists ORDER BY updated_at DESC').fetchall()
         return jsonify([dict(r) for r in rows])
-    finally:
-        db.close()
-
 @media_bp.route('/api/playlists', methods=['POST'])
 def api_playlist_create():
     """Create a new playlist."""
     d = request.json or {}
     name = d.get('name', 'New Playlist').strip()
     media_type = d.get('media_type', 'audio')
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('INSERT INTO playlists (name, media_type, items) VALUES (?, ?, ?)',
                    (name, media_type, json.dumps(d.get('items', []))))
         db.commit()
         pid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
         return jsonify({'id': pid, 'status': 'ok'})
-    finally:
-        db.close()
-
 @media_bp.route('/api/playlists/<int:pid>', methods=['PUT'])
 def api_playlist_update(pid):
     """Update a playlist."""
     d = request.json or {}
-    db = get_db()
-    try:
+    with db_session() as db:
         update_data = {}
         for field in ('name', 'items'):
             if field in d:
@@ -2054,20 +2048,13 @@ def api_playlist_update(pid):
             db.execute(f'UPDATE playlists SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?', params)
             db.commit()
         return jsonify({'status': 'ok'})
-    finally:
-        db.close()
-
 @media_bp.route('/api/playlists/<int:pid>', methods=['DELETE'])
 def api_playlist_delete(pid):
     """Delete a playlist."""
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('DELETE FROM playlists WHERE id = ?', (pid,))
         db.commit()
         return jsonify({'status': 'ok'})
-    finally:
-        db.close()
-
 @media_bp.route('/api/media/<media_type>/<int:media_id>/metadata', methods=['PUT'])
 def api_media_metadata_update(media_type, media_id):
     """Update metadata for a media item."""
@@ -2086,14 +2073,10 @@ def api_media_metadata_update(media_type, media_id):
     if not filtered:
         return jsonify({'error': 'No valid fields'}), 400
     sql, params = build_update(table, filtered, allowed, where_val=media_id)
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute(sql, params)
         db.commit()
         return jsonify({'status': 'ok'})
-    finally:
-        db.close()
-
 # [EXTRACTED to blueprint] Medical vitals trend + expiring meds + reference
 
 
@@ -2168,3 +2151,26 @@ def api_torrent_dir():
     return jsonify({'path': d})
 
 # ─── Unified Download Queue ──────────────────────────────────────
+
+@media_bp.route('/api/downloads/queue', methods=['GET'])
+def api_download_queue():
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM download_queue ORDER BY created_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
+        return jsonify([dict(r) for r in rows])
+@media_bp.route('/api/downloads/retry/<int:did>', methods=['POST'])
+def api_download_retry(did):
+    with db_session() as db:
+        row = db.execute('SELECT * FROM download_queue WHERE id = ? AND status = "failed"', (did,)).fetchone()
+        if not row:
+            return jsonify({'error': 'Not found or not failed'}), 404
+        if row['retries'] >= 3:
+            return jsonify({'error': 'Max retries exceeded'}), 400
+        db.execute('UPDATE download_queue SET status = "queued", error = NULL WHERE id = ?', (did,))
+        db.commit()
+        # Re-trigger download
+        return jsonify({'requeued': True})

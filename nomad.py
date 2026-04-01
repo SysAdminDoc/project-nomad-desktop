@@ -12,6 +12,8 @@ import time
 import logging
 from logging.handlers import RotatingFileHandler
 
+from log_utils import SensitiveDataFilter, install_scrubbing_filter
+
 LOG_FORMAT = '%(asctime)s [%(name)s] %(levelname)s: %(message)s'
 MAX_LOG_BYTES = 5 * 1024 * 1024  # 5 MB per file
 LOG_BACKUP_COUNT = 3
@@ -21,6 +23,7 @@ logging.basicConfig(
     format=LOG_FORMAT,
     handlers=[logging.StreamHandler()],
 )
+install_scrubbing_filter()
 log = logging.getLogger('nomad')
 
 
@@ -255,6 +258,7 @@ def main():
         get_log_path(), maxBytes=MAX_LOG_BYTES, backupCount=LOG_BACKUP_COUNT, encoding='utf-8'
     )
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    file_handler.addFilter(SensitiveDataFilter('file_scrub'))
     logging.getLogger().addHandler(file_handler)
 
     init_db()

@@ -13,13 +13,13 @@
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) .main-content {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface2) 12%, transparent), transparent 14%),
-    transparent !important;
+    transparent;
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) .sidebar {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface3) 28%, transparent), transparent 20%),
-    var(--sidebar-bg, var(--surface-solid)) !important;
+    var(--sidebar-bg, var(--surface-solid));
   border-right-color: color-mix(in srgb, var(--border-hover) 36%, var(--border));
   box-shadow:
     inset -1px 0 0 color-mix(in srgb, white 4%, transparent),
@@ -141,15 +141,15 @@
 ) {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface3) 12%, transparent), transparent 100%),
-    color-mix(in srgb, var(--surface2) 96%, transparent) !important;
-  border-color: color-mix(in srgb, var(--border-hover) 30%, var(--border)) !important;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent) !important;
-  color: var(--text) !important;
+    color-mix(in srgb, var(--surface2) 96%, transparent);
+  border-color: color-mix(in srgb, var(--border-hover) 30%, var(--border));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
+  color: var(--text);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) .customize-panel {
-  border-left-color: color-mix(in srgb, var(--border-hover) 42%, var(--border)) !important;
-  box-shadow: -20px 0 48px rgba(0,0,0,0.42) !important;
+  border-left-color: color-mix(in srgb, var(--border-hover) 42%, var(--border));
+  box-shadow: -20px 0 48px rgba(0,0,0,0.42);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) :is(
@@ -169,8 +169,8 @@
 ) {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface3) 16%, transparent), transparent 100%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface2) 96%, transparent), color-mix(in srgb, var(--surface-solid) 84%, transparent)) !important;
-  border-color: color-mix(in srgb, var(--border-hover) 32%, var(--border)) !important;
+    linear-gradient(180deg, color-mix(in srgb, var(--surface2) 96%, transparent), color-mix(in srgb, var(--surface-solid) 84%, transparent));
+  border-color: color-mix(in srgb, var(--border-hover) 32%, var(--border));
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) :is(
@@ -195,9 +195,9 @@
 ) {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface3) 12%, transparent), transparent 100%),
-    color-mix(in srgb, var(--surface2) 96%, transparent) !important;
-  border-color: color-mix(in srgb, var(--border-hover) 32%, var(--border)) !important;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent) !important;
+    color-mix(in srgb, var(--surface2) 96%, transparent);
+  border-color: color-mix(in srgb, var(--border-hover) 32%, var(--border));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) :is(
@@ -218,10 +218,10 @@
   .benchmark-tag-input,
   .mesh-compose-input
 ) {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--surface3) 10%, transparent), transparent), var(--surface-field) !important;
-  border-color: color-mix(in srgb, var(--border-hover) 34%, var(--border)) !important;
-  color: var(--text) !important;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent) !important;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface3) 10%, transparent), transparent), var(--surface-field);
+  border-color: color-mix(in srgb, var(--border-hover) 34%, var(--border));
+  color: var(--text);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) :is(
@@ -229,7 +229,7 @@
   select,
   textarea
 )::placeholder {
-  color: color-mix(in srgb, var(--text-muted) 92%, transparent) !important;
+  color: color-mix(in srgb, var(--text-muted) 92%, transparent);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) option {
@@ -244,7 +244,7 @@
   .media-folder-item:hover,
   .map-geocode-item:hover
 ) {
-  background: color-mix(in srgb, var(--accent-dim) 82%, var(--surface2)) !important;
+  background: color-mix(in srgb, var(--accent-dim) 82%, var(--surface2));
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) :is(
@@ -254,9 +254,9 @@
   .media-folder-item.active
 ) {
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--accent-dim) 92%, transparent), color-mix(in srgb, var(--surface2) 96%, transparent)) !important;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent) !important;
-  color: var(--text) !important;
+    linear-gradient(135deg, color-mix(in srgb, var(--accent-dim) 92%, transparent), color-mix(in srgb, var(--surface2) 96%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--text);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) :is(
@@ -266,7 +266,7 @@
 ) {
   background:
     radial-gradient(circle at top, color-mix(in srgb, var(--surface3) 12%, transparent), transparent 44%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface2) 30%, transparent), transparent 18%) !important;
+    linear-gradient(180deg, color-mix(in srgb, var(--surface2) 30%, transparent), transparent 18%);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) :is(
@@ -295,43 +295,43 @@
 ) {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface3) 12%, transparent), transparent 100%),
-    color-mix(in srgb, var(--surface2) 96%, transparent) !important;
-  border-color: color-mix(in srgb, var(--border-hover) 30%, var(--border)) !important;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent) !important;
+    color-mix(in srgb, var(--surface2) 96%, transparent);
+  border-color: color-mix(in srgb, var(--border-hover) 30%, var(--border));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) .region-card:hover {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent-dim) 32%, transparent), transparent 100%),
-    color-mix(in srgb, var(--surface2) 96%, transparent) !important;
+    color-mix(in srgb, var(--surface2) 96%, transparent);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, white 4%, transparent),
-    0 14px 28px rgba(0,0,0,0.22) !important;
+    0 14px 28px rgba(0,0,0,0.22);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) .map-source-row:hover {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent-dim) 20%, transparent), transparent 100%),
-    color-mix(in srgb, var(--surface3) 82%, var(--surface2)) !important;
+    color-mix(in srgb, var(--surface3) 82%, var(--surface2));
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) .tools-card {
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, white 4%, transparent),
-    var(--shadow-panel) !important;
+    var(--shadow-panel);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) .compass-rose {
   background:
-    radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--surface3) 70%, var(--surface-solid)), color-mix(in srgb, var(--surface2) 92%, transparent) 60%, color-mix(in srgb, var(--surface-solid) 96%, black) 100%) !important;
-  border-color: color-mix(in srgb, var(--accent) 72%, var(--border)) !important;
+    radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--surface3) 70%, var(--surface-solid)), color-mix(in srgb, var(--surface2) 92%, transparent) 60%, color-mix(in srgb, var(--surface-solid) 96%, black) 100%);
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, white 6%, transparent),
-    0 18px 36px rgba(0,0,0,0.28) !important;
+    0 18px 36px rgba(0,0,0,0.28);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) :is(.compass-rose::before, .compass-rose::after) {
-  background: color-mix(in srgb, var(--border-hover) 52%, transparent) !important;
+  background: color-mix(in srgb, var(--border-hover) 52%, transparent);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) :is(
@@ -339,7 +339,7 @@
   .tools-launch-card-info
 ) {
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--accent-dim) 30%, transparent), color-mix(in srgb, var(--surface2) 94%, transparent)) !important;
+    linear-gradient(135deg, color-mix(in srgb, var(--accent-dim) 30%, transparent), color-mix(in srgb, var(--surface2) 94%, transparent));
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) :is(
@@ -367,7 +367,7 @@
   .prep-main-header h4,
   .home-modal-title
 ) {
-  color: var(--text) !important;
+  color: var(--text);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) :is(
@@ -399,7 +399,7 @@
   .status-strip,
   .section-header-label
 ) {
-  color: var(--text-dim) !important;
+  color: var(--text-dim);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) :is(
@@ -412,15 +412,15 @@
   [class*="prep-calc-copy"],
   [class*="prep-weather-note"]
 ) {
-  color: var(--text-dim) !important;
+  color: var(--text-dim);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) .compass-mark-north {
-  color: var(--red) !important;
+  color: var(--red);
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) .settings-workspace .setting-row {
-  border-bottom-color: color-mix(in srgb, var(--border-hover) 18%, var(--border)) !important;
+  border-bottom-color: color-mix(in srgb, var(--border-hover) 18%, var(--border));
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) .map-geocode-item {
@@ -429,8 +429,8 @@
 }
 
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) #status-strip {
-  background: color-mix(in srgb, var(--surface-panel) 96%, transparent) !important;
-  border-bottom-color: color-mix(in srgb, var(--border-hover) 26%, var(--border)) !important;
+  background: color-mix(in srgb, var(--surface-panel) 96%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--border-hover) 26%, var(--border));
   box-shadow: 0 12px 32px rgba(0,0,0,0.18);
 }
 
@@ -445,7 +445,7 @@
 :is([data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"]) .tour-card-shell {
   background:
     radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 12%, transparent), transparent 28%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-solid) 99%, transparent), color-mix(in srgb, var(--surface2) 92%, transparent)) !important;
-  border-color: color-mix(in srgb, var(--border-hover) 34%, var(--border)) !important;
-  box-shadow: var(--shadow-floating) !important;
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-solid) 99%, transparent), color-mix(in srgb, var(--surface2) 92%, transparent));
+  border-color: color-mix(in srgb, var(--border-hover) 34%, var(--border));
+  box-shadow: var(--shadow-floating);
 }

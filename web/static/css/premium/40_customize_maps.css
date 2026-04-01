@@ -1,14 +1,12 @@
 /* Customize and map workspace */
 .customize-panel {
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.7), rgba(249,244,235,0.96)) !important;
-  border-left: 1px solid rgba(255,255,255,0.34);
-  box-shadow: -20px 0 48px rgba(34,24,11,0.16);
+  background: var(--surface-overlay-soft) !important;
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-panel);
 }
 
 .customize-panel-header {
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.18)) !important;
+  background: var(--surface-overlay-soft) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
@@ -20,11 +18,10 @@
 .customize-section {
   margin-bottom: 18px;
   padding: 16px 16px 14px;
-  border: 1px solid rgba(63,45,23,0.08);
+  border: 1px solid var(--border);
   border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.46), rgba(255,250,242,0.82));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.52);
+  background: var(--surface-overlay-soft);
+  box-shadow: inset 0 1px 0 var(--panel-highlight);
 }
 
 .customize-section-title {
@@ -37,15 +34,14 @@
 
 .customize-theme-card {
   border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.5), rgba(255,248,240,0.9));
-  box-shadow: 0 10px 24px rgba(80,60,30,0.05);
+  background: var(--surface-overlay-soft);
+  box-shadow: var(--shadow-sm);
 }
 
 .customize-theme-card:hover,
 .customize-theme-card:focus-visible {
   transform: translateY(-1px);
-  box-shadow: 0 14px 28px rgba(80,60,30,0.1);
+  box-shadow: var(--shadow-panel);
 }
 
 .customize-zoom-row {
@@ -64,9 +60,8 @@
   cursor: pointer;
   padding: 12px 14px;
   border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.4), rgba(255,248,240,0.76));
-  box-shadow: inset 0 0 0 1px rgba(63,45,23,0.08);
+  background: var(--surface-overlay-soft);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .customize-close-btn {
@@ -94,13 +89,12 @@
 }
 
 .customize-sortable-item:hover {
-  background:
-    linear-gradient(180deg, rgba(201,116,32,0.12), rgba(255,248,240,0.8));
+  background: var(--accent-dim);
 }
 
 .customize-row {
   padding: 10px 2px;
-  border-bottom: 1px solid rgba(63,45,23,0.08);
+  border-bottom: 1px solid var(--border);
 }
 
 .customize-row:last-child {
@@ -119,10 +113,9 @@
 .map-viewer-shell,
 .map-surface,
 .map-surface-inline {
-  border: 1px solid rgba(255,255,255,0.34) !important;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.56), rgba(255,252,245,0.82)) !important;
-  box-shadow: 0 14px 40px rgba(80,60,30,0.08);
+  border: 1px solid var(--border) !important;
+  background: var(--surface-overlay-soft) !important;
+  box-shadow: var(--shadow-panel);
 }
 
 .map-command-deck {
@@ -182,8 +175,8 @@
   min-height: 26px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid rgba(63,45,23,0.08);
-  background: rgba(255,255,255,0.62);
+  border: 1px solid var(--border);
+  background: var(--surface-field);
   color: var(--text-dim);
   font-size: 10px;
   font-weight: 700;
@@ -208,14 +201,14 @@
 
 .map-controls .btn,
 .map-controls select {
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.46);
+  box-shadow: inset 0 1px 0 var(--panel-highlight);
 }
 
 .map-coords {
   padding: 7px 10px;
-  border: 1px solid rgba(63,45,23,0.08);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  background: rgba(255,255,255,0.62);
+  background: var(--surface-field);
 }
 
 .map-viewer-shell {
@@ -230,8 +223,8 @@
   z-index: 3;
   padding: 6px;
   border-radius: 16px;
-  background: rgba(255,250,242,0.84);
-  box-shadow: 0 12px 28px rgba(34,24,11,0.14);
+  background: var(--surface-field);
+  box-shadow: var(--shadow-panel);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
@@ -294,7 +287,7 @@
 }
 
 .map-geocode-item:hover {
-  background: rgba(201,116,32,0.08);
+  background: var(--accent-dim);
 }
 
 .map-geocode-type {
@@ -349,9 +342,9 @@
   display: grid;
   gap: 2px;
   padding: 8px 10px;
-  border: 1px solid rgba(63,45,23,0.08);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(255,252,245,0.76);
+  background: var(--surface-field);
 }
 
 .map-popup-fact-label {
@@ -463,12 +456,12 @@
 }
 
 .map-measure-pill {
-  background: rgba(201,116,32,0.1) !important;
-  border-color: rgba(201,116,32,0.2) !important;
+  background: var(--accent-dim) !important;
+  border-color: var(--accent-dim) !important;
 }
 
 .map-wrap {
-  box-shadow: inset 0 0 0 1px rgba(63,45,23,0.08);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .map-management-grid {
@@ -484,18 +477,16 @@
 }
 
 .region-card {
-  border: 1px solid rgba(63,45,23,0.08);
+  border: 1px solid var(--border);
   border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.46), rgba(255,248,240,0.86));
+  background: var(--surface-overlay-soft);
   transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
 .region-card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 12px 24px rgba(80,60,30,0.08);
-  background:
-    linear-gradient(180deg, rgba(201,116,32,0.12), rgba(255,248,240,0.86));
+  box-shadow: var(--shadow-panel);
+  background: var(--accent-dim);
 }
 
 .region-card-shell {
@@ -542,9 +533,8 @@
 }
 
 .map-download-status {
-  border: 1px solid rgba(63,45,23,0.08);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.4), rgba(255,248,240,0.8)) !important;
+  border: 1px solid var(--border);
+  background: var(--surface-overlay-soft) !important;
   margin-bottom: 10px;
   padding: 8px 12px;
   border-radius: 8px;

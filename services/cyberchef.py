@@ -131,10 +131,11 @@ def start():
 
 
 def stop():
-    global _httpd
+    global _httpd, _server_thread
     if _httpd:
         _httpd.shutdown()
         _httpd = None
+    _server_thread = None
 
     db = get_db()
     try:
@@ -145,4 +146,4 @@ def stop():
 
 
 def running():
-    return _httpd is not None and check_port(CYBERCHEF_PORT)
+    return _httpd is not None and _server_thread is not None and _server_thread.is_alive() and check_port(CYBERCHEF_PORT)

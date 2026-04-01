@@ -6,98 +6,89 @@ from flask import Blueprint, request, jsonify, Response
 from werkzeug.utils import secure_filename
 
 from config import get_data_dir
-from db import get_db, log_activity
+from db import db_session, log_activity
 
 notes_bp = Blueprint('notes', __name__)
 
 
 @notes_bp.route('/api/notes')
 def api_notes_list():
-    db = get_db()
     try:
-        notes = db.execute('SELECT * FROM notes ORDER BY pinned DESC, updated_at DESC LIMIT 1000').fetchall()
-    finally:
-        db.close()
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        notes = db.execute('SELECT * FROM notes ORDER BY pinned DESC, updated_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return jsonify([dict(n) for n in notes])
 
 
 @notes_bp.route('/api/notes', methods=['POST'])
 def api_notes_create():
     data = request.get_json() or {}
-    db = get_db()
-    try:
+    title = (data.get('title') or 'Untitled')[:200]
+    content = (data.get('content') or '')[:50000]
+    with db_session() as db:
         cur = db.execute('INSERT INTO notes (title, content) VALUES (?, ?)',
-                         (data.get('title', 'Untitled'), data.get('content', '')))
+                         (title, content))
         db.commit()
         note_id = cur.lastrowid
         note = db.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
         return jsonify(dict(note)), 201
-    finally:
-        db.close()
-
-
 @notes_bp.route('/api/notes/<int:note_id>', methods=['PUT'])
 def api_notes_update(note_id):
     data = request.get_json() or {}
-    db = get_db()
-    try:
+    with db_session() as db:
         current = db.execute('SELECT title, content FROM notes WHERE id = ?', (note_id,)).fetchone()
         if not current:
             return jsonify({'error': 'Not found'}), 404
-        title = data.get('title') if data.get('title') is not None else current['title']
-        content = data.get('content') if data.get('content') is not None else current['content']
+        # Save current version before updating
+        db.execute('INSERT INTO note_revisions (note_id, title, content) VALUES (?, ?, ?)',
+                   (note_id, current['title'], current['content']))
+        title = (data.get('title') if data.get('title') is not None else current['title'])[:200]
+        content = (data.get('content') if data.get('content') is not None else current['content'])[:50000]
         db.execute('UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
                    (title, content, note_id))
         db.commit()
         note = db.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
         return jsonify(dict(note))
-    finally:
-        db.close()
-
-
 @notes_bp.route('/api/notes/<int:note_id>', methods=['DELETE'])
 def api_notes_delete(note_id):
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('DELETE FROM note_tags WHERE note_id = ?', (note_id,))
         db.execute('DELETE FROM note_links WHERE source_note_id = ? OR target_note_id = ?', (note_id, note_id))
         db.execute('DELETE FROM notes WHERE id = ?', (note_id,))
         db.commit()
         return jsonify({'status': 'deleted'})
-    finally:
-        db.close()
-
-
 # --- Notes Pin/Tag ---
 
 @notes_bp.route('/api/notes/<int:note_id>/pin', methods=['POST'])
 def api_notes_pin(note_id):
     data = request.get_json() or {}
     pinned = 1 if data.get('pinned', True) else 0
-    db = get_db()
-    db.execute('UPDATE notes SET pinned = ? WHERE id = ?', (pinned, note_id))
-    db.commit()
-    db.close()
-    return jsonify({'status': 'ok', 'pinned': pinned})
-
-
+    with db_session() as db:
+        note = db.execute('SELECT id FROM notes WHERE id = ?', (note_id,)).fetchone()
+        if not note:
+            return jsonify({'error': 'Not found'}), 404
+        db.execute('UPDATE notes SET pinned = ? WHERE id = ?', (pinned, note_id))
+        db.commit()
+        return jsonify({'status': 'ok', 'pinned': pinned})
 @notes_bp.route('/api/notes/<int:note_id>/tags', methods=['PUT'])
 def api_notes_tags(note_id):
     data = request.get_json() or {}
     tags = data.get('tags', '')
-    db = get_db()
-    db.execute('UPDATE notes SET tags = ? WHERE id = ?', (tags, note_id))
-    db.commit()
-    db.close()
-    return jsonify({'status': 'ok'})
-
-
+    with db_session() as db:
+        note = db.execute('SELECT id FROM notes WHERE id = ?', (note_id,)).fetchone()
+        if not note:
+            return jsonify({'error': 'Not found'}), 404
+        db.execute('UPDATE notes SET tags = ? WHERE id = ?', (tags, note_id))
+        db.commit()
+        return jsonify({'status': 'ok'})
 @notes_bp.route('/api/notes/<int:note_id>/export')
 def api_notes_export(note_id):
     """Export a single note as a Markdown file."""
-    db = get_db()
-    note = db.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
-    db.close()
+    with db_session() as db:
+        note = db.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
     if not note:
         return jsonify({'error': 'Not found'}), 404
     title = note['title'] or 'Untitled'
@@ -114,17 +105,16 @@ def api_notes_export_all():
     try:
         import io
         import zipfile as zf
-        db = get_db()
-        notes = db.execute('SELECT * FROM notes ORDER BY updated_at DESC').fetchall()
-        db.close()
+        with db_session() as db:
+            notes = db.execute('SELECT * FROM notes ORDER BY updated_at DESC LIMIT 10000').fetchall()
         buf = io.BytesIO()
         with zf.ZipFile(buf, 'w', zf.ZIP_DEFLATED) as z:
             for n in notes:
                 title = n['title'] or 'Untitled'
                 content = n['content'] or ''
-                safe = secure_filename(title) or f'note-{n["id"]}'
+                safe = secure_filename(title) or 'note'
                 md = f"# {title}\n\n{content}"
-                z.writestr(f'{safe}.md', md)
+                z.writestr(f'{safe}-{n["id"]}.md', md)
         buf.seek(0)
         return Response(buf.read(), mimetype='application/zip',
                        headers={'Content-Disposition': 'attachment; filename="nomad-notes.zip"'})
@@ -137,16 +127,11 @@ def api_notes_export_all():
 @notes_bp.route('/api/notes/tags')
 def api_note_tags():
     """List all unique tags with counts."""
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute(
             'SELECT tag, COUNT(*) as count FROM note_tags GROUP BY tag ORDER BY count DESC, tag'
         ).fetchall()
         return jsonify([{'tag': r['tag'], 'count': r['count']} for r in rows])
-    finally:
-        db.close()
-
-
 @notes_bp.route('/api/notes/<int:note_id>/tags', methods=['POST'])
 def api_note_add_tag(note_id):
     """Add a tag to a note."""
@@ -154,32 +139,21 @@ def api_note_add_tag(note_id):
     tag = d.get('tag', '').strip().lower()
     if not tag:
         return jsonify({'error': 'tag required'}), 400
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('INSERT OR IGNORE INTO note_tags (note_id, tag) VALUES (?, ?)', (note_id, tag))
         db.commit()
         return jsonify({'status': 'ok'})
-    finally:
-        db.close()
-
-
 @notes_bp.route('/api/notes/<int:note_id>/tags/<tag>', methods=['DELETE'])
 def api_note_remove_tag(note_id, tag):
     """Remove a tag from a note."""
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('DELETE FROM note_tags WHERE note_id = ? AND tag = ?', (note_id, tag))
         db.commit()
         return jsonify({'status': 'ok'})
-    finally:
-        db.close()
-
-
 @notes_bp.route('/api/notes/<int:note_id>/backlinks')
 def api_note_backlinks(note_id):
     """Get all notes that link to this note."""
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute(
             '''SELECT n.id, n.title, n.updated_at FROM notes n
                JOIN note_links l ON l.source_note_id = n.id
@@ -187,29 +161,21 @@ def api_note_backlinks(note_id):
             (note_id,)
         ).fetchall()
         return jsonify([dict(r) for r in rows])
-    finally:
-        db.close()
-
-
 @notes_bp.route('/api/notes/search-titles')
 def api_note_search_titles():
     """Search note titles for wiki-link autocomplete."""
     q = request.args.get('q', '').strip()
     if not q:
         return jsonify([])
-    db = get_db()
-    try:
-        rows = db.execute('SELECT id, title FROM notes WHERE title LIKE ? LIMIT 10', (f'%{q}%',)).fetchall()
+    q_escaped = q.replace('%', '\\%').replace('_', '\\_')
+    like_pattern = f'%{q_escaped}%'
+    with db_session() as db:
+        rows = db.execute("SELECT id, title FROM notes WHERE title LIKE ? ESCAPE '\\' LIMIT 10", (like_pattern,)).fetchall()
         return jsonify([{'id': r['id'], 'title': r['title']} for r in rows])
-    finally:
-        db.close()
-
-
 @notes_bp.route('/api/notes/templates')
 def api_note_templates():
     """List note templates."""
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute('SELECT * FROM note_templates ORDER BY name').fetchall()
         templates = [dict(r) for r in rows]
         # Add built-in templates if table is empty
@@ -222,24 +188,18 @@ def api_note_templates():
                 {'name': 'Meeting Notes', 'icon': '\ud83e\udd1d', 'content': '# Meeting Notes\n\n**Date:** \n**Attendees:** \n\n## Agenda\n\n\n## Discussion\n\n\n## Action Items\n- [ ] \n'},
                 {'name': 'Daily Journal', 'icon': '\ud83d\udcd3', 'content': '# Journal Entry\n\n**Weather:** \n**Mood:** \n\n## Today\n\n\n## Accomplishments\n\n\n## Tomorrow\n\n'},
             ]
-            for t in builtins:
-                db.execute('INSERT INTO note_templates (name, content, icon) VALUES (?, ?, ?)',
-                           (t['name'], t['content'], t['icon']))
+            db.executemany('INSERT INTO note_templates (name, content, icon) VALUES (?, ?, ?)',
+                          [(t['name'], t['content'], t['icon']) for t in builtins])
             db.commit()
             templates = builtins
         return jsonify(templates)
-    finally:
-        db.close()
-
-
 @notes_bp.route('/api/notes/journal', methods=['POST'])
 def api_note_create_journal():
     """Create a daily journal entry for today."""
     from datetime import datetime
     today = datetime.now().strftime('%Y-%m-%d')
     title = f'Journal \u2014 {today}'
-    db = get_db()
-    try:
+    with db_session() as db:
         # Check if today's journal already exists
         existing = db.execute("SELECT id FROM notes WHERE title = ? AND is_journal = 1", (title,)).fetchone()
         if existing:
@@ -251,17 +211,17 @@ def api_note_create_journal():
         db.execute('INSERT OR IGNORE INTO note_tags (note_id, tag) VALUES (?, ?)', (note_id, 'journal'))
         db.commit()
         return jsonify({'id': note_id, 'existed': False})
-    finally:
-        db.close()
-
-
 # --- Journal (standalone) ---
 
 @notes_bp.route('/api/journal')
 def api_journal_list():
-    db = get_db()
-    rows = db.execute('SELECT * FROM journal ORDER BY created_at DESC LIMIT 100').fetchall()
-    db.close()
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM journal ORDER BY created_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 
@@ -271,30 +231,28 @@ def api_journal_create():
     entry = data.get('entry', '').strip()
     if not entry:
         return jsonify({'error': 'Entry required'}), 400
-    db = get_db()
-    db.execute('INSERT INTO journal (entry, mood, tags) VALUES (?,?,?)',
-               (entry, data.get('mood', ''), data.get('tags', '')))
-    db.commit()
-    db.close()
+    with db_session() as db:
+        db.execute('INSERT INTO journal (entry, mood, tags) VALUES (?,?,?)',
+                   (entry, data.get('mood', ''), data.get('tags', '')))
+        db.commit()
     log_activity('journal_entry', detail=entry[:50])
     return jsonify({'status': 'logged'}), 201
 
 
 @notes_bp.route('/api/journal/<int:jid>', methods=['DELETE'])
 def api_journal_delete(jid):
-    db = get_db()
-    db.execute('DELETE FROM journal WHERE id = ?', (jid,))
-    db.commit()
-    db.close()
+    with db_session() as db:
+        db.execute('DELETE FROM journal WHERE id = ?', (jid,))
+        db.commit()
+    log_activity('journal_deleted', detail='Deleted journal entry')
     return jsonify({'status': 'deleted'})
 
 
 @notes_bp.route('/api/journal/export')
 def api_journal_export():
     """Export journal as a text file."""
-    db = get_db()
-    entries = [dict(r) for r in db.execute('SELECT * FROM journal ORDER BY created_at ASC').fetchall()]
-    db.close()
+    with db_session() as db:
+        entries = [dict(r) for r in db.execute('SELECT * FROM journal ORDER BY created_at ASC LIMIT 10000').fetchall()]
     md = '# NOMAD Daily Journal\n\n'
     for e in entries:
         md += f'## {e["created_at"]}\n'
@@ -349,3 +307,53 @@ def api_note_attachment_upload(note_id):
     safe = secure_filename(f.filename)
     f.save(os.path.join(att_dir, safe))
     return jsonify({'status': 'ok', 'filename': safe, 'path': f'/api/notes/{note_id}/attachments/{safe}'})
+
+
+# --- Note Version History ---
+
+@notes_bp.route('/api/notes/<int:nid>/history', methods=['GET'])
+def api_note_history(nid):
+    with db_session() as db:
+        rows = db.execute('SELECT * FROM note_revisions WHERE note_id = ? ORDER BY created_at DESC LIMIT 50', (nid,)).fetchall()
+        return jsonify([dict(r) for r in rows])
+@notes_bp.route('/api/notes/<int:nid>/restore/<int:rev_id>', methods=['POST'])
+def api_note_restore(nid, rev_id):
+    with db_session() as db:
+        rev = db.execute('SELECT * FROM note_revisions WHERE id = ? AND note_id = ?', (rev_id, nid)).fetchone()
+        if not rev:
+            return jsonify({'error': 'Revision not found'}), 404
+        # Save current as new revision first
+        old = db.execute('SELECT title, content FROM notes WHERE id = ?', (nid,)).fetchone()
+        if old:
+            db.execute('INSERT INTO note_revisions (note_id, title, content) VALUES (?, ?, ?)',
+                       (nid, old['title'], old['content']))
+        # Restore
+        db.execute('UPDATE notes SET title = ?, content = ?, updated_at = datetime("now") WHERE id = ?',
+                   (rev['title'], rev['content'], nid))
+        db.commit()
+        return jsonify({'restored': True})
+# --- Knowledge Graph ---
+
+@notes_bp.route('/api/notes/graph', methods=['GET'])
+def api_notes_graph():
+    with db_session() as db:
+        nodes = db.execute("""
+            SELECT n.id, n.title, n.tags,
+                (SELECT COUNT(*) FROM note_links WHERE source_note_id = n.id) +
+                (SELECT COUNT(*) FROM note_links WHERE target_note_id = n.id) as link_count
+            FROM notes n ORDER BY link_count DESC LIMIT 200
+        """).fetchall()
+        edges = db.execute('SELECT source_note_id as source, target_note_id as target FROM note_links LIMIT 500').fetchall()
+        return jsonify({
+            'nodes': [dict(n) for n in nodes],
+            'edges': [dict(e) for e in edges]
+        })
+@notes_bp.route('/api/notes/orphans', methods=['GET'])
+def api_notes_orphans():
+    with db_session() as db:
+        rows = db.execute("""
+            SELECT n.id, n.title, n.created_at FROM notes n
+            WHERE NOT EXISTS (SELECT 1 FROM note_links WHERE source_note_id = n.id OR target_note_id = n.id)
+            ORDER BY n.created_at DESC LIMIT 50
+        """).fetchall()
+        return jsonify([dict(r) for r in rows])

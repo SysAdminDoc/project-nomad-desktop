@@ -11,14 +11,17 @@ import logging
 
 from flask import Blueprint, request, jsonify, Response
 
-from db import get_db, get_db_path, log_activity
+from web.blueprints import error_response
+from db import get_db_path, db_session, log_activity
 from config import APP_DISPLAY_NAME, APP_EXECUTABLE_BASENAME, APP_STORAGE_DIRNAME, get_data_dir, set_data_dir
 from platform_utils import get_data_base
 from services import ollama, kiwix, cyberchef, kolibri, qdrant, stirling, flatnotes
 from services.manager import (
     get_download_progress, get_dir_size, format_size,
-    get_services_dir, ensure_dependencies,
+    get_services_dir, ensure_dependencies, is_running,
+    get_service_resources, SERVICE_HEALTH_URLS, is_healthy,
 )
+import config
 from web.state import _wizard_state, _auto_backup_timer, _update_state, broadcast_event
 import web.state as _state
 
@@ -49,29 +52,21 @@ SERVICE_MODULES = {
 
 # These module-level vars are accessed by system routes
 _benchmark_state = {'status': 'idle', 'progress': 0, 'stage': '', 'results': None}
-_cpu_percent = 0
 
-def _start_cpu_monitor():
-    global _cpu_percent
-    import psutil as _ps
-    while True:
-        try:
-            _cpu_percent = _ps.cpu_percent(interval=2)
-        except Exception:
-            pass
+# _cpu_percent is maintained by the CPU monitor thread started in web.app.create_app().
+# Import it from web.app so there is only one monitor thread.
 
-import threading as _thr
-_thr.Thread(target=_start_cpu_monitor, daemon=True).start()
+def _get_cpu_percent():
+    """Lazy accessor for app-level _cpu_percent to avoid circular imports."""
+    import web.app as _app
+    return _app._cpu_percent
 
 system_bp = Blueprint('system', __name__)
 
 @system_bp.route('/api/settings')
 def api_settings():
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute('SELECT key, value FROM settings').fetchall()
-    finally:
-        db.close()
     return jsonify({r['key']: r['value'] for r in rows})
 
 SETTINGS_WHITELIST = {
@@ -84,17 +79,12 @@ SETTINGS_WHITELIST = {
 @system_bp.route('/api/settings', methods=['PUT'])
 def api_settings_update():
     data = request.get_json() or {}
-    db = get_db()
-    try:
-        rejected = []
-        for key, value in data.items():
-            if key not in SETTINGS_WHITELIST:
-                rejected.append(key)
-                continue
-            db.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (key, str(value)))
+    with db_session() as db:
+        rejected = [key for key in data if key not in SETTINGS_WHITELIST]
+        allowed = [(key, str(value)) for key, value in data.items() if key in SETTINGS_WHITELIST]
+        if allowed:
+            db.executemany('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', allowed)
         db.commit()
-    finally:
-        db.close()
     if rejected:
         return jsonify({'status': 'partial', 'rejected_keys': rejected}), 400
     return jsonify({'status': 'saved'})
@@ -133,11 +123,8 @@ DASHBOARD_MODES = {
 
 @system_bp.route('/api/dashboard/mode')
 def api_dashboard_mode():
-    db = get_db()
-    try:
+    with db_session() as db:
         row = db.execute("SELECT value FROM settings WHERE key = 'dashboard_mode'").fetchone()
-    finally:
-        db.close()
     mode = row['value'] if row else 'command'
     if mode not in DASHBOARD_MODES:
         mode = 'command'
@@ -145,12 +132,9 @@ def api_dashboard_mode():
 
 @system_bp.route('/api/settings/wizard-complete', methods=['POST'])
 def api_wizard_complete():
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('first_run_complete', '1')")
         db.commit()
-    finally:
-        db.close()
     return jsonify({'status': 'ok'})
 
 # ─── Drives API ───────────────────────────────────────────────────
@@ -187,7 +171,7 @@ def api_set_data_dir():
     data = request.get_json() or {}
     path = data.get('path', '')
     if not path:
-        return jsonify({'error': 'No path provided'}), 400
+        return error_response('No path provided')
     try:
         full_path = os.path.join(path, APP_STORAGE_DIRNAME)
         os.makedirs(full_path, exist_ok=True)
@@ -199,7 +183,7 @@ def api_set_data_dir():
         set_data_dir(full_path)
         return jsonify({'status': 'ok', 'path': full_path})
     except Exception as e:
-        return jsonify({'error': f'Cannot write to {path}: {e}'}), 400
+        return error_response(f'Cannot write to {path}: {e}')
 
 
 # ─── Wizard Setup API ─────────────────────────────────────────────
@@ -322,13 +306,9 @@ def api_wizard_setup():
                 _wizard_state['completed'].append(model_name)
 
         # Mark wizard complete
-        db = get_db()
-        try:
+        with db_session() as db:
             db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('first_run_complete', '1')")
             db.commit()
-        finally:
-            db.close()
-
         _wizard_state.update({'status': 'complete', 'phase': 'done', 'overall_progress': 100,
                               'current_item': 'Setup complete!'})
 
@@ -374,7 +354,7 @@ def api_system():
         cpu_count = psutil.cpu_count()
         cpu_count_phys = psutil.cpu_count(logical=False)
         cpu_name = platform.processor()
-        cpu_percent = _cpu_percent  # non-blocking, from background monitor
+        cpu_percent = _get_cpu_percent()  # non-blocking, from background monitor
     except Exception:
         mem = swap = None
         cpu_count = os.cpu_count()
@@ -452,7 +432,7 @@ def api_system_live():
     import psutil
     try:
         return jsonify({
-            'cpu_percent': _cpu_percent,  # non-blocking, from background monitor
+            'cpu_percent': _get_cpu_percent(),  # non-blocking, from background monitor
             'ram_percent': psutil.virtual_memory().percent,
             'swap_percent': psutil.swap_memory().percent,
         })
@@ -463,8 +443,7 @@ def api_system_live():
 @system_bp.route('/api/content-summary')
 def api_content_summary():
     """Human-readable summary of offline knowledge capacity."""
-    db = get_db()
-    try:
+    with db_session() as db:
         row = db.execute('''SELECT
             (SELECT COUNT(*) FROM conversations) as convos,
             (SELECT COUNT(*) FROM notes) as notes,
@@ -472,9 +451,6 @@ def api_content_summary():
             (SELECT COALESCE(SUM(chunks_count), 0) FROM documents WHERE status = 'ready') as chunks
         ''').fetchone()
         convo_count, note_count, doc_count, doc_chunks = row['convos'], row['notes'], row['docs'], row['chunks']
-    finally:
-        db.close()
-
     # Disk usage
     data_dir = get_data_dir()
     total_bytes = get_dir_size(data_dir)
@@ -537,21 +513,19 @@ def api_network():
 def api_activity():
     limit = request.args.get('limit', 50, type=int)
     filter_val = request.args.get('filter', '')
-    db = get_db()
-    try:
+    with db_session() as db:
         if filter_val:
             rows = db.execute('SELECT * FROM activity_log WHERE event LIKE ? OR service LIKE ? ORDER BY created_at DESC LIMIT ?',
                               (f'%{filter_val}%', f'%{filter_val}%', limit)).fetchall()
         else:
             rows = db.execute('SELECT * FROM activity_log ORDER BY created_at DESC LIMIT ?', (limit,)).fetchall()
-    finally:
-        db.close()
     return jsonify([dict(r) for r in rows])
 
 # ─── GPU Info ──────────────────────────────────────────────────────
 
 @system_bp.route('/api/gpu')
 def api_gpu():
+    from platform_utils import detect_gpu as _detect_gpu
     return jsonify(_detect_gpu())
 
 # ─── Health ────────────────────────────────────────────────────────
@@ -748,7 +722,7 @@ def api_import_config():
     from db import get_db_path
 
     if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
+        return error_response('No file provided')
     file = request.files['file']
     try:
         with zf.ZipFile(io.BytesIO(file.read())) as z:
@@ -760,9 +734,9 @@ def api_import_config():
                 z.extract('nomad.db', os.path.dirname(db_path))
                 return jsonify({'status': 'ok', 'message': 'Config restored. Restart app to apply.'})
             else:
-                return jsonify({'error': 'Invalid backup file'}), 400
+                return error_response('Invalid backup file')
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 # ─── Database Restore from Auto-Backups ──────────────────────────
 
@@ -812,35 +786,34 @@ def api_backups_restore():
 @system_bp.route('/api/dashboard/overview')
 def api_dashboard_overview():
     """Quick overview for command dashboard."""
-    db = get_db()
-    from datetime import datetime, timedelta
+    with db_session() as db:
+        from datetime import datetime, timedelta
 
-    # Active timers
-    timer_count = db.execute('SELECT COUNT(*) as c FROM timers').fetchone()['c']
+        # Active timers
+        timer_count = db.execute('SELECT COUNT(*) as c FROM timers').fetchone()['c']
 
-    # Low stock
-    low_stock = db.execute('SELECT COUNT(*) as c FROM inventory WHERE quantity <= min_quantity AND min_quantity > 0').fetchone()['c']
+        # Low stock
+        low_stock = db.execute('SELECT COUNT(*) as c FROM inventory WHERE quantity <= min_quantity AND min_quantity > 0').fetchone()['c']
 
-    # Expiring soon (30 days)
-    soon = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
-    today = datetime.now().strftime('%Y-%m-%d')
-    expiring = db.execute("SELECT COUNT(*) as c FROM inventory WHERE expiration != '' AND expiration <= ? AND expiration >= ?", (soon, today)).fetchone()['c']
+        # Expiring soon (30 days)
+        soon = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
+        today = datetime.now().strftime('%Y-%m-%d')
+        expiring = db.execute("SELECT COUNT(*) as c FROM inventory WHERE expiration != '' AND expiration <= ? AND expiration >= ?", (soon, today)).fetchone()['c']
 
-    # Recent incidents (24h)
-    recent_incidents = db.execute("SELECT COUNT(*) as c FROM incidents WHERE created_at >= datetime('now', '-24 hours')").fetchone()['c']
+        # Recent incidents (24h)
+        recent_incidents = db.execute("SELECT COUNT(*) as c FROM incidents WHERE created_at >= datetime('now', '-24 hours')").fetchone()['c']
 
-    # Situation board
-    settings = {r['key']: r['value'] for r in db.execute('SELECT key, value FROM settings').fetchall()}
-    sit = {}
-    try:
-        sit = json.loads(settings.get('sit_board', '{}'))
-    except Exception:
-        pass
+        # Situation board
+        settings = {r['key']: r['value'] for r in db.execute('SELECT key, value FROM settings').fetchall()}
+        sit = {}
+        try:
+            sit = json.loads(settings.get('sit_board', '{}'))
+        except Exception:
+            pass
 
-    # Weather trend
-    pressure_rows = db.execute('SELECT pressure_hpa FROM weather_log WHERE pressure_hpa IS NOT NULL ORDER BY created_at DESC LIMIT 3').fetchall()
+        # Weather trend
+        pressure_rows = db.execute('SELECT pressure_hpa FROM weather_log WHERE pressure_hpa IS NOT NULL ORDER BY created_at DESC LIMIT 3').fetchall()
 
-    db.close()
 
     return jsonify({
         'timers': timer_count, 'low_stock': low_stock, 'expiring': expiring,
@@ -852,8 +825,7 @@ def api_dashboard_overview():
 def api_dashboard_live():
     """Single aggregated endpoint for the live situational dashboard.
     Returns data from all modules in one request — designed for auto-refresh."""
-    db = get_db()
-    try:
+    with db_session() as db:
         from datetime import datetime, timedelta
         now = datetime.now()
         today = now.strftime('%Y-%m-%d')
@@ -943,9 +915,6 @@ def api_dashboard_live():
             'situation': situation,
             'federation': {'peers_recent': peers_online},
         })
-    finally:
-        db.close()
-
 # ─── CSV Import API ────────────────────────────────────────────────
 
 
@@ -982,16 +951,15 @@ def api_export_all():
 @system_bp.route('/api/dashboard/critical')
 def api_dashboard_critical():
     """Return actual critical items for the command dashboard."""
-    db = get_db()
-    from datetime import datetime, timedelta
-    today = datetime.now().strftime('%Y-%m-%d')
-    soon = (datetime.now() + timedelta(days=14)).strftime('%Y-%m-%d')
+    with db_session() as db:
+        from datetime import datetime, timedelta
+        today = datetime.now().strftime('%Y-%m-%d')
+        soon = (datetime.now() + timedelta(days=14)).strftime('%Y-%m-%d')
 
-    low_items = db.execute('SELECT name, quantity, unit, category FROM inventory WHERE quantity <= min_quantity AND min_quantity > 0 LIMIT 5').fetchall()
-    expiring_items = db.execute("SELECT name, expiration, category FROM inventory WHERE expiration != '' AND expiration <= ? AND expiration >= ? ORDER BY expiration LIMIT 5", (soon, today)).fetchall()
-    critical_burn = db.execute("SELECT name, quantity, daily_usage, category FROM inventory WHERE daily_usage > 0 AND (quantity / daily_usage) < 7 ORDER BY (quantity / daily_usage) LIMIT 5").fetchall()
+        low_items = db.execute('SELECT name, quantity, unit, category FROM inventory WHERE quantity <= min_quantity AND min_quantity > 0 LIMIT 5').fetchall()
+        expiring_items = db.execute("SELECT name, expiration, category FROM inventory WHERE expiration != '' AND expiration <= ? AND expiration >= ? ORDER BY expiration LIMIT 5", (soon, today)).fetchall()
+        critical_burn = db.execute("SELECT name, quantity, daily_usage, category FROM inventory WHERE daily_usage > 0 AND (quantity / daily_usage) < 7 ORDER BY (quantity / daily_usage) LIMIT 5").fetchall()
 
-    db.close()
     return jsonify({
         'low_items': [dict(r) for r in low_items],
         'expiring_items': [dict(r) for r in expiring_items],
@@ -1003,8 +971,7 @@ def api_dashboard_critical():
 @system_bp.route('/api/analytics/inventory-trends')
 def api_analytics_inventory_trends():
     """Inventory add/remove trends over past 30 days + category breakdown."""
-    db = get_db()
-    try:
+    with db_session() as db:
         from datetime import datetime, timedelta
         # Daily inventory activity from activity_log
         daily = db.execute("""
@@ -1034,8 +1001,6 @@ def api_analytics_inventory_trends():
         today = datetime.now().strftime('%Y-%m-%d')
         soon30 = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
         expiring = db.execute("SELECT COUNT(*) as c FROM inventory WHERE expiration != '' AND expiration <= ? AND expiration >= ?", (soon30, today)).fetchone()['c']
-    finally:
-        db.close()
     return jsonify({
         'daily_counts': daily_counts,
         'categories': categories,
@@ -1047,8 +1012,7 @@ def api_analytics_inventory_trends():
 @system_bp.route('/api/analytics/consumption-rate')
 def api_analytics_consumption_rate():
     """Burn rate analysis — daily consumption per category with projections."""
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute("""
             SELECT category as name,
                    SUM(daily_usage) as daily_rate,
@@ -1072,8 +1036,6 @@ def api_analytics_consumption_rate():
             })
             if days_rem < overall_min:
                 overall_min = days_rem
-    finally:
-        db.close()
     return jsonify({
         'categories': categories,
         'overall_days': overall_min if overall_min != float('inf') else None,
@@ -1082,8 +1044,7 @@ def api_analytics_consumption_rate():
 @system_bp.route('/api/analytics/weather-history')
 def api_analytics_weather_history():
     """Weather readings for past 30 days."""
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute("""
             SELECT date(created_at) as dt,
                    AVG(temp_f) as temp,
@@ -1102,15 +1063,12 @@ def api_analytics_weather_history():
             'pressure': round(r['pressure'], 1) if r['pressure'] else None,
             'conditions': r['conditions'] or '',
         } for r in rows]
-    finally:
-        db.close()
     return jsonify({'readings': readings})
 
 @system_bp.route('/api/analytics/power-history')
 def api_analytics_power_history():
     """Power generation/consumption trends for past 30 days."""
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute("""
             SELECT date(created_at) as dt,
                    AVG(solar_wh_today) as generated_kwh,
@@ -1127,15 +1085,12 @@ def api_analytics_power_history():
             'consumed_kwh': round(r['consumed_kwh'] / 1000, 2) if r['consumed_kwh'] else 0,
             'battery_level': round(r['battery_level'], 1) if r['battery_level'] else None,
         } for r in rows]
-    finally:
-        db.close()
     return jsonify({'daily': daily})
 
 @system_bp.route('/api/analytics/medical-vitals')
 def api_analytics_medical_vitals():
     """Patient vitals trending over past 30 days."""
-    db = get_db()
-    try:
+    with db_session() as db:
         patients = db.execute('SELECT id, name FROM patients').fetchall()
         result = []
         for p in patients:
@@ -1157,8 +1112,6 @@ def api_analytics_medical_vitals():
                     'spo2': round(v['spo2']) if v['spo2'] else None,
                 } for v in vitals]
                 result.append({'name': p['name'], 'readings': readings})
-    finally:
-        db.close()
     return jsonify({'patients': result})
 
 # ─── Dashboard Widget Configuration ───────────────────────────────
@@ -1179,17 +1132,15 @@ DEFAULT_WIDGETS = [
 @system_bp.route('/api/dashboard/widgets', methods=['GET'])
 def api_dashboard_widgets_get():
     """Return the user's dashboard widget configuration."""
-    db = get_db()
-    try:
+    with db_session() as db:
+      try:
         row = db.execute("SELECT value FROM settings WHERE key = 'dashboard_widgets'").fetchone()
         if row:
             widgets = json.loads(row['value'])
         else:
             widgets = DEFAULT_WIDGETS
-    except Exception:
+      except Exception:
         widgets = DEFAULT_WIDGETS
-    finally:
-        db.close()
     return jsonify({'widgets': widgets})
 
 @system_bp.route('/api/dashboard/widgets', methods=['POST'])
@@ -1213,29 +1164,23 @@ def api_dashboard_widgets_save():
         if not isinstance(w.get('order'), int):
             return jsonify({'error': 'Each widget must have an integer order field'}), 400
 
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES ('dashboard_widgets', ?)",
             (json.dumps(widgets),)
         )
         db.commit()
-    finally:
-        db.close()
     return jsonify({'ok': True, 'widgets': widgets})
 
 @system_bp.route('/api/dashboard/widgets/reset', methods=['POST'])
 def api_dashboard_widgets_reset():
     """Reset dashboard widget configuration to defaults."""
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES ('dashboard_widgets', ?)",
             (json.dumps(DEFAULT_WIDGETS),)
         )
         db.commit()
-    finally:
-        db.close()
     return jsonify({'ok': True, 'widgets': DEFAULT_WIDGETS})
 
 @system_bp.route('/api/system/backup/create', methods=['POST'])
@@ -1276,11 +1221,8 @@ def api_backup_create():
             from cryptography.hazmat.primitives import hashes
             import hashlib, base64
             # Use PBKDF2 key derivation (must match restore path)
-            db_cfg = get_db()
-            try:
+            with db_session() as db_cfg:
                 cfg_row = db_cfg.execute("SELECT value FROM settings WHERE key = 'auto_backup_config'").fetchone()
-            finally:
-                db_cfg.close()
             salt = ''
             if cfg_row and cfg_row['value']:
                 cfg_data = json.loads(cfg_row['value'])
@@ -1370,11 +1312,8 @@ def api_backup_restore():
             from cryptography.hazmat.primitives import hashes
             import base64
             # Load stored salt from backup config
-            db2 = get_db()
-            try:
+            with db_session() as db2:
                 cfg_row = db2.execute("SELECT value FROM settings WHERE key = 'auto_backup_config'").fetchone()
-            finally:
-                db2.close()
             salt = ''
             if cfg_row and cfg_row['value']:
                 cfg_data = json.loads(cfg_row['value'])
@@ -1396,6 +1335,34 @@ def api_backup_restore():
 
     if not restore_data or restore_data[:16] != b'SQLite format 3\x00':
         return jsonify({'error': 'Invalid SQLite database file'}), 400
+
+    # Write to temp file first and validate
+    import tempfile
+    temp_fd, temp_path = tempfile.mkstemp(suffix='.db')
+    try:
+        with os.fdopen(temp_fd, 'wb') as f:
+            f.write(restore_data)
+        # Validate the backup
+        test_conn = _sqlite3.connect(temp_path)
+        try:
+            integrity = test_conn.execute('PRAGMA integrity_check').fetchone()[0]
+            if integrity != 'ok':
+                return jsonify({'error': f'Backup failed integrity check: {integrity}'}), 400
+            # Check critical tables exist
+            tables = [r[0] for r in test_conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+            required = ['settings', 'inventory', 'contacts', 'activity_log']
+            missing = [t for t in required if t not in tables]
+            if missing:
+                return jsonify({'error': f'Backup missing tables: {", ".join(missing)}'}), 400
+        finally:
+            test_conn.close()
+        os.unlink(temp_path)
+    except Exception as e:
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+        raise
 
     # Pre-restore safety backup
     pre_restore_path = db_path + '.pre-restore'
@@ -1459,13 +1426,10 @@ def api_backup_configure():
         derived = base64.urlsafe_b64encode(kdf.derive(data['password'].encode())).decode()
         config['_derived_key'] = derived
         config['_salt'] = salt
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('auto_backup_config', ?)",
                    (json.dumps(config),))
         db.commit()
-    finally:
-        db.close()
     from flask import current_app
     schedule_fn = current_app.config.get('_schedule_auto_backup')
     if schedule_fn:
@@ -1476,11 +1440,8 @@ def api_backup_configure():
 @system_bp.route('/api/system/backup/config')
 def api_backup_config_get():
     """Get current auto-backup configuration."""
-    db = get_db()
-    try:
+    with db_session() as db:
         row = db.execute("SELECT value FROM settings WHERE key = 'auto_backup_config'").fetchone()
-    finally:
-        db.close()
     if row and row['value']:
         config = json.loads(row['value'])
         config['has_password'] = bool(config.get('_derived_key'))
@@ -1516,9 +1477,8 @@ def api_system_shutdown():
 
 @system_bp.route('/api/auth/check')
 def api_auth_check():
-    db = get_db()
-    row = db.execute("SELECT value FROM settings WHERE key = 'auth_password'").fetchone()
-    db.close()
+    with db_session() as db:
+        row = db.execute("SELECT value FROM settings WHERE key = 'auth_password'").fetchone()
     remote = request.remote_addr or ''
     is_local = remote in ('127.0.0.1', '::1', 'localhost')
     return jsonify({'enabled': bool(row and row['value']), 'authenticated': is_local or not (row and row['value'])})
@@ -1529,10 +1489,9 @@ def api_auth_set_password():
     password = data.get('password', '').strip()
     import hashlib
     hashed = hashlib.sha256(password.encode()).hexdigest() if password else ''
-    db = get_db()
-    db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('auth_password', ?)", (hashed,))
-    db.commit()
-    db.close()
+    with db_session() as db:
+        db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('auth_password', ?)", (hashed,))
+        db.commit()
     return jsonify({'status': 'saved', 'enabled': bool(password)})
 
 # ─── PDF Viewer API ───────────────────────────────────────────────
@@ -1540,8 +1499,7 @@ def api_auth_set_password():
 @system_bp.route('/api/system/health')
 def api_system_health():
     """Comprehensive health check — DB status, data coverage, service availability."""
-    db = get_db()
-    try:
+    with db_session() as db:
         health = {'status': 'operational', 'issues': [], 'coverage': {}}
 
         # Data coverage — what has the user set up?
@@ -1607,14 +1565,207 @@ def api_system_health():
         if health['issues']:
             health['status'] = 'attention_needed'
         return jsonify(health)
-    finally:
-        db.close()
+@system_bp.route('/api/system/health-score', methods=['GET'])
+def api_health_score():
+    """Compute a numeric health score (0-100) with breakdown."""
+    from db import db_session
+    with db_session() as db:
+        score = 0
+        breakdown = {}
+
+        # Data coverage (25 points)
+        tables_to_check = ['inventory', 'contacts', 'patients', 'waypoints', 'notes', 'checklists']
+        populated = 0
+        for t in tables_to_check:
+            try:
+                count = db.execute(f'SELECT COUNT(*) FROM {t}').fetchone()[0]
+                if count > 0: populated += 1
+            except Exception:
+                pass
+        coverage = round((populated / len(tables_to_check)) * 25)
+        breakdown['data_coverage'] = coverage
+        score += coverage
+
+        # Service availability (20 points)
+        services_check = ['ollama', 'kiwix']
+        running = sum(1 for s in services_check if is_running(s))
+        svc_score = round((running / max(1, len(services_check))) * 20)
+        breakdown['services'] = svc_score
+        score += svc_score
+
+        # Backup freshness (15 points)
+        try:
+            last_backup = db.execute("SELECT MAX(created_at) as latest FROM activity_log WHERE event = 'backup_created'").fetchone()
+            if last_backup and last_backup['latest']:
+                from datetime import datetime, timedelta
+                backup_dt = datetime.fromisoformat(last_backup['latest'])
+                hours_ago = (datetime.now() - backup_dt).total_seconds() / 3600
+                if hours_ago < 24: breakdown['backup'] = 15
+                elif hours_ago < 48: breakdown['backup'] = 10
+                elif hours_ago < 168: breakdown['backup'] = 5
+                else: breakdown['backup'] = 0
+            else:
+                breakdown['backup'] = 0
+        except Exception:
+            breakdown['backup'] = 0
+        score += breakdown['backup']
+
+        # Disk space (10 points)
+        try:
+            usage = shutil.disk_usage(config.get_data_dir())
+            free_pct = (usage.free / usage.total) * 100
+            if free_pct > 20: breakdown['disk'] = 10
+            elif free_pct > 10: breakdown['disk'] = 7
+            elif free_pct > 5: breakdown['disk'] = 3
+            else: breakdown['disk'] = 0
+        except Exception:
+            breakdown['disk'] = 5
+        score += breakdown['disk']
+
+        # No expired items (10 points)
+        try:
+            expired = db.execute("SELECT COUNT(*) FROM inventory WHERE expiration IS NOT NULL AND expiration < date('now')").fetchone()[0]
+            breakdown['no_expired'] = 10 if expired == 0 else max(0, 10 - expired)
+        except Exception:
+            breakdown['no_expired'] = 10
+        score += breakdown['no_expired']
+
+        # No overdue tasks (10 points)
+        try:
+            overdue = db.execute("SELECT COUNT(*) FROM scheduled_tasks WHERE next_due IS NOT NULL AND next_due < datetime('now') AND status != 'completed'").fetchone()[0]
+            breakdown['no_overdue'] = 10 if overdue == 0 else max(0, 10 - overdue * 2)
+        except Exception:
+            breakdown['no_overdue'] = 10
+        score += breakdown['no_overdue']
+
+        # DB integrity (10 points)
+        try:
+            integrity = db.execute('PRAGMA integrity_check').fetchone()[0]
+            breakdown['db_integrity'] = 10 if integrity == 'ok' else 0
+        except Exception:
+            breakdown['db_integrity'] = 0
+        score += breakdown['db_integrity']
+
+        status = 'healthy' if score >= 75 else 'attention' if score >= 50 else 'degraded'
+        return jsonify({'score': min(100, score), 'status': status, 'breakdown': breakdown})
+
+
+@system_bp.route('/api/system/self-test', methods=['GET'])
+def api_self_test():
+    """Run a comprehensive self-test of all system components."""
+    import sqlite3 as _sqlite3
+    results = {'status': 'ok', 'checks': []}
+
+    # Check all services via SERVICE_HEALTH_URLS
+    for svc_id, (url, expected_status) in SERVICE_HEALTH_URLS.items():
+        check = {'name': f'service_{svc_id}', 'status': 'skip', 'detail': 'Not running'}
+        if is_running(svc_id):
+            if is_healthy(svc_id):
+                check['status'] = 'pass'
+                check['detail'] = f'{svc_id} responding on {url}'
+            else:
+                check['status'] = 'fail'
+                check['detail'] = f'{svc_id} running but not responding'
+                results['status'] = 'degraded'
+        results['checks'].append(check)
+
+    # Also check services without health URLs
+    for svc_id in SERVICE_MODULES:
+        if svc_id not in SERVICE_HEALTH_URLS:
+            check = {'name': f'service_{svc_id}', 'status': 'skip', 'detail': 'Not running'}
+            if is_running(svc_id):
+                check['status'] = 'pass'
+                check['detail'] = f'{svc_id} process alive (no HTTP health endpoint)'
+            results['checks'].append(check)
+
+    # Backup freshness
+    with db_session() as db:
+        try:
+            last_backup = db.execute("SELECT MAX(created_at) as latest FROM activity_log WHERE event = 'backup_created'").fetchone()
+            if last_backup and last_backup['latest']:
+                from datetime import datetime, timedelta
+                backup_dt = datetime.fromisoformat(last_backup['latest'])
+                hours_ago = (datetime.now() - backup_dt).total_seconds() / 3600
+                if hours_ago > 48:
+                    results['checks'].append({
+                        'name': 'backup_freshness', 'status': 'warn',
+                        'detail': f'Last backup was {hours_ago:.0f} hours ago (>48h)',
+                    })
+                    if results['status'] == 'ok':
+                        results['status'] = 'attention'
+                else:
+                    results['checks'].append({
+                        'name': 'backup_freshness', 'status': 'pass',
+                        'detail': f'Last backup {hours_ago:.0f} hours ago',
+                    })
+            else:
+                results['checks'].append({
+                    'name': 'backup_freshness', 'status': 'warn',
+                    'detail': 'No backups found',
+                })
+                if results['status'] == 'ok':
+                    results['status'] = 'attention'
+        except Exception:
+            results['checks'].append({
+                'name': 'backup_freshness', 'status': 'skip',
+                'detail': 'Could not check backup status',
+            })
+
+        # DB integrity check
+        try:
+            integrity = db.execute('PRAGMA integrity_check').fetchone()[0]
+            if integrity == 'ok':
+                results['checks'].append({
+                    'name': 'db_integrity', 'status': 'pass',
+                    'detail': 'Database integrity check passed',
+                })
+            else:
+                results['checks'].append({
+                    'name': 'db_integrity', 'status': 'fail',
+                    'detail': f'Database integrity check failed: {integrity}',
+                })
+                results['status'] = 'degraded'
+        except Exception as e:
+            results['checks'].append({
+                'name': 'db_integrity', 'status': 'fail',
+                'detail': f'Could not run integrity check: {e}',
+            })
+            results['status'] = 'degraded'
+    # Check write permission on data directory
+    data_dir = config.get_data_dir()
+    try:
+        test_file = os.path.join(data_dir, '.write_test_selftest')
+        with open(test_file, 'w') as f:
+            f.write('test')
+        os.remove(test_file)
+        results['checks'].append({
+            'name': 'data_dir_writable', 'status': 'pass',
+            'detail': f'Data directory writable: {data_dir}',
+        })
+    except Exception as e:
+        results['checks'].append({
+            'name': 'data_dir_writable', 'status': 'fail',
+            'detail': f'Cannot write to data directory: {e}',
+        })
+        results['status'] = 'degraded'
+
+    return jsonify(results)
+
+
+@system_bp.route('/api/services/resources', methods=['GET'])
+def api_services_resources():
+    """Get CPU, memory, and thread usage for all running services."""
+    result = {}
+    for svc_id in ['ollama', 'kiwix', 'cyberchef', 'kolibri', 'qdrant', 'stirling', 'flatnotes']:
+        if is_running(svc_id):
+            result[svc_id] = get_service_resources(svc_id)
+    return jsonify(result)
+
 
 @system_bp.route('/api/system/getting-started')
 def api_getting_started():
     """Returns a guided setup checklist for new users."""
-    db = get_db()
-    try:
+    with db_session() as db:
         steps = [
             {'id': 'contacts', 'title': 'Add emergency contacts',
              'desc': 'Names, phone numbers, callsigns, roles, and skills for your group.',
@@ -1651,9 +1802,6 @@ def api_getting_started():
         ]
         completed = sum(1 for s in steps if s['done'])
         return jsonify({'steps': steps, 'completed': completed, 'total': len(steps), 'pct': round(completed / len(steps) * 100)})
-    finally:
-        db.close()
-
 # ─── NukeMap ──────────────────────────────────────────────────────
 
 # Resolve nukemap directory — try multiple paths for robustness
@@ -1770,14 +1918,12 @@ def api_i18n_translations(lang):
 
 @system_bp.route('/api/i18n/language', methods=['GET'])
 def api_i18n_get_language():
-    db = get_db()
-    try:
+    with db_session() as db:
+      try:
         row = db.execute("SELECT value FROM settings WHERE key = 'language'").fetchone()
         lang = row['value'] if row else 'en'
-    except Exception:
+      except Exception:
         lang = 'en'
-    finally:
-        db.close()
     return jsonify({'language': lang})
 
 @system_bp.route('/api/i18n/language', methods=['POST'])
@@ -1786,13 +1932,10 @@ def api_i18n_set_language():
     lang = data.get('language', '').strip()
     if lang not in SUPPORTED_LANGUAGES:
         return jsonify({'error': f'Unsupported language: {lang}'}), 400
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES ('language', ?)",
             (lang,)
         )
         db.commit()
-    finally:
-        db.close()
     return jsonify({'status': 'ok', 'language': lang})

@@ -185,13 +185,13 @@ function renderMediaItems() {
           <button type="button" class="media-inline-action media-card-favorite${v.favorited?' is-favorite':''}" data-media-action="toggle-favorite-item" data-media-id="${v.id}" data-stop-propagation aria-label="${v.favorited?'Remove favorite':'Add favorite'}">${v.favorited?'&#9733;':'&#9734;'}</button>
         </div>
         <div class="media-card-info"><div class="media-card-title">${escapeHtml(v.title)}</div>
-        <div class="media-card-meta"><span class="check-cat">${v.category}</span><span>${v.duration||''}</span><span>${v.filesize?formatBytes(v.filesize):''}</span></div></div>
+        <div class="media-card-meta"><span class="check-cat">${escapeHtml(v.category)}</span><span>${v.duration||''}</span><span>${v.filesize?formatBytes(v.filesize):''}</span></div></div>
       </div>`).join('') + '</div>';
   } else {
     el.innerHTML = filtered.map(v => `
       <div class="media-list-row${_mediaSelected.has(v.id)?' selected':''}" data-media-id="${v.id}" data-media-action="${_mediaSelectMode?'toggle-select-item':'play-video'}" data-media-filename="${escapeAttr(v.filename)}" data-media-title="${escapeAttr(v.title)}" role="button" tabindex="0">
         ${selPfx(v.id, v.title)}${v.thumbnail ? `<img src="/api/videos/serve/${encodeURIComponent(v.thumbnail)}" class="media-list-thumb" loading="lazy" onerror="this.outerHTML='<div class=media-list-play>&#9654;</div>'">` : '<div class="media-list-play">&#9654;</div>'}<div class="media-list-title">${escapeHtml(v.title)}</div>
-        <div class="media-list-meta">${v.folder?v.folder+' / ':''}${v.category}</div>
+        <div class="media-list-meta">${v.folder?escapeHtml(v.folder)+' / ':''}${escapeHtml(v.category)}</div>
         <div class="media-list-meta">${v.filesize?formatBytes(v.filesize):''}</div>
         <div class="media-list-actions">${favBtn(v.id,v.favorited)}
         <button type="button" class="media-inline-action" data-media-action="move-media-item" data-media-id="${v.id}" data-media-kind="videos" data-stop-propagation title="Move" aria-label="Move media item">&#9776;</button>
@@ -206,7 +206,7 @@ function renderAudio(el, items) {
     <div class="media-audio-row${_mediaSelected.has(a.id)?' selected':''}" data-media-id="${a.id}" data-media-action="${_mediaSelectMode?'toggle-select-item':'play-audio'}" data-media-filename="${escapeAttr(a.filename)}" data-media-title="${escapeAttr(a.title)}" role="button" tabindex="0">
       ${selPfx(a.id, a.title)}<div class="media-list-play">&#9835;</div>
       <div class="media-list-title">${escapeHtml(a.title)}</div>
-      <div class="media-list-meta">${a.artist?escapeHtml(a.artist)+' &middot; ':''}${a.category}</div>
+      <div class="media-list-meta">${a.artist?escapeHtml(a.artist)+' &middot; ':''}${escapeHtml(a.category)}</div>
       <div class="media-list-meta">${a.duration||''} ${a.filesize?formatBytes(a.filesize):''}</div>
       <div class="media-list-actions">
         <button type="button" class="media-inline-action${a.favorited?' is-favorite':''}" data-media-action="toggle-favorite-item" data-media-id="${a.id}" data-stop-propagation title="Favorite" aria-label="${a.favorited?'Remove favorite':'Add favorite'}">${a.favorited?'&#9733;':'&#9734;'}</button>
@@ -1371,7 +1371,7 @@ function updateActiveDownloadsPanel() {
           : s.paused
           ? `<button class="btn btn-sm btn-primary torrent-btn-compact" type="button" data-media-action="torrent-resume" data-torrent-hash="${escapeAttr(s.hash)}">Resume</button>`
           : `<button class="btn btn-sm torrent-btn-compact" type="button" data-media-action="torrent-pause" data-torrent-hash="${escapeAttr(s.hash)}">Pause</button>`}
-        <button class="btn btn-sm torrent-btn-compact torrent-btn-danger" type="button" data-media-action="torrent-remove" data-torrent-hash="${escapeAttr(s.hash)}" title="Remove from list">✕</button>
+        <button class="btn btn-sm torrent-btn-compact torrent-btn-danger" type="button" data-media-action="torrent-remove" data-torrent-hash="${escapeAttr(s.hash)}" title="Remove from list" aria-label="Remove torrent">✕</button>
       </div>
     </div>`;
   }).join('');
@@ -2175,7 +2175,7 @@ async function loadSubscriptions() {
           </div>
           <div class="media-browser-card-actions">
             <button class="btn btn-sm btn-primary" type="button" data-media-action="browse-channel-videos" data-channel-url="${escapeAttr(s.channel_url)}" data-channel-name="${escapeAttr(s.channel_name)}" title="Browse videos">Browse</button>
-            <button class="btn btn-sm btn-danger" type="button" data-media-action="unsubscribe-channel" data-subscription-id="${s.id}" data-channel-name="${escapeAttr(s.channel_name)}" title="Unsubscribe">x</button>
+            <button class="btn btn-sm btn-danger" type="button" data-media-action="unsubscribe-channel" data-subscription-id="${s.id}" data-channel-name="${escapeAttr(s.channel_name)}" title="Unsubscribe" aria-label="Unsubscribe">x</button>
           </div>
         </div>
       </div>`;
@@ -2190,7 +2190,7 @@ async function uploadMediaFiles() {
   if (!input.files.length) return;
   const cat = document.getElementById('media-cat-select').value;
   const uploadMap = {videos:'/api/videos/upload', audio:'/api/audio/upload', books:'/api/books/upload'};
-  for (const file of input.files) {
+  const uploads = Array.from(input.files).map(file => {
     const sizeMB = (file.size / 1024 / 1024).toFixed(1);
     const formData = new FormData();
     formData.append('file', file);
@@ -2198,12 +2198,11 @@ async function uploadMediaFiles() {
     formData.append('folder', _mediaFolder);
     formData.append('title', file.name.replace(/\.[^.]+$/, ''));
     toast(`Uploading ${file.name} (${sizeMB} MB)...`, 'info');
-    try {
-      const r = await fetch(uploadMap[_mediaSub], {method:'POST', body:formData});
-      if (r.ok) toast('Uploaded: ' + file.name, 'success');
-      else toast('Upload failed: ' + file.name, 'error');
-    } catch(e) { toast('Upload failed: ' + file.name, 'error'); }
-  }
+    return fetch(uploadMap[_mediaSub], {method:'POST', body:formData})
+      .then(r => { if (r.ok) toast('Uploaded: ' + file.name, 'success'); else toast('Upload failed: ' + file.name, 'error'); })
+      .catch(() => toast('Upload failed: ' + file.name, 'error'));
+  });
+  await Promise.all(uploads);
   input.value = '';
   loadMediaContent(); loadTotalMediaStats();
 }
@@ -2235,7 +2234,7 @@ async function loadActiveCatalog() {
       for (const item of items) {
         const downloaded = existing.has(item.url);
         html += `<div class="catalog-item"><div class="catalog-item-info"><div class="catalog-item-title">${escapeHtml(item.title)}</div>
-          <div class="catalog-item-meta">${escapeHtml(item.channel)} &middot; ${item.category}</div></div>
+          <div class="catalog-item-meta">${escapeHtml(item.channel)} &middot; ${escapeHtml(item.category)}</div></div>
           ${downloaded ? '<span class="media-status-chip media-status-chip-success">Downloaded</span>'
           : `<button class="btn btn-sm btn-primary" type="button" data-media-action="${isAudio ? 'download-catalog-audio' : 'download-catalog-item'}" data-media-url="${escapeAttr(item.url)}" data-media-folder="${escapeAttr(item.folder)}" data-media-category="${escapeAttr(item.category)}">Download</button>`}
         </div>`;
@@ -2262,7 +2261,7 @@ async function loadBookCatalog() {
       for (const item of items) {
         const downloaded = existing.has(item.url);
         html += `<div class="catalog-item"><div class="catalog-item-info"><div class="catalog-item-title">${escapeHtml(item.title)}</div>
-          <div class="catalog-item-meta">${escapeHtml(item.author)} &middot; ${item.format.toUpperCase()} &middot; ${item.category}</div>
+          <div class="catalog-item-meta">${escapeHtml(item.author)} &middot; ${item.format.toUpperCase()} &middot; ${escapeHtml(item.category)}</div>
           ${item.description ? `<div class="media-catalog-item-desc">${escapeHtml(item.description)}</div>` : ''}</div>
           ${downloaded ? '<span class="media-status-chip media-status-chip-success">Downloaded</span>'
           : `<button class="btn btn-sm btn-primary" type="button" data-media-action="download-ref-book" data-media-url="${escapeAttr(item.url)}" data-media-folder="${escapeAttr(item.folder)}" data-media-category="${escapeAttr(item.category)}" data-media-title="${escapeAttr(item.title)}" data-media-author="${escapeAttr(item.author || '')}" data-media-format="${escapeAttr(item.format)}" data-media-description="${escapeAttr(item.description || '')}">Download</button>`}
@@ -2323,15 +2322,14 @@ async function downloadAllAudioCatalog() {
   try {
     const catalog = await (await fetch('/api/audio/catalog')).json();
     // Download each one as audio
+    const toDownload = catalog.filter(item => !_mediaItems.find(a => a.url === item.url));
+    if (!toDownload.length) { toast('All audio catalog items already downloaded!', 'success'); return; }
+    const results = await Promise.all(toDownload.map(item =>
+      fetch('/api/ytdlp/download-audio', {method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({url:item.url, folder:item.folder, category:item.category})}).then(r => r.json())
+    ));
     let queued = 0;
-    for (const item of catalog) {
-      const existing = _mediaItems.find(a => a.url === item.url);
-      if (existing) continue;
-      const r = await fetch('/api/ytdlp/download-audio', {method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({url:item.url, folder:item.folder, category:item.category})});
-      const d = await r.json();
-      if (d.id) { queued++; pollMediaDownloads(d.id); }
-    }
+    results.forEach(d => { if (d.id) { queued++; pollMediaDownloads(d.id); } });
     if (queued === 0) toast('All audio catalog items already downloaded!', 'success');
     else toast(`Queued ${queued} audio downloads`, 'info');
   } catch(e) { toast('Failed', 'error'); }
@@ -2383,6 +2381,7 @@ function getToneClassFromPercent(prefix, value) {
   return `${prefix}-tone-risk`;
 }
 
+let _currentDrillType = '';
 function updateDrillLiveState() {
   const inputs = Array.from(document.querySelectorAll('#drill-steps input'));
   const total = inputs.length;
@@ -2475,7 +2474,6 @@ function completeDrill() {
   document.getElementById('drill-progress').hidden = true;
   loadDrillHistory();
 }
-let _currentDrillType = '';
 
 function cancelDrill() {
   if (_drillTimer) { clearInterval(_drillTimer); _drillTimer = null; }
@@ -2527,7 +2525,7 @@ function submitDrawnZone() {
   const fillColor = colorMap[colorKey] || '#f44336';
   const coords = [..._zonePoints, _zonePoints[0]];
   const geojson = {type:'Feature', geometry:{type:'Polygon', coordinates:[coords]}, properties:{name, color:fillColor}};
-  const zones = JSON.parse(localStorage.getItem('nomad-map-zones') || '[]');
+  let zones; try { zones = JSON.parse(localStorage.getItem('nomad-map-zones') || '[]'); } catch(e) { zones = []; }
   zones.push(geojson);
   localStorage.setItem('nomad-map-zones', JSON.stringify(zones));
   renderMapZones();
@@ -3506,10 +3504,10 @@ async function showShoppingList() {
     let body = '<div class="shopping-list-shell">';
     let lastCat = '';
     items.forEach(i => {
-      if (i.category !== lastCat) { body += `<div class="shopping-list-category">${i.category}</div>`; lastCat = i.category; }
+      if (i.category !== lastCat) { body += `<div class="shopping-list-category">${escapeHtml(i.category)}</div>`; lastCat = i.category; }
       body += `<div class="shopping-list-row">
         <span class="shopping-list-name">${escapeHtml(i.name)}</span>
-        <span class="shopping-list-meta">${i.need > 0 ? '+' + i.need : ''} ${i.unit} <span class="shopping-list-reason">(${i.reason})</span></span>
+        <span class="shopping-list-meta">${i.need > 0 ? '+' + i.need : ''} ${escapeHtml(i.unit)} <span class="shopping-list-reason">(${escapeHtml(i.reason)})</span></span>
       </div>`;
     });
     body += '</div>';
@@ -3730,7 +3728,7 @@ function createCustomChecklist() {
   // Show inline name input instead of prompt()
   const sidebar = document.querySelector('.prep-sidebar');
   let nameForm = document.getElementById('custom-cl-name-form');
-  if (nameForm) { document.getElementById('custom-cl-name-input').focus(); return; }
+  if (nameForm) { const inp = document.getElementById('custom-cl-name-input'); if (!inp) return; inp.focus(); return; }
   nameForm = document.createElement('div');
   nameForm.id = 'custom-cl-name-form';
   nameForm.style.cssText = 'padding:6px 8px;border-bottom:1px solid var(--border);display:flex;gap:4px;';
@@ -3738,6 +3736,7 @@ function createCustomChecklist() {
     <button type="button" class="btn btn-sm btn-primary" data-prep-action="submit-custom-checklist">Create</button>`;
   sidebar.querySelector('.prep-list').before(nameForm);
   const inp = document.getElementById('custom-cl-name-input');
+  if (!inp) return;
   inp.focus();
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') submitCustomChecklist(); if (e.key === 'Escape') nameForm.remove(); });
 }
@@ -3759,7 +3758,7 @@ function addChecklistItem() {
   if (!_currentChecklistId) return;
   const checklist = document.getElementById('prep-checklist');
   // Don't add multiple forms
-  if (document.getElementById('add-item-form')) { document.getElementById('add-item-text').focus(); return; }
+  if (document.getElementById('add-item-form')) { const inp = document.getElementById('add-item-text'); if (!inp) return; inp.focus(); return; }
   const form = document.createElement('div');
   form.id = 'add-item-form';
   form.style.cssText = 'padding:8px 16px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:center;';
@@ -3774,19 +3773,23 @@ function addChecklistItem() {
     <button type="button" class="btn btn-sm" data-shell-action="close-add-item-form">Done</button>`;
   checklist.parentElement.appendChild(form);
   const inp = document.getElementById('add-item-text');
+  if (!inp) return;
   inp.focus();
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') submitChecklistItem(); if (e.key === 'Escape') form.remove(); });
 }
 function submitChecklistItem() {
-  const text = document.getElementById('add-item-text').value.trim();
+  const textEl = document.getElementById('add-item-text');
+  const catEl = document.getElementById('add-item-cat');
+  if (!textEl || !catEl) return;
+  const text = textEl.value.trim();
   if (!text) return;
-  const cat = document.getElementById('add-item-cat').value;
+  const cat = catEl.value;
   _currentChecklistItems.push({text, checked: false, cat});
   renderChecklist();
   fetch(`/api/checklists/${_currentChecklistId}`, {method:'PUT', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({items: _currentChecklistItems})});
-  document.getElementById('add-item-text').value = '';
-  document.getElementById('add-item-text').focus();
+  textEl.value = '';
+  textEl.focus();
 }
 
 /* ─── Emergency Alert Sounds ─── */

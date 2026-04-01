@@ -250,7 +250,7 @@ function exportCurrentNote() {
 
 function openWikiLink(title) {
   // Switch to notes tab and open the linked note
-  document.querySelector('[data-tab="notes"]').click();
+  document.querySelector('[data-tab="notes"]')?.click();
   setTimeout(() => {
     const note = (typeof allNotes !== 'undefined' ? allNotes : []).find(n => n.title === title);
     if (note) {
@@ -646,7 +646,7 @@ function deleteModel(name, btn) {
 async function pullFromSettings(name) {
   await fetch('/api/ai/pull', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({model:name})});
   toast(`Pulling ${name}...`);
-  document.querySelector('[data-tab="ai-chat"]').click();
+  document.querySelector('[data-tab="ai-chat"]')?.click();
   pollPullProgress();
 }
 
@@ -1070,7 +1070,7 @@ function tourNext() {
 
 function tourSkip() {
   setShellVisibility(document.getElementById('tour-overlay'), false);
-  document.querySelector('[data-tab="services"]').click();
+  document.querySelector('[data-tab="services"]')?.click();
   fetch('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tour_complete:'1'})});
 }
 
@@ -1084,8 +1084,10 @@ function toggleModelPicker() {
 }
 
 async function loadModelPickerList() {
-  const rec = await (await fetch('/api/ai/recommended')).json();
-  const models = await (await fetch('/api/ai/models')).json();
+  const [rec, models] = await Promise.all([
+    fetch('/api/ai/recommended').then(r => r.json()),
+    fetch('/api/ai/models').then(r => r.json())
+  ]);
   const installed = new Set(models.map(m => m.name));
   document.getElementById('model-picker-list').innerHTML = rec.map((r, idx) => `
     <div class="model-picker-card">
