@@ -6,6 +6,18 @@
 <link rel="manifest" href="/static/manifest.json">
 <meta name="theme-color" content="#4f9cf7">
 <title>{{ page_title }} · NOMAD Field Desk v{{ version }}</title>
+<script>
+(() => {
+  try {
+    const savedTheme = localStorage.getItem('nomad-theme');
+    const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+    const theme = savedTheme || (prefersDark ? 'nightops' : 'nomad');
+    if (theme && theme !== 'nomad') {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+  } catch (_) {}
+})();
+</script>
 <link rel="stylesheet" href="/static/maplibre-gl.css">
 {% if bundle_css %}
 <link rel="stylesheet" href="/static/dist/{{ bundle_css }}">
@@ -14,7 +26,6 @@
 <link rel="stylesheet" href="/static/css/premium.css">
 {% endif %}
 <script src="/static/maplibre-gl.js"></script>
-<script src="/static/pmtiles.js"></script>
 <script src="/static/js/epub.min.js"></script>
 </head>
 <body data-workspace-page="{{ active_tab }}">

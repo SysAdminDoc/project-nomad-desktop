@@ -573,9 +573,9 @@
   display: none;
 }
 
-/* Workspace context bar + inspector hidden globally — declutter all pages */
-.workspace-context-bar,
-.workspace-inspector {
+/* Keep auxiliary panels collapsed only while they are explicitly hidden. */
+.workspace-context-bar[hidden],
+.workspace-inspector[hidden] {
   display: none !important;
 }
 .workspace-context-bar--definition {
