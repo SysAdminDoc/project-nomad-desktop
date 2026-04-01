@@ -16,7 +16,7 @@
 }
 
 .prep-reference-wire-swatch-black { color: #333; }
-.prep-reference-wire-swatch-white { color: #fff; background: #333; }
+.prep-reference-wire-swatch-white { color: var(--text-inverse); background: #333; }
 .prep-reference-wire-swatch-green { color: var(--green); }
 .prep-reference-wire-swatch-red { color: var(--red); }
 .prep-reference-wire-swatch-blue { color: var(--accent); }
@@ -630,11 +630,11 @@
 }
 
 .network-status-inline.is-online .network-status-dot {
-  color: #4caf50;
+  color: var(--green);
 }
 
 .network-status-inline.is-offline .network-status-dot {
-  color: #f44336;
+  color: var(--red);
 }
 
 .connection-lost-banner {
@@ -784,7 +784,7 @@
 
 .alert-dismiss-link {
   margin-right: 4px;
-  color: var(--blue);
+  color: var(--info, #4f86d8);
   font-size: 10px;
   cursor: pointer;
 }
@@ -803,4 +803,112 @@
   margin-top: 4px;
   color: var(--text-muted);
   font-size: 10px;
+}
+
+/* Skeleton loading */
+.skeleton-card { padding: 16px; border-radius: var(--radius-sm); background: var(--surface); margin-bottom: 8px; height: 160px; }
+.skeleton-line { height: 12px; border-radius: 6px; background: var(--surface3); margin-bottom: 8px; animation: skeleton-pulse 1.5s ease-in-out infinite; }
+@keyframes skeleton-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+/* ─── Touch Target Compliance ─────────────────────────────────────── */
+.btn,
+.tab,
+.nav-item,
+.sidebar-item,
+.guide-option,
+.guide-tile,
+.copilot-utility-btn,
+.prep-emergency-btn,
+.prep-utility-tab {
+    min-height: 44px;
+    min-width: 44px;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+/* ─── Container Queries for Responsive Typography ─────────────────── */
+.workspace-panel, .widget, .content-area {
+    container-type: inline-size;
+}
+
+@container (max-width: 400px) {
+    h1, .heading-xl { font-size: 1.25rem; }
+    h2, .heading-lg { font-size: 1.1rem; }
+    h3, .heading-md { font-size: 1rem; }
+    p, .body-text { font-size: 0.875rem; }
+    .stat-value { font-size: 1.5rem; }
+}
+
+@container (min-width: 401px) and (max-width: 800px) {
+    h1, .heading-xl { font-size: 1.5rem; }
+    h2, .heading-lg { font-size: 1.25rem; }
+    h3, .heading-md { font-size: 1.1rem; }
+}
+
+@container (min-width: 801px) {
+    h1, .heading-xl { font-size: 1.75rem; }
+    h2, .heading-lg { font-size: 1.5rem; }
+    h3, .heading-md { font-size: 1.25rem; }
+}
+
+/* ─── Aspect Ratio for Media Containers ───────────────────────────── */
+.video-container, .video-thumb, .media-thumb,
+.video-player-wrapper {
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+}
+
+.book-cover, .album-art, .photo-thumb {
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    object-fit: cover;
+}
+
+.map-container, .map-preview {
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+}
+
+img.avatar, .contact-avatar {
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+/* ─── Spacing Utilities ───────────────────────────────────────────── */
+.gap-xs { gap: var(--space-xs); }
+.gap-sm { gap: var(--space-sm); }
+.gap-md { gap: var(--space-md); }
+.gap-lg { gap: var(--space-lg); }
+.gap-xl { gap: var(--space-xl); }
+.p-xs { padding: var(--space-xs); }
+.p-sm { padding: var(--space-sm); }
+.p-md { padding: var(--space-md); }
+.p-lg { padding: var(--space-lg); }
+.p-xl { padding: var(--space-xl); }
+.m-xs { margin: var(--space-xs); }
+.m-sm { margin: var(--space-sm); }
+.m-md { margin: var(--space-md); }
+.m-lg { margin: var(--space-lg); }
+.m-xl { margin: var(--space-xl); }
+
+/* ─── color-mix() Fallback ────────────────────────────────────────── */
+@supports not (color: color-mix(in srgb, red, blue)) {
+    :root {
+        /* Fallback values for browsers without color-mix() support */
+        --accent-dim: #1a6b4a;
+        --surface-overlay-soft: rgba(255, 255, 255, 0.06);
+        --panel-highlight: rgba(255, 255, 255, 0.03);
+        --overlay-scrim-strong: rgba(0, 0, 0, 0.7);
+    }
+    [data-theme="nomad"] {
+        --accent-dim: #2e7d5a;
+        --surface-overlay-soft: rgba(245, 240, 232, 0.5);
+        --panel-highlight: rgba(245, 240, 232, 0.3);
+    }
 }

@@ -11,12 +11,13 @@ import time
 import platform
 import logging
 import shutil
+import threading
 from collections import deque
 from datetime import datetime, timedelta
 from html import escape as esc
 from flask import jsonify, request, Response
 
-from db import get_db, db_session, log_activity
+from db import db_session, log_activity
 from services import ollama
 from web.print_templates import render_print_document
 
@@ -25,6 +26,8 @@ log = logging.getLogger('nomad.web')
 # ─── Undo System (Phase 19) ─────────────────────────────────────────
 # Module-level deque: stores last 10 destructive operations with 30s TTL
 _undo_stack = deque(maxlen=10)
+_redo_stack = []
+_undo_lock = threading.Lock()
 
 _UNDO_VALID_TABLES = {'inventory', 'contacts', 'notes', 'waypoints', 'documents',
                        'videos', 'audio', 'books', 'checklists', 'weather_log',
@@ -39,20 +42,22 @@ _UNDO_VALID_TABLES = {'inventory', 'contacts', 'notes', 'waypoints', 'documents'
 
 def _push_undo(action_type, description, table, row_data):
     """Push an undoable action onto the stack."""
-    _undo_stack.append({
-        'action_type': action_type,
-        'description': description,
-        'table': table,
-        'row_data': row_data,
-        'timestamp': time.time(),
-    })
+    with _undo_lock:
+        _undo_stack.append({
+            'action_type': action_type,
+            'description': description,
+            'table': table,
+            'row_data': row_data,
+            'timestamp': time.time(),
+        })
 
 
 def _prune_expired():
     """Remove entries older than 30 seconds."""
     cutoff = time.time() - 30
-    while _undo_stack and _undo_stack[0]['timestamp'] < cutoff:
-        _undo_stack.popleft()
+    with _undo_lock:
+        while _undo_stack and _undo_stack[0]['timestamp'] < cutoff:
+            _undo_stack.popleft()
 
 
 def _is_expired_date(value):
@@ -83,8 +88,7 @@ def register_advanced_routes(app):
         data = request.get_json() or {}
         model = data.get('model', ollama.DEFAULT_MODEL)
 
-        db = get_db()
-        try:
+        with db_session() as db:
             ctx_parts = []
 
             # Recent activity log (last 24h)
@@ -193,9 +197,6 @@ def register_advanced_routes(app):
             if team_count:
                 ctx_parts.append(f'TEAM: {team_count} contacts registered')
 
-        finally:
-            db.close()
-
         context = '\n\n'.join(ctx_parts) if ctx_parts else 'No operational data recorded yet.'
 
         system_prompt = f"""You are a military-style intelligence officer generating a SITREP (Situation Report) for a preparedness and field-operations workspace called NOMAD Field Desk.
@@ -258,16 +259,13 @@ RULES:
         if m:
             qty = int(m.group(1))
             item_name = m.group(2).strip()
-            db = get_db()
-            try:
+            with db_session() as db:
                 db.execute(
                     'INSERT INTO inventory (name, quantity, category) VALUES (?, ?, ?)',
                     (item_name, qty, 'other'))
                 db.commit()
                 row_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
                 log_activity('inventory_added', 'ai', f'Added {qty} {item_name} via AI action')
-            finally:
-                db.close()
             return jsonify({
                 'status': 'executed',
                 'action': 'add_inventory',
@@ -279,16 +277,13 @@ RULES:
         m = re.match(r'log\s+incident\s+(.+)', action, re.IGNORECASE)
         if m:
             desc = m.group(1).strip()
-            db = get_db()
-            try:
+            with db_session() as db:
                 db.execute(
                     'INSERT INTO incidents (severity, category, description) VALUES (?, ?, ?)',
                     ('info', 'other', desc))
                 db.commit()
                 row_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
                 log_activity('incident_logged', 'ai', f'Incident: {desc[:80]}')
-            finally:
-                db.close()
             return jsonify({
                 'status': 'executed',
                 'action': 'log_incident',
@@ -300,14 +295,11 @@ RULES:
         m = re.match(r'create\s+note\s+(.+)', action, re.IGNORECASE)
         if m:
             title = m.group(1).strip()
-            db = get_db()
-            try:
+            with db_session() as db:
                 db.execute('INSERT INTO notes (title, content) VALUES (?, ?)', (title, ''))
                 db.commit()
                 row_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
                 log_activity('note_created', 'ai', f'Note: {title}')
-            finally:
-                db.close()
             return jsonify({
                 'status': 'executed',
                 'action': 'create_note',
@@ -324,16 +316,13 @@ RULES:
                 lng = float(m.group(3))
             except ValueError:
                 return jsonify({'error': 'Invalid coordinates — lat and lng must be numbers'}), 400
-            db = get_db()
-            try:
+            with db_session() as db:
                 db.execute(
                     'INSERT INTO waypoints (name, lat, lng) VALUES (?, ?, ?)',
                     (wp_name, lat, lng))
                 db.commit()
                 row_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
                 log_activity('waypoint_added', 'ai', f'Waypoint: {wp_name} ({lat},{lng})')
-            finally:
-                db.close()
             return jsonify({
                 'status': 'executed',
                 'action': 'add_waypoint',
@@ -352,11 +341,8 @@ RULES:
     @app.route('/api/ai/memory', methods=['GET'])
     def api_ai_memory_list():
         """List persistent AI memory facts."""
-        db = get_db()
-        try:
+        with db_session() as db:
             row = db.execute("SELECT value FROM settings WHERE key = 'ai_memory'").fetchone()
-        finally:
-            db.close()
         memories = []
         if row and row['value']:
             try:
@@ -372,8 +358,7 @@ RULES:
         fact = data.get('fact', '').strip()
         if not fact:
             return jsonify({'error': 'No fact provided'}), 400
-        db = get_db()
-        try:
+        with db_session() as db:
             row = db.execute("SELECT value FROM settings WHERE key = 'ai_memory'").fetchone()
             memories = []
             if row and row['value']:
@@ -386,20 +371,15 @@ RULES:
                 "INSERT OR REPLACE INTO settings (key, value) VALUES ('ai_memory', ?)",
                 (json.dumps(memories),))
             db.commit()
-        finally:
-            db.close()
         log_activity('ai_memory_saved', 'ai', f'Memory: {fact[:60]}')
         return jsonify({'status': 'saved', 'count': len(memories)})
 
     @app.route('/api/ai/memory', methods=['DELETE'])
     def api_ai_memory_clear():
         """Clear all AI memory."""
-        db = get_db()
-        try:
+        with db_session() as db:
             db.execute("DELETE FROM settings WHERE key = 'ai_memory'")
             db.commit()
-        finally:
-            db.close()
         log_activity('ai_memory_cleared', 'ai', 'All AI memories cleared')
         return jsonify({'status': 'cleared'})
 
@@ -412,8 +392,7 @@ RULES:
     @app.route('/api/print/operations-binder')
     def api_print_operations_binder():
         """Generate a comprehensive printable operations binder."""
-        db = get_db()
-        try:
+        with db_session() as db:
             # Node identity
             node_name_row = db.execute("SELECT value FROM settings WHERE key = 'node_name'").fetchone()
             node_name = (node_name_row['value'] if node_name_row and node_name_row['value'] else platform.node()) or 'NOMAD Node'
@@ -456,9 +435,6 @@ RULES:
             family_plan_row = db.execute(
                 "SELECT value FROM settings WHERE key = 'family_emergency_plan'").fetchone()
             family_plan = family_plan_row['value'] if family_plan_row and family_plan_row['value'] else ''
-
-        finally:
-            db.close()
 
         now = datetime.now().strftime('%Y-%m-%d %H:%M')
         date_str = datetime.now().strftime('%d %B %Y')
@@ -700,8 +676,7 @@ RULES:
     @app.route('/api/print/wallet-cards')
     def api_print_wallet_cards():
         """Generate credit-card-sized reference cards for printing and laminating."""
-        db = get_db()
-        try:
+        with db_session() as db:
             # Node identity
             node_name_row = db.execute("SELECT value FROM settings WHERE key = 'node_name'").fetchone()
             node_name = (node_name_row['value'] if node_name_row and node_name_row['value'] else platform.node()) or 'NOMAD'
@@ -742,9 +717,6 @@ RULES:
             custom_freqs = [dict(r) for r in db.execute(
                 'SELECT frequency, service, mode FROM freq_database ORDER BY priority DESC, frequency LIMIT 8'
             ).fetchall()]
-
-        finally:
-            db.close()
 
         now = datetime.now().strftime('%Y-%m-%d')
         patient_name = ''
@@ -858,8 +830,7 @@ RULES:
     @app.route('/api/print/soi')
     def api_print_soi():
         """Generate a Signal Operating Instructions document."""
-        db = get_db()
-        try:
+        with db_session() as db:
             # Node identity
             node_name_row = db.execute("SELECT value FROM settings WHERE key = 'node_name'").fetchone()
             node_name = (node_name_row['value'] if node_name_row and node_name_row['value'] else platform.node()) or 'NOMAD Node'
@@ -879,9 +850,6 @@ RULES:
             contacts = [dict(r) for r in db.execute(
                 "SELECT name, callsign, role, freq FROM contacts "
                 "WHERE callsign != '' OR freq != '' ORDER BY callsign, name").fetchall()]
-
-        finally:
-            db.close()
 
         now = datetime.now().strftime('%Y-%m-%d %H:%M')
         date_str = datetime.now().strftime('%d %B %Y')
@@ -1393,12 +1361,9 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
     @app.route('/api/system/db-check', methods=['POST'])
     def api_system_db_check():
         """Run PRAGMA integrity_check and foreign_key_check."""
-        db = get_db()
-        try:
+        with db_session() as db:
             integrity = db.execute('PRAGMA integrity_check').fetchall()
             fk_check = db.execute('PRAGMA foreign_key_check').fetchall()
-        finally:
-            db.close()
 
         integrity_results = [dict(r) for r in integrity] if integrity else []
         fk_results = [dict(r) for r in fk_check] if fk_check else []
@@ -1417,12 +1382,9 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
     @app.route('/api/system/db-vacuum', methods=['POST'])
     def api_system_db_vacuum():
         """Run VACUUM and REINDEX to optimize the database."""
-        db = get_db()
-        try:
+        with db_session() as db:
             db.execute('VACUUM')
             db.execute('REINDEX')
-        finally:
-            db.close()
         log_activity('db_vacuum', 'system', 'Database vacuumed and reindexed')
         return jsonify({'status': 'ok', 'message': 'VACUUM and REINDEX completed'})
 
@@ -1435,9 +1397,8 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
 
         # 1. Database accessible
         try:
-            db = get_db()
-            db.execute('SELECT 1').fetchone()
-            db.close()
+            with db_session() as db:
+                db.execute('SELECT 1').fetchone()
             results.append({'check': 'database', 'status': 'pass', 'detail': 'Database accessible'})
         except Exception as e:
             results.append({'check': 'database', 'status': 'fail', 'detail': str(e)})
@@ -1505,10 +1466,9 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
             'weather_log', 'patients', 'waypoints', 'alerts', 'power_log',
         ]
         try:
-            db = get_db()
-            existing = [r[0] for r in db.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
-            db.close()
+            with db_session() as db:
+                existing = [r[0] for r in db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
             missing = [t for t in critical_tables if t not in existing]
             if not missing:
                 results.append({'check': 'critical_tables', 'status': 'pass',
@@ -1534,24 +1494,27 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
     def api_undo_peek():
         """Return the last undoable action (if within TTL)."""
         _prune_expired()
-        if not _undo_stack:
-            return jsonify({'available': False})
-        entry = _undo_stack[-1]
-        return jsonify({
-            'available': True,
-            'action_type': entry['action_type'],
-            'description': entry['description'],
-            'seconds_remaining': max(0, int(30 - (time.time() - entry['timestamp']))),
-        })
+        with _undo_lock:
+            if not _undo_stack:
+                return jsonify({'available': False})
+            entry = _undo_stack[-1]
+            return jsonify({
+                'available': True,
+                'action_type': entry['action_type'],
+                'description': entry['description'],
+                'seconds_remaining': max(0, int(30 - (time.time() - entry['timestamp']))),
+            })
 
     @app.route('/api/undo', methods=['POST'])
     def api_undo_execute():
         """Undo the last destructive action."""
         _prune_expired()
-        if not _undo_stack:
-            return jsonify({'error': 'Nothing to undo (expired or empty)'}), 404
+        with _undo_lock:
+            if not _undo_stack:
+                return jsonify({'error': 'Nothing to undo (expired or empty)'}), 404
 
-        entry = _undo_stack.pop()
+            entry = _undo_stack.pop()
+            _redo_stack.append(entry)
         table = entry['table']
         row_data = entry['row_data']
 
@@ -1559,43 +1522,83 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
             return jsonify({'error': f'Undo refused: invalid table "{table}"'}), 400
 
         # Validate column names against actual table schema to prevent SQL injection
-        db = get_db()
         try:
-            valid_cols = {r['name'] for r in db.execute(f"PRAGMA table_info({table})").fetchall()}
-            if not valid_cols:
-                return jsonify({'error': 'Undo failed: unknown table schema'}), 400
+            with db_session() as db:
+                valid_cols = {r['name'] for r in db.execute(f"PRAGMA table_info({table})").fetchall()}
+                if not valid_cols:
+                    return jsonify({'error': 'Undo failed: unknown table schema'}), 400
 
-            if entry['action_type'] == 'delete':
-                # Re-insert the deleted row — only use columns that exist in the table
-                cols = [c for c in row_data.keys() if c in valid_cols]
-                if not cols:
-                    return jsonify({'error': 'Undo failed: no valid columns'}), 400
-                placeholders = ', '.join(['?'] * len(cols))
-                col_names = ', '.join(cols)
-                db.execute(
-                    f'INSERT INTO {table} ({col_names}) VALUES ({placeholders})',
-                    [row_data[c] for c in cols])
-                db.commit()
-            elif entry['action_type'] == 'update':
-                # Restore previous values — only use columns that exist in the table
-                row_id = row_data.get('id')
-                if row_id is not None:
-                    safe_keys = [k for k in row_data if k != 'id' and k in valid_cols]
-                    if not safe_keys:
+                if entry['action_type'] == 'delete':
+                    # Re-insert the deleted row — only use columns that exist in the table
+                    cols = [c for c in row_data.keys() if c in valid_cols]
+                    if not cols:
                         return jsonify({'error': 'Undo failed: no valid columns'}), 400
-                    sets = ', '.join(f'{k} = ?' for k in safe_keys)
-                    vals = [row_data[k] for k in safe_keys]
-                    vals.append(row_id)
-                    db.execute(f'UPDATE {table} SET {sets} WHERE id = ?', vals)
+                    placeholders = ', '.join(['?'] * len(cols))
+                    col_names = ', '.join(cols)
+                    db.execute(
+                        f'INSERT INTO {table} ({col_names}) VALUES ({placeholders})',
+                        [row_data[c] for c in cols])
                     db.commit()
-            log_activity('undo', 'system', entry['description'])
+                elif entry['action_type'] == 'update':
+                    # Restore previous values — only use columns that exist in the table
+                    row_id = row_data.get('id')
+                    if row_id is not None:
+                        safe_keys = [k for k in row_data if k != 'id' and k in valid_cols]
+                        if not safe_keys:
+                            return jsonify({'error': 'Undo failed: no valid columns'}), 400
+                        sets = ', '.join(f'{k} = ?' for k in safe_keys)
+                        vals = [row_data[k] for k in safe_keys]
+                        vals.append(row_id)
+                        db.execute(f'UPDATE {table} SET {sets} WHERE id = ?', vals)
+                        db.commit()
+                log_activity('undo', 'system', entry['description'])
         except Exception as e:
             return jsonify({'error': 'Undo failed'}), 500
-        finally:
-            db.close()
 
         return jsonify({
             'status': 'undone',
+            'description': entry['description'],
+        })
+
+    @app.route('/api/redo', methods=['POST'])
+    def api_redo():
+        """Redo the last undone action."""
+        with _undo_lock:
+            if not _redo_stack:
+                return jsonify({'error': 'Nothing to redo'}), 404
+
+            entry = _redo_stack.pop()
+            _undo_stack.append(entry)
+        table = entry['table']
+        row_data = entry['row_data']
+
+        if table not in _UNDO_VALID_TABLES:
+            return jsonify({'error': f'Redo refused: invalid table "{table}"'}), 400
+
+        try:
+            with db_session() as db:
+                valid_cols = {r['name'] for r in db.execute(f"PRAGMA table_info({table})").fetchall()}
+                if not valid_cols:
+                    return jsonify({'error': 'Redo failed: unknown table schema'}), 400
+
+                if entry['action_type'] == 'delete':
+                    # Original action was a delete — redo means delete the row again
+                    row_id = row_data.get('id')
+                    if row_id is not None:
+                        db.execute(f'DELETE FROM {table} WHERE id = ?', [row_id])
+                        db.commit()
+                    else:
+                        return jsonify({'error': 'Redo failed: no row id'}), 400
+                elif entry['action_type'] == 'update':
+                    # Cannot redo an update without the "new" values — skip
+                    return jsonify({'error': 'Redo not supported for updates'}), 400
+
+                log_activity('redo', 'system', entry['description'])
+        except Exception as e:
+            return jsonify({'error': 'Redo failed'}), 500
+
+        return jsonify({
+            'status': 'redone',
             'description': entry['description'],
         })
 
@@ -1608,13 +1611,10 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
     @app.route('/api/federation/community-readiness')
     def api_federation_community_readiness():
         """Aggregate readiness scores across all federated nodes."""
-        db = get_db()
-        try:
+        with db_session() as db:
             rows = db.execute(
                 'SELECT node_id, node_name, situation, updated_at FROM federation_sitboard '
                 'ORDER BY updated_at DESC').fetchall()
-        finally:
-            db.close()
 
         CATEGORIES = ['water', 'food', 'medical', 'shelter', 'security', 'comms', 'power']
         nodes = []
@@ -1685,8 +1685,7 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
             return jsonify({'error': 'skill query param required'}), 400
 
         results = []
-        db = get_db()
-        try:
+        with db_session() as db:
             # Local contacts with matching skills
             contacts = db.execute(
                 "SELECT name, callsign, role, skills, phone FROM contacts "
@@ -1743,9 +1742,6 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
                     'phone': cr['contact'] or '',
                 })
 
-        finally:
-            db.close()
-
         return jsonify({'query': query, 'results': results, 'count': len(results)})
 
     # ─── Distributed Alert Relay ─────────────────────────────────────
@@ -1761,8 +1757,7 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
         if not alert_title or not alert_message:
             return jsonify({'error': 'title and message required'}), 400
 
-        db = get_db()
-        try:
+        with db_session() as db:
             # Get node identity for the sender
             node_id_row = db.execute("SELECT value FROM settings WHERE key = 'node_id'").fetchone()
             node_name_row = db.execute("SELECT value FROM settings WHERE key = 'node_name'").fetchone()
@@ -1775,8 +1770,6 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
                 "SELECT node_id, node_name, ip, port FROM federation_peers "
                 "WHERE trust_level IN ('trusted', 'admin', 'member') "
                 "AND ip != '' ORDER BY node_name").fetchall()]
-        finally:
-            db.close()
 
         if not peers:
             return jsonify({'error': 'No trusted peers configured', 'sent': 0}), 404

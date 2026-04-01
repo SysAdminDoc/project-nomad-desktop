@@ -22,7 +22,7 @@
   .message.user .avatar,
   .search-highlight
 ) {
-  color: var(--text-inverse) !important;
+  color: var(--text-inverse);
 }
 
 :is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) :is(
@@ -30,23 +30,23 @@
   .incident-sev.warning,
   .search-result-type.inventory
 ) {
-  background: var(--warning-dim) !important;
-  color: var(--warning) !important;
-  border-color: var(--warning-border) !important;
+  background: var(--warning-dim);
+  color: var(--warning);
+  border-color: var(--warning-border);
 }
 
 :is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) :is(
   .workspace-frame-light,
   .shareable-data-block
 ) {
-  color: var(--text) !important;
-  border-color: var(--border) !important;
+  color: var(--text);
+  border-color: var(--border);
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-solid) 96%, transparent), color-mix(in srgb, var(--surface2) 84%, transparent)) !important;
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-solid) 96%, transparent), color-mix(in srgb, var(--surface2) 84%, transparent));
 }
 
 :is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) .media-card-thumb {
-  background: var(--thumb-surface) !important;
+  background: var(--thumb-surface);
 }
 
 :is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) :is(
@@ -56,11 +56,11 @@
   .media-batch-btn-danger,
   .media-batch-btn-muted
 ) {
-  color: var(--text-inverse) !important;
+  color: var(--text-inverse);
 }
 
 :is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) .media-card-thumb .play-overlay {
-  background: var(--overlay-scrim) !important;
+  background: var(--overlay-scrim);
 }
 
 :is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) :is(
@@ -68,19 +68,19 @@
   .media-card-favorite:hover,
   .media-card-favorite:focus-visible
 ) {
-  background: var(--overlay-scrim-strong) !important;
+  background: var(--overlay-scrim-strong);
 }
 
 :is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) .media-card-favorite {
-  color: color-mix(in srgb, var(--text-inverse) 76%, transparent) !important;
-  background: color-mix(in srgb, var(--overlay-scrim-strong) 72%, transparent) !important;
+  color: color-mix(in srgb, var(--text-inverse) 76%, transparent);
+  background: color-mix(in srgb, var(--overlay-scrim-strong) 72%, transparent);
 }
 
 :is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) :is(
   .text-status-green-strong,
   .guide-status-green
 ) {
-  color: var(--green) !important;
+  color: var(--green);
 }
 
 :is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) :is(
@@ -88,13 +88,13 @@
   .text-forecast-caution,
   .guide-status-orange
 ) {
-  color: var(--warning) !important;
+  color: var(--warning);
 }
 
 :is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) .text-status-blue-strong {
-  color: var(--info) !important;
+  color: var(--info);
 }
 
 :is(:root, [data-theme="nomad"], [data-theme="nightops"], [data-theme="cyber"], [data-theme="redlight"], [data-theme="eink"]) .text-muted-strong {
-  color: var(--text-muted) !important;
+  color: var(--text-muted);
 }

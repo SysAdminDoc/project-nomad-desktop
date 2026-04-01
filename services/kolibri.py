@@ -252,6 +252,9 @@ def start():
         db.close()
 
     for _ in range(30):
+        if proc.poll() is not None:
+            log.error('Kolibri process exited during startup with code %d', proc.returncode)
+            raise RuntimeError('Kolibri process exited during startup')
         if check_port(KOLIBRI_PORT):
             log.info(f'Kolibri running on port {KOLIBRI_PORT} (PID {proc.pid})')
             return proc.pid

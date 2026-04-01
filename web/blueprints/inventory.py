@@ -9,7 +9,7 @@ import logging
 from flask import Blueprint, request, jsonify, Response
 from werkzeug.utils import secure_filename
 
-from db import get_db, log_activity
+from db import db_session, log_activity
 from services import ollama
 from services.manager import format_size
 from web.print_templates import render_print_document
@@ -46,8 +46,12 @@ INVENTORY_CATEGORIES = [
 
 @inventory_bp.route('/api/inventory')
 def api_inventory_list():
-    db = get_db()
     try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
         cat = request.args.get('category', '')
         search = request.args.get('q', '').strip()
         query = 'SELECT * FROM inventory'
@@ -61,10 +65,9 @@ def api_inventory_list():
             params.extend([f'%{search}%'] * 3)
         if clauses:
             query += ' WHERE ' + ' AND '.join(clauses)
-        query += ' ORDER BY category, name'
+        query += ' ORDER BY category, name LIMIT ? OFFSET ?'
+        params.extend([limit, offset])
         rows = db.execute(query, params).fetchall()
-    finally:
-        db.close()
     return jsonify([dict(r) for r in rows])
 
 @inventory_bp.route('/api/inventory', methods=['POST'])
@@ -75,8 +78,7 @@ def api_inventory_list():
 })
 def api_inventory_create():
     data = request.get_json() or {}
-    db = get_db()
-    try:
+    with db_session() as db:
         cur = db.execute(
             'INSERT INTO inventory (name, category, quantity, unit, min_quantity, daily_usage, location, expiration, barcode, cost, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             (data.get('name', ''), data.get('category', 'other'), data.get('quantity', 0),
@@ -85,8 +87,6 @@ def api_inventory_create():
         db.commit()
         item_id = cur.lastrowid
         row = db.execute('SELECT * FROM inventory WHERE id = ?', (item_id,)).fetchone()
-    finally:
-        db.close()
     broadcast_event('inventory_update', {'action': 'add', 'id': item_id})
     return jsonify(dict(row)), 201
 
@@ -102,36 +102,29 @@ def api_inventory_update(item_id):
     filtered = safe_columns(data, allowed)
     if not filtered:
         return jsonify({'error': 'No fields to update'}), 400
-    db = get_db()
-    try:
+    with db_session() as db:
         set_clause = ', '.join(f'{col} = ?' for col in filtered)
         vals = list(filtered.values())
         vals.append(item_id)
         db.execute(f'UPDATE inventory SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?', vals)
         db.commit()
-    finally:
-        db.close()
     broadcast_event('inventory_update', {'action': 'edit', 'id': item_id})
     return jsonify({'status': 'saved'})
 
 @inventory_bp.route('/api/inventory/<int:item_id>', methods=['DELETE'])
 def api_inventory_delete(item_id):
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute('DELETE FROM inventory_photos WHERE inventory_id = ?', (item_id,))
         db.execute('DELETE FROM inventory_checkouts WHERE inventory_id = ?', (item_id,))
         db.execute('DELETE FROM shopping_list WHERE inventory_id = ?', (item_id,))
         db.execute('DELETE FROM inventory WHERE id = ?', (item_id,))
         db.commit()
-    finally:
-        db.close()
     broadcast_event('inventory_update', {'action': 'delete', 'id': item_id})
     return jsonify({'status': 'deleted'})
 
 @inventory_bp.route('/api/inventory/summary')
 def api_inventory_summary():
-    db = get_db()
-    try:
+    with db_session() as db:
         total = db.execute('SELECT COUNT(*) as c FROM inventory').fetchone()['c']
         low_stock = db.execute('SELECT COUNT(*) as c FROM inventory WHERE quantity <= min_quantity AND min_quantity > 0').fetchone()['c']
         # Expiring within 30 days
@@ -141,8 +134,6 @@ def api_inventory_summary():
         expiring = db.execute("SELECT COUNT(*) as c FROM inventory WHERE expiration != '' AND expiration <= ? AND expiration >= ?", (soon, today)).fetchone()['c']
         expired = db.execute("SELECT COUNT(*) as c FROM inventory WHERE expiration != '' AND expiration < ?", (today,)).fetchone()['c']
         cats = db.execute('SELECT category, COUNT(*) as c, SUM(quantity) as qty FROM inventory GROUP BY category ORDER BY category').fetchall()
-    finally:
-        db.close()
     return jsonify({
         'total': total, 'low_stock': low_stock, 'expiring_soon': expiring, 'expired': expired,
         'categories': [{'category': r['category'], 'count': r['c'], 'total_qty': r['qty'] or 0} for r in cats],
@@ -155,11 +146,8 @@ def api_inventory_categories():
 @inventory_bp.route('/api/inventory/burn-rate')
 def api_inventory_burn_rate():
     """Calculate days of supply remaining per category."""
-    db = get_db()
-    try:
-        rows = db.execute('SELECT category, name, quantity, unit, daily_usage FROM inventory WHERE daily_usage > 0 ORDER BY category, name').fetchall()
-    finally:
-        db.close()
+    with db_session() as db:
+        rows = db.execute('SELECT category, name, quantity, unit, daily_usage FROM inventory WHERE daily_usage > 0 ORDER BY category, name LIMIT 10000').fetchall()
     cats = {}
     for r in rows:
         cat = r['category']
@@ -324,8 +312,7 @@ def api_inventory_receipt_import():
         return jsonify({'error': 'No items provided'}), 400
 
     added = 0
-    db = get_db()
-    try:
+    with db_session() as db:
         for item in items:
             name = str(item.get('name', '')).strip()
             if not name:
@@ -342,9 +329,6 @@ def api_inventory_receipt_import():
             )
             added += 1
         db.commit()
-    finally:
-        db.close()
-
     log_activity('receipt_import', f'Imported {added} items from receipt scan')
     return jsonify({'status': 'ok', 'count': added})
 
@@ -502,8 +486,7 @@ def api_inventory_vision_import():
     valid_conditions = {'New', 'Good', 'Fair', 'Poor'}
 
     added = 0
-    db = get_db()
-    try:
+    with db_session() as db:
         for item in items:
             name = str(item.get('name', '')).strip()
             if not name:
@@ -525,18 +508,14 @@ def api_inventory_vision_import():
             )
             added += 1
         db.commit()
-    finally:
-        db.close()
-
     log_activity('vision_import', f'Imported {added} items from AI vision scan')
     return jsonify({'status': 'ok', 'count': added})
 
 
 @inventory_bp.route('/api/inventory/export-csv')
 def api_inventory_csv():
-    db = get_db()
-    rows = db.execute('SELECT name, category, quantity, unit, min_quantity, daily_usage, location, expiration, notes FROM inventory ORDER BY category, name').fetchall()
-    db.close()
+    with db_session() as db:
+        rows = db.execute('SELECT name, category, quantity, unit, min_quantity, daily_usage, location, expiration, notes FROM inventory ORDER BY category, name LIMIT 50000').fetchall()
     import csv, io
     buf = io.StringIO()
     w = csv.writer(buf)
@@ -561,25 +540,24 @@ def api_inventory_import_csv():
         except UnicodeDecodeError:
             content = raw.decode('latin-1')
         reader = csv.DictReader(io.StringIO(content))
-        db = get_db()
-        imported = 0
-        for row in reader:
-            name = row.get('Name', row.get('name', '')).strip()
-            if not name:
-                continue
-            db.execute(
-                'INSERT INTO inventory (name, category, quantity, unit, min_quantity, daily_usage, location, expiration, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                (name, row.get('Category', row.get('category', 'other')),
-                 float(row.get('Quantity', row.get('quantity', 0)) or 0),
-                 row.get('Unit', row.get('unit', 'ea')),
-                 float(row.get('Min Qty', row.get('min_quantity', 0)) or 0),
-                 float(row.get('Daily Usage', row.get('daily_usage', 0)) or 0),
-                 row.get('Location', row.get('location', '')),
-                 row.get('Expiration', row.get('expiration', '')),
-                 row.get('Notes', row.get('notes', ''))))
-            imported += 1
-        db.commit()
-        db.close()
+        with db_session() as db:
+            imported = 0
+            for row in reader:
+                name = row.get('Name', row.get('name', '')).strip()
+                if not name:
+                    continue
+                db.execute(
+                    'INSERT INTO inventory (name, category, quantity, unit, min_quantity, daily_usage, location, expiration, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    (name, row.get('Category', row.get('category', 'other')),
+                     float(row.get('Quantity', row.get('quantity', 0)) or 0),
+                     row.get('Unit', row.get('unit', 'ea')),
+                     float(row.get('Min Qty', row.get('min_quantity', 0)) or 0),
+                     float(row.get('Daily Usage', row.get('daily_usage', 0)) or 0),
+                     row.get('Location', row.get('location', '')),
+                     row.get('Expiration', row.get('expiration', '')),
+                     row.get('Notes', row.get('notes', ''))))
+                imported += 1
+            db.commit()
         return jsonify({'status': 'imported', 'count': imported})
     except Exception as e:
         log.error(f'Inventory CSV import failed: {e}')
@@ -587,28 +565,26 @@ def api_inventory_import_csv():
 
 @inventory_bp.route('/api/inventory/shopping-list')
 def api_shopping_list():
-    db = get_db()
     from datetime import datetime, timedelta
     today = datetime.now().strftime('%Y-%m-%d')
     soon = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
 
-    # Low stock items — need to restock
-    low = db.execute('SELECT name, quantity, unit, min_quantity, category FROM inventory WHERE quantity <= min_quantity AND min_quantity > 0').fetchall()
-    low_items = [{'name': r['name'], 'need': round(r['min_quantity'] - r['quantity'], 1), 'unit': r['unit'],
-                  'category': r['category'], 'reason': 'below minimum'} for r in low]
+    with db_session() as db:
+        # Low stock items — need to restock
+        low = db.execute('SELECT name, quantity, unit, min_quantity, category FROM inventory WHERE quantity <= min_quantity AND min_quantity > 0 LIMIT 10000').fetchall()
+        low_items = [{'name': r['name'], 'need': round(r['min_quantity'] - r['quantity'], 1), 'unit': r['unit'],
+                      'category': r['category'], 'reason': 'below minimum'} for r in low]
 
-    # Expiring items — need replacement
-    expiring = db.execute("SELECT name, unit, category, expiration FROM inventory WHERE expiration != '' AND expiration <= ?", (soon,)).fetchall()
-    exp_items = [{'name': r['name'], 'need': 1, 'unit': r['unit'], 'category': r['category'],
-                  'reason': f'expires {r["expiration"]}'} for r in expiring]
+        # Expiring items — need replacement
+        expiring = db.execute("SELECT name, unit, category, expiration FROM inventory WHERE expiration != '' AND expiration <= ? LIMIT 10000", (soon,)).fetchall()
+        exp_items = [{'name': r['name'], 'need': 1, 'unit': r['unit'], 'category': r['category'],
+                      'reason': f'expires {r["expiration"]}'} for r in expiring]
 
-    # Critical burn rate — running out within 14 days
-    burn = db.execute("SELECT name, quantity, daily_usage, unit, category FROM inventory WHERE daily_usage > 0 AND (quantity / daily_usage) < 14").fetchall()
-    burn_items = [{'name': r['name'], 'need': round(r['daily_usage'] * 30 - r['quantity'], 1), 'unit': r['unit'],
-                   'category': r['category'], 'reason': f'{round(r["quantity"]/r["daily_usage"],1)} days left'}
-                  for r in burn if r['daily_usage'] * 30 > r['quantity']]
-
-    db.close()
+        # Critical burn rate — running out within 14 days
+        burn = db.execute("SELECT name, quantity, daily_usage, unit, category FROM inventory WHERE daily_usage > 0 AND (quantity / daily_usage) < 14 LIMIT 10000").fetchall()
+        burn_items = [{'name': r['name'], 'need': round(r['daily_usage'] * 30 - r['quantity'], 1), 'unit': r['unit'],
+                       'category': r['category'], 'reason': f'{round(r["quantity"]/r["daily_usage"],1)} days left'}
+                      for r in burn if r['daily_usage'] * 30 > r['quantity']]
 
     # Deduplicate by name
     seen = set()
@@ -625,8 +601,7 @@ def api_shopping_list():
 @inventory_bp.route('/api/inventory/shopping-list/save', methods=['POST'])
 def api_shopping_list_save():
     """Save current shopping list snapshot."""
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute(
             'SELECT id, name, category, quantity, min_quantity, unit FROM inventory WHERE min_quantity > 0 AND quantity < min_quantity'
         ).fetchall()
@@ -638,9 +613,6 @@ def api_shopping_list_save():
             )
         db.commit()
         return jsonify({'status': 'ok', 'count': len(rows)})
-    finally:
-        db.close()
-
 @inventory_bp.route('/api/inventory/<int:item_id>/checkout', methods=['POST'])
 def api_inventory_checkout(item_id):
     """Check out an inventory item to a person."""
@@ -650,8 +622,7 @@ def api_inventory_checkout(item_id):
     reason = d.get('reason', '')
     if not person:
         return jsonify({'error': 'person required'}), 400
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute(
             'INSERT INTO inventory_checkouts (inventory_id, checked_out_to, quantity, reason) VALUES (?, ?, ?, ?)',
             (item_id, person, qty, reason)
@@ -660,14 +631,10 @@ def api_inventory_checkout(item_id):
         db.commit()
         log_activity('checkout', detail=f'{person} checked out item #{item_id}')
         return jsonify({'status': 'ok'})
-    finally:
-        db.close()
-
 @inventory_bp.route('/api/inventory/<int:item_id>/checkin', methods=['POST'])
 def api_inventory_checkin(item_id):
     """Return a checked-out inventory item."""
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute(
             "UPDATE inventory_checkouts SET returned_at = CURRENT_TIMESTAMP WHERE inventory_id = ? AND returned_at IS NULL",
             (item_id,)
@@ -676,35 +643,31 @@ def api_inventory_checkin(item_id):
         db.commit()
         log_activity('checkin', detail=f'Item #{item_id} returned')
         return jsonify({'status': 'ok'})
-    finally:
-        db.close()
-
 @inventory_bp.route('/api/inventory/checkouts')
 def api_inventory_checkouts():
     """List all currently checked-out items."""
-    db = get_db()
     try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+    with db_session() as db:
         rows = db.execute(
             '''SELECT c.*, i.name as item_name, i.category
                FROM inventory_checkouts c
                JOIN inventory i ON c.inventory_id = i.id
                WHERE c.returned_at IS NULL
-               ORDER BY c.checked_out_at DESC'''
+               ORDER BY c.checked_out_at DESC
+               LIMIT ? OFFSET ?''',
+            (limit, offset)
         ).fetchall()
         return jsonify([dict(r) for r in rows])
-    finally:
-        db.close()
-
 @inventory_bp.route('/api/inventory/<int:item_id>/photos', methods=['GET'])
 def api_inventory_photos(item_id):
     """List photos for an inventory item."""
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute('SELECT * FROM inventory_photos WHERE inventory_id = ? ORDER BY created_at DESC', (item_id,)).fetchall()
         return jsonify([dict(r) for r in rows])
-    finally:
-        db.close()
-
 @inventory_bp.route('/api/inventory/<int:item_id>/photos', methods=['POST'])
 def api_inventory_photo_upload(item_id):
     """Upload a photo for an inventory item."""
@@ -720,38 +683,26 @@ def api_inventory_photo_upload(item_id):
     filepath = os.path.join(photos_dir, filename)
     photo.save(filepath)
 
-    db = get_db()
-    try:
+    with db_session() as db:
         caption = request.form.get('caption', '')
         db.execute('INSERT INTO inventory_photos (inventory_id, filename, caption) VALUES (?, ?, ?)',
                    (item_id, filename, caption))
         db.commit()
         return jsonify({'status': 'ok', 'filename': filename})
-    finally:
-        db.close()
-
 @inventory_bp.route('/api/inventory/locations')
 def api_inventory_locations():
     """Get unique inventory locations for filtering."""
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute("SELECT DISTINCT location FROM inventory WHERE location != '' ORDER BY location").fetchall()
         return jsonify([r['location'] for r in rows])
-    finally:
-        db.close()
-
 @inventory_bp.route('/api/inventory/scan/<barcode>')
 def api_inventory_scan(barcode):
     """Look up inventory item by barcode."""
-    db = get_db()
-    try:
+    with db_session() as db:
         row = db.execute('SELECT * FROM inventory WHERE barcode = ?', (barcode,)).fetchone()
         if row:
             return jsonify(dict(row))
         return jsonify({'found': False, 'barcode': barcode}), 404
-    finally:
-        db.close()
-
 # ─── Barcode / UPC Database ──────────────────────────────────────
 
 @inventory_bp.route('/api/barcode/lookup/<upc>')
@@ -761,15 +712,11 @@ def api_barcode_lookup(upc):
     upc = re.sub(r'[^0-9]', '', str(upc))
     if not upc or len(upc) not in (8, 12, 13):
         return jsonify({'error': 'Invalid UPC format — must be 8, 12, or 13 digits'}), 400
-    db = get_db()
-    try:
+    with db_session() as db:
         row = db.execute('SELECT * FROM upc_database WHERE upc = ?', (upc,)).fetchone()
         if row:
             return jsonify({'found': True, **dict(row)})
         return jsonify({'found': False, 'upc': upc})
-    finally:
-        db.close()
-
 @inventory_bp.route('/api/barcode/add', methods=['POST'])
 def api_barcode_add():
     """Add a new UPC to the local barcode database."""
@@ -782,8 +729,7 @@ def api_barcode_add():
         return jsonify({'error': 'Invalid UPC format — must be 8, 12, or 13 digits'}), 400
     if not name:
         return jsonify({'error': 'Name is required'}), 400
-    db = get_db()
-    try:
+    with db_session() as db:
         db.execute(
             'INSERT OR REPLACE INTO upc_database (upc, name, category, brand, size, unit, default_shelf_life_days) VALUES (?, ?, ?, ?, ?, ?, ?)',
             (upc, name, data.get('category', 'General'), data.get('brand', ''),
@@ -793,9 +739,6 @@ def api_barcode_add():
         db.commit()
         row = db.execute('SELECT * FROM upc_database WHERE upc = ?', (upc,)).fetchone()
         return jsonify({'status': 'saved', **dict(row)}), 201
-    finally:
-        db.close()
-
 @inventory_bp.route('/api/barcode/scan-to-inventory', methods=['POST'])
 def api_barcode_scan_to_inventory():
     """Look up UPC and add to inventory with auto-filled details."""
@@ -807,8 +750,7 @@ def api_barcode_scan_to_inventory():
     quantity = max(0, float(data.get('quantity', 1)))
     if not upc or len(upc) not in (8, 12, 13):
         return jsonify({'error': 'Invalid UPC format — must be 8, 12, or 13 digits'}), 400
-    db = get_db()
-    try:
+    with db_session() as db:
         upc_row = db.execute('SELECT * FROM upc_database WHERE upc = ?', (upc,)).fetchone()
         if not upc_row:
             return jsonify({'error': 'UPC not found in database — add it first'}), 404
@@ -836,61 +778,50 @@ def api_barcode_scan_to_inventory():
         inv_row = db.execute('SELECT * FROM inventory WHERE id = ?', (item_id,)).fetchone()
         log_activity('barcode_scan_add', 'inventory', f'Added {upc_row["name"]} x{quantity} via barcode {upc}')
         return jsonify({'status': 'added', 'item': dict(inv_row)}), 201
-    finally:
-        db.close()
-
 @inventory_bp.route('/api/barcode/database/stats')
 def api_barcode_stats():
     """Return count of UPCs in database by category."""
-    db = get_db()
-    try:
+    with db_session() as db:
         rows = db.execute('SELECT category, COUNT(*) as count FROM upc_database GROUP BY category ORDER BY count DESC').fetchall()
         total = sum(r['count'] for r in rows)
         return jsonify({'total': total, 'categories': [dict(r) for r in rows]})
-    finally:
-        db.close()
-
 # ─── Inventory Consume (quick daily use) ──────────────────────────
 
 @inventory_bp.route('/api/inventory/<int:item_id>/consume', methods=['POST'])
 def api_inventory_consume(item_id):
     """Decrement item by daily_usage or specified amount. Logs consumption."""
     data = request.get_json() or {}
-    db = get_db()
-    row = db.execute('SELECT * FROM inventory WHERE id = ?', (item_id,)).fetchone()
-    if not row:
-        db.close()
-        return jsonify({'error': 'Not found'}), 404
-    amount = data.get('amount', row['daily_usage'] or 1)
-    new_qty = max(0, row['quantity'] - amount)
-    db.execute('UPDATE inventory SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', (new_qty, item_id))
-    db.commit()
+    with db_session() as db:
+        row = db.execute('SELECT id, name, quantity, daily_usage, unit FROM inventory WHERE id = ?', (item_id,)).fetchone()
+        if not row:
+            return jsonify({'error': 'Not found'}), 404
+        amount = data.get('amount', row['daily_usage'] or 1)
+        new_qty = max(0, row['quantity'] - amount)
+        db.execute('UPDATE inventory SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', (new_qty, item_id))
+        db.commit()
     log_activity('inventory_consumed', row['name'], f'-{amount} {row["unit"]} (was {row["quantity"]}, now {new_qty})')
-    db.close()
     return jsonify({'status': 'consumed', 'name': row['name'], 'consumed': amount, 'remaining': new_qty})
 
 @inventory_bp.route('/api/inventory/batch-consume', methods=['POST'])
 def api_inventory_batch_consume():
     """Consume daily usage for all items that have daily_usage set."""
-    db = get_db()
-    rows = db.execute('SELECT id, name, quantity, daily_usage, unit FROM inventory WHERE daily_usage > 0 AND quantity > 0').fetchall()
-    consumed = []
-    for r in rows:
-        new_qty = max(0, r['quantity'] - r['daily_usage'])
-        db.execute('UPDATE inventory SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', (new_qty, r['id']))
-        consumed.append({'name': r['name'], 'used': r['daily_usage'], 'remaining': new_qty, 'unit': r['unit']})
-    db.commit()
+    with db_session() as db:
+        rows = db.execute('SELECT id, name, quantity, daily_usage, unit FROM inventory WHERE daily_usage > 0 AND quantity > 0').fetchall()
+        consumed = []
+        for r in rows:
+            new_qty = max(0, r['quantity'] - r['daily_usage'])
+            db.execute('UPDATE inventory SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', (new_qty, r['id']))
+            consumed.append({'name': r['name'], 'used': r['daily_usage'], 'remaining': new_qty, 'unit': r['unit']})
+        db.commit()
     if consumed:
         log_activity('daily_consumption', detail=f'Updated {len(consumed)} items')
-    db.close()
     return jsonify({'status': 'consumed', 'items': consumed})
 
 @inventory_bp.route('/api/inventory/print')
 def api_inventory_print():
     """Printable inventory list."""
-    db = get_db()
-    items = db.execute('SELECT * FROM inventory ORDER BY category, name').fetchall()
-    db.close()
+    with db_session() as db:
+        items = db.execute('SELECT name, category, quantity, unit, min_quantity, daily_usage, expiration, location FROM inventory ORDER BY category, name LIMIT 50000').fetchall()
     now = time.strftime('%Y-%m-%d %H:%M')
     categories = {}
     low_count = 0
@@ -1049,24 +980,23 @@ def api_import_csv_execute():
     else:
         reader = csv.DictReader(io.StringIO(csv_data))
         rows_to_process = list(reader)
-    db = get_db()
-    inserted = 0
-    errors = []
-    for i, row in enumerate(rows_to_process):
-        try:
-            mapped = {}
-            for csv_col, db_col in mapping.items():
-                if csv_col in row and db_col:
-                    mapped[db_col] = row[csv_col]
-            if not mapped:
-                continue
-            sql, params = build_insert(target, mapped, valid_cols)
-            db.execute(sql, params)
-            inserted += 1
-        except Exception as e:
-            errors.append(f'Row {i + 1}: {str(e)}')
-    db.commit()
-    db.close()
+    with db_session() as db:
+        inserted = 0
+        errors = []
+        for i, row in enumerate(rows_to_process):
+            try:
+                mapped = {}
+                for csv_col, db_col in mapping.items():
+                    if csv_col in row and db_col:
+                        mapped[db_col] = row[csv_col]
+                if not mapped:
+                    continue
+                sql, params = build_insert(target, mapped, valid_cols)
+                db.execute(sql, params)
+                inserted += 1
+            except Exception as e:
+                errors.append(f'Row {i + 1}: {str(e)}')
+        db.commit()
     log_activity('csv_import', 'import', f'{inserted} rows into {target}')
     return jsonify({'status': 'complete', 'inserted': inserted, 'errors': errors, 'target_table': target})
 
@@ -1316,15 +1246,14 @@ def api_templates_inventory_apply():
         return jsonify({'error': f'Unknown template: {template_id}. Available: {", ".join(_INVENTORY_TEMPLATES.keys())}'}), 400
     tpl = _INVENTORY_TEMPLATES[template_id]
     location = data.get('location', '')
-    db = get_db()
-    inserted = 0
-    for item in tpl['items']:
-        db.execute(
-            'INSERT INTO inventory (name, category, quantity, unit, location, notes) VALUES (?, ?, ?, ?, ?, ?)',
-            (item['name'], item.get('category', 'other'), item.get('quantity', 0),
-             item.get('unit', 'ea'), location, f'From template: {tpl["name"]}'))
-        inserted += 1
-    db.commit()
-    db.close()
+    with db_session() as db:
+        inserted = 0
+        for item in tpl['items']:
+            db.execute(
+                'INSERT INTO inventory (name, category, quantity, unit, location, notes) VALUES (?, ?, ?, ?, ?, ?)',
+                (item['name'], item.get('category', 'other'), item.get('quantity', 0),
+                 item.get('unit', 'ea'), location, f'From template: {tpl["name"]}'))
+            inserted += 1
+        db.commit()
     log_activity('template_applied', 'inventory', f'{tpl["name"]} ({inserted} items)')
     return jsonify({'status': 'applied', 'template': tpl['name'], 'items_inserted': inserted})

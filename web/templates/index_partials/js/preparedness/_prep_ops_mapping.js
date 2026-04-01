@@ -299,7 +299,7 @@ async function printFullCard() {
   // Also try settings
   try { const s = await fetch('/api/settings').then(r=>r.json()); if (s.sit_board) Object.assign(sit, JSON.parse(s.sit_board)); } catch(e) {}
 
-  const sitColors = {green:'#2d6a2d',yellow:'#8a7a00',orange:'#a84a12',red:'#993333'};
+  const sitColors = {green:'var(--green)',yellow:'var(--yellow)',orange:'var(--orange)',red:'var(--red)'};
   const sitLabels = {green:'GOOD',yellow:'CAUTION',orange:'CONCERN',red:'CRITICAL'};
   const now = new Date();
 
@@ -324,7 +324,7 @@ let h = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>NOMAD Full Emer
     h += '<h2>SITUATION STATUS</h2><div class="sit-row">';
     ['security','water','food','medical','power','comms'].forEach(d => {
       const lvl = sit[d]||'green';
-      h += `<div class="sit-box" style="background:${sitColors[lvl]||'#999'}">${d.toUpperCase()}<br>${sitLabels[lvl]||'?'}</div>`;
+      h += `<div class="sit-box" style="background:${sitColors[lvl]||'var(--text-muted)'}">${d.toUpperCase()}<br>${sitLabels[lvl]||'?'}</div>`;
     });
     h += '</div>';
   }

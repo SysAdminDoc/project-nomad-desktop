@@ -4,7 +4,7 @@
 
 /* ─── Situation Board ─── */
 .sit-board {
-  display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px;
   margin-bottom: 16px; padding: 16px; background: var(--surface);
   border: 1px solid var(--border); border-radius: var(--radius);
 }
@@ -531,7 +531,7 @@
   display: block;
   margin: 0 auto 12px;
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface-solid);
 }
 
 .gs-step-row {

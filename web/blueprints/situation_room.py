@@ -32,8 +32,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 
 import requests
-from flask import Blueprint, request, jsonify
-from db import get_db, db_session, log_activity
+from flask import Blueprint, request, jsonify, current_app
+from db import db_session, log_activity
 
 situation_room_bp = Blueprint('situation_room', __name__)
 log = logging.getLogger('nomad.situation_room')
@@ -663,21 +663,25 @@ def _fetch_earthquakes():
         return
 
     features = data.get('features', [])[:100]
+    batch_ts = datetime.now().isoformat()
     with db_session() as db:
-        db.execute("DELETE FROM sitroom_events WHERE event_type = 'earthquake'")
         for f in features:
             props = f.get('properties', {})
             geom = f.get('geometry', {})
             coords = geom.get('coordinates', [0, 0, 0])
-            db.execute('''INSERT OR IGNORE INTO sitroom_events
-                (event_id, event_type, title, magnitude, lat, lng, depth_km, event_time, source_url, detail_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            db.execute('''INSERT OR REPLACE INTO sitroom_events
+                (event_id, event_type, title, magnitude, lat, lng, depth_km, event_time, source_url, detail_json, cached_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                 (f.get('id', ''), 'earthquake', props.get('place', ''),
                  props.get('mag'), coords[1] if len(coords) > 1 else 0,
                  coords[0] if coords else 0, coords[2] if len(coords) > 2 else 0,
                  props.get('time', 0), props.get('url', ''),
                  json.dumps({'tsunami': props.get('tsunami'), 'alert': props.get('alert'),
-                             'felt': props.get('felt'), 'sig': props.get('sig')})))
+                             'felt': props.get('felt'), 'sig': props.get('sig')}),
+                 batch_ts))
+        db.commit()
+        # Remove stale rows from previous batches
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'earthquake' AND (cached_at IS NULL OR cached_at < ?)", (batch_ts,))
         db.commit()
     log.info(f"Situation Room: cached {len(features)} earthquakes")
 
@@ -697,8 +701,8 @@ def _fetch_weather_alerts():
         return
 
     features = data.get('features', [])[:200]
+    batch_ts = datetime.now().isoformat()
     with db_session() as db:
-        db.execute("DELETE FROM sitroom_events WHERE event_type = 'weather_alert'")
         for f in features:
             props = f.get('properties', {})
             event_id = props.get('id', '')
@@ -717,9 +721,9 @@ def _fetch_weather_alerts():
                     onset_ms = int(datetime.fromisoformat(props['onset'].replace('Z', '+00:00')).timestamp() * 1000)
             except (ValueError, TypeError):
                 pass
-            db.execute('''INSERT OR IGNORE INTO sitroom_events
-                (event_id, event_type, title, lat, lng, event_time, source_url, detail_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+            db.execute('''INSERT OR REPLACE INTO sitroom_events
+                (event_id, event_type, title, lat, lng, event_time, source_url, detail_json, cached_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                 (event_id, 'weather_alert',
                  f"{props.get('event', '')} - {props.get('areaDesc', '')}",
                  lat, lng, onset_ms, props.get('id', ''),
@@ -729,7 +733,11 @@ def _fetch_weather_alerts():
                      'description': (props.get('description') or '')[:2000],
                      'instruction': (props.get('instruction') or '')[:1000],
                      'sender': props.get('senderName', ''), 'expires': props.get('expires', ''),
-                 })))
+                 }),
+                 batch_ts))
+        db.commit()
+        # Remove stale rows from previous batches
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'weather_alert' AND (cached_at IS NULL OR cached_at < ?)", (batch_ts,))
         db.commit()
     log.info(f"Situation Room: cached {len(features)} weather alerts")
 
@@ -794,16 +802,26 @@ def _fetch_market_data():
     except Exception as e:
         log.debug(f"CoinGecko failed: {e}")
 
-    # Gold/Silver (metals.dev)
+    # Gold/Silver (metals.dev) — with change tracking from previous cached price
     try:
         resp = requests.get('https://api.metals.dev/v1/latest?api_key=demo&currency=USD&unit=toz',
                             timeout=_REQ_TIMEOUT, headers=_REQ_HEADERS)
         if resp.ok:
             metals = resp.json().get('metals', {})
-            if 'gold' in metals:
-                markets.append({'symbol': 'GOLD', 'price': metals['gold'], 'change_24h': 0, 'market_type': 'commodity'})
-            if 'silver' in metals:
-                markets.append({'symbol': 'SILVER', 'price': metals['silver'], 'change_24h': 0, 'market_type': 'commodity'})
+            # Read previous prices from DB for change calculation
+            prev_prices = {}
+            try:
+                with db_session() as db:
+                    for row in db.execute("SELECT symbol, price FROM sitroom_markets WHERE symbol IN ('GOLD', 'SILVER')").fetchall():
+                        prev_prices[row[0]] = row[1]
+            except Exception:
+                pass
+            for metal_key, symbol in [('gold', 'GOLD'), ('silver', 'SILVER')]:
+                if metal_key in metals:
+                    new_price = metals[metal_key]
+                    old_price = prev_prices.get(symbol)
+                    change = ((new_price - old_price) / old_price * 100) if old_price else 0
+                    markets.append({'symbol': symbol, 'price': new_price, 'change_24h': round(change, 2), 'market_type': 'commodity'})
     except Exception as e:
         log.debug(f"Metals failed: {e}")
 
@@ -841,9 +859,8 @@ def _fetch_market_data():
 
     with db_session() as db:
         db.execute('DELETE FROM sitroom_markets')
-        for m in markets:
-            db.execute('INSERT INTO sitroom_markets (symbol, price, change_24h, market_type, label) VALUES (?, ?, ?, ?, ?)',
-                       (m['symbol'], m['price'], m.get('change_24h', 0), m.get('market_type', 'other'), m.get('label', '')))
+        db.executemany('INSERT INTO sitroom_markets (symbol, price, change_24h, market_type, label) VALUES (?, ?, ?, ?, ?)',
+                      [(m['symbol'], m['price'], m.get('change_24h', 0), m.get('market_type', 'other'), m.get('label', '')) for m in markets])
         db.commit()
     log.info(f"Situation Room: cached {len(markets)} market entries")
 
@@ -866,8 +883,8 @@ def _fetch_conflict_data():
         return
 
     features = data.get('features', [])[:50]
+    batch_ts = datetime.now().isoformat()
     with db_session() as db:
-        db.execute("DELETE FROM sitroom_events WHERE event_type = 'conflict'")
         for f in features:
             props = f.get('properties', {})
             geom = f.get('geometry', {})
@@ -877,13 +894,17 @@ def _fetch_conflict_data():
             mag = sev.get('severity_value') if isinstance(sev, dict) else None
             url_obj = props.get('url', {})
             source_url = url_obj.get('report', '') if isinstance(url_obj, dict) else ''
-            db.execute('''INSERT OR IGNORE INTO sitroom_events
-                (event_id, event_type, title, magnitude, lat, lng, event_time, source_url, detail_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            db.execute('''INSERT OR REPLACE INTO sitroom_events
+                (event_id, event_type, title, magnitude, lat, lng, event_time, source_url, detail_json, cached_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                 (eid, 'conflict', props.get('name', props.get('eventtype', 'Unknown')),
                  mag, coords[1] if len(coords) > 1 else 0, coords[0] if coords else 0, 0, source_url,
                  json.dumps({'alert_level': props.get('alertlevel', ''), 'event_type': props.get('eventtype', ''),
-                             'country': props.get('country', ''), 'description': (props.get('description') or '')[:2000]})))
+                             'country': props.get('country', ''), 'description': (props.get('description') or '')[:2000]}),
+                 batch_ts))
+        db.commit()
+        # Remove stale rows from previous batches
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'conflict' AND (cached_at IS NULL OR cached_at < ?)", (batch_ts,))
         db.commit()
     log.info(f"Situation Room: cached {len(features)} GDACS events")
 
@@ -1046,9 +1067,8 @@ def _fetch_space_weather():
 
     with db_session() as db:
         db.execute('DELETE FROM sitroom_space_weather')
-        for dtype, data in datasets.items():
-            db.execute('INSERT INTO sitroom_space_weather (data_type, value_json) VALUES (?, ?)',
-                       (dtype, json.dumps(data)))
+        db.executemany('INSERT INTO sitroom_space_weather (data_type, value_json) VALUES (?, ?)',
+                      [(dtype, json.dumps(data)) for dtype, data in datasets.items()])
         db.commit()
     log.info(f"Situation Room: cached {len(datasets)} space weather datasets")
 
@@ -1179,16 +1199,20 @@ def _fetch_fires():
     if not fires:
         return
 
+    batch_ts = datetime.now().isoformat()
     with db_session() as db:
-        db.execute("DELETE FROM sitroom_events WHERE event_type = 'fire'")
         for lat, lng, brightness, confidence, acq_date in fires:
             eid = hashlib.sha256(f"fire:{lat:.3f}:{lng:.3f}:{acq_date}".encode()).hexdigest()[:16]
-            db.execute('''INSERT OR IGNORE INTO sitroom_events
-                (event_id, event_type, title, magnitude, lat, lng, event_time, detail_json)
-                VALUES (?, ?, ?, ?, ?, ?, 0, ?)''',
+            db.execute('''INSERT OR REPLACE INTO sitroom_events
+                (event_id, event_type, title, magnitude, lat, lng, event_time, detail_json, cached_at)
+                VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)''',
                 (eid, 'fire', f"Fire detection ({confidence})" if confidence else 'Fire detection',
                  brightness, lat, lng,
-                 json.dumps({'brightness': brightness, 'confidence': confidence, 'acq_date': acq_date})))
+                 json.dumps({'brightness': brightness, 'confidence': confidence, 'acq_date': acq_date}),
+                 batch_ts))
+        db.commit()
+        # Remove stale rows from previous batches
+        db.execute("DELETE FROM sitroom_events WHERE event_type = 'fire' AND (cached_at IS NULL OR cached_at < ?)", (batch_ts,))
         db.commit()
     log.info(f"Situation Room: cached {len(fires)} fire detections")
 
@@ -1615,15 +1639,15 @@ def _fetch_stablecoins():
 
     names = {'tether': 'USDT', 'usd-coin': 'USDC', 'dai': 'DAI', 'first-digital-usd': 'FDUSD'}
     with db_session() as db:
+        rows = []
         for coin, vals in data.items():
             symbol = names.get(coin, coin.upper())
             price = vals.get('usd', 1.0)
             mcap = vals.get('usd_market_cap', 0)
             change = vals.get('usd_24h_change', 0)
-            # Store as market entry
-            db.execute('INSERT OR REPLACE INTO sitroom_markets (symbol, price, change_24h, market_type, label) VALUES (?, ?, ?, ?, ?)',
-                       (symbol, price, round(change or 0, 4), 'stablecoin',
-                        f"${mcap/1e9:.1f}B" if mcap else ''))
+            rows.append((symbol, price, round(change or 0, 4), 'stablecoin',
+                         f"${mcap/1e9:.1f}B" if mcap else ''))
+        db.executemany('INSERT OR REPLACE INTO sitroom_markets (symbol, price, change_24h, market_type, label) VALUES (?, ?, ?, ?, ?)', rows)
         db.commit()
     log.info(f"Situation Room: cached {len(data)} stablecoin entries")
 
@@ -2212,9 +2236,8 @@ def _fetch_gdelt_events():
         db.execute('''CREATE TABLE IF NOT EXISTS sitroom_gdelt
             (id INTEGER PRIMARY KEY, data_type TEXT UNIQUE, value_json TEXT,
              cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-        for dtype, data in results.items():
-            db.execute('INSERT OR REPLACE INTO sitroom_gdelt (data_type, value_json) VALUES (?, ?)',
-                       (dtype, json.dumps(data)))
+        db.executemany('INSERT OR REPLACE INTO sitroom_gdelt (data_type, value_json) VALUES (?, ?)',
+                      [(dtype, json.dumps(data)) for dtype, data in results.items()])
         db.commit()
     log.info(f"Situation Room: cached {len(results)} GDELT datasets")
 
@@ -2275,6 +2298,32 @@ def _fetch_cot_positioning():
 
 # ─── Refresh Orchestrator ──────────────────────────────────────────────
 
+_REFRESH_TIERS = {
+    'critical': [_fetch_earthquakes, _fetch_weather_alerts, _fetch_oref_alerts, _fetch_fires],
+    'standard': [_fetch_rss_feeds, _fetch_market_data, _fetch_stablecoins,
+                 _fetch_conflict_data, _compute_correlations,
+                 _fetch_aviation, _fetch_space_weather, _fetch_volcanoes,
+                 _fetch_predictions, _fetch_disease_outbreaks, _fetch_internet_outages,
+                 _fetch_radiation, _fetch_sanctions, _fetch_displacement,
+                 _fetch_ucdp_conflicts, _fetch_cyber_threats, _fetch_yield_curve,
+                 _fetch_service_status, _fetch_social_velocity, _fetch_renewable_energy,
+                 _fetch_fuel_prices, _fetch_product_hunt, _fetch_macro_stress,
+                 _fetch_central_banks],
+    'background': [_fetch_bigmac_index, _fetch_arxiv_papers, _fetch_github_trending,
+                   _fetch_ais_ships, _fetch_cot_positioning, _fetch_gdelt_trending,
+                   _fetch_gdelt_events],
+}
+
+
+def _safe_worker(func, app):
+    """Run a single fetch worker with error isolation and app context."""
+    try:
+        with app.app_context():
+            func()
+    except Exception as e:
+        log.warning(f'Fetch worker {func.__name__} failed: {e}')
+
+
 def refresh_all_feeds():
     global _fetch_running
     with _state_lock:
@@ -2282,44 +2331,22 @@ def refresh_all_feeds():
             return False
         _fetch_running = True
 
+    app = current_app._get_current_object()
+
     def _worker():
         global _fetch_running
         try:
-            _fetch_rss_feeds()
-            _fetch_earthquakes()
-            _fetch_weather_alerts()
-            _fetch_market_data()
-            _fetch_conflict_data()
-            _fetch_aviation()
-            _fetch_ais_ships()
-            _fetch_space_weather()
-            _fetch_volcanoes()
-            _fetch_predictions()
-            _fetch_fires()
-            _fetch_disease_outbreaks()
-            _fetch_internet_outages()
-            _fetch_radiation()
-            _fetch_gdelt_trending()
-            _fetch_sanctions()
-            _fetch_displacement()
-            _fetch_ucdp_conflicts()
-            _fetch_cyber_threats()
-            _fetch_yield_curve()
-            _fetch_stablecoins()
-            _fetch_service_status()
-            _fetch_social_velocity()
-            _fetch_renewable_energy()
-            _fetch_bigmac_index()
-            _fetch_github_trending()
-            _fetch_fuel_prices()
-            _fetch_product_hunt()
-            _fetch_macro_stress()
-            _fetch_central_banks()
-            _fetch_arxiv_papers()
-            _fetch_oref_alerts()
-            _fetch_gdelt_events()
-            _fetch_cot_positioning()
-            _compute_correlations()
+            for tier_name in ('critical', 'standard', 'background'):
+                tier_funcs = _REFRESH_TIERS[tier_name]
+                with ThreadPoolExecutor(max_workers=8) as executor:
+                    futures = {}
+                    for worker_func in tier_funcs:
+                        futures[executor.submit(_safe_worker, worker_func, app)] = worker_func.__name__
+                    for future in as_completed(futures, timeout=120):
+                        try:
+                            future.result()
+                        except Exception as e:
+                            log.warning(f'Worker {futures[future]} failed: {e}')
         except Exception as e:
             log.exception(f"Situation Room refresh error: {e}")
         finally:
@@ -2369,23 +2396,32 @@ def api_sitroom_news():
 @situation_room_bp.route('/api/sitroom/events')
 def api_sitroom_events():
     event_type = request.args.get('type', '')
-    limit = min(request.args.get('limit', 200, type=int), 500)
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
     with db_session() as db:
         if event_type:
-            rows = db.execute('SELECT * FROM sitroom_events WHERE event_type = ? ORDER BY cached_at DESC LIMIT ?',
-                              (event_type, limit)).fetchall()
+            rows = db.execute('SELECT * FROM sitroom_events WHERE event_type = ? ORDER BY cached_at DESC LIMIT ? OFFSET ?',
+                              (event_type, limit, offset)).fetchall()
         else:
-            rows = db.execute('SELECT * FROM sitroom_events ORDER BY cached_at DESC LIMIT ?', (limit,)).fetchall()
+            rows = db.execute('SELECT * FROM sitroom_events ORDER BY cached_at DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return jsonify({'events': [dict(r) for r in rows]})
 
 
 @situation_room_bp.route('/api/sitroom/earthquakes')
 def api_sitroom_earthquakes():
     min_mag = request.args.get('min_magnitude', 0, type=float)
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
     with db_session() as db:
         rows = db.execute(
-            "SELECT * FROM sitroom_events WHERE event_type = 'earthquake' AND (magnitude IS NULL OR magnitude >= ?) ORDER BY event_time DESC LIMIT 100",
-            (min_mag,)).fetchall()
+            "SELECT * FROM sitroom_events WHERE event_type = 'earthquake' AND (magnitude IS NULL OR magnitude >= ?) ORDER BY event_time DESC LIMIT ? OFFSET ?",
+            (min_mag, limit, offset)).fetchall()
     return jsonify({'earthquakes': [dict(r) for r in rows]})
 
 
@@ -2434,16 +2470,26 @@ def api_sitroom_space_weather():
 @situation_room_bp.route('/api/sitroom/volcanoes')
 def api_sitroom_volcanoes():
     """Return cached volcanic activity."""
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
     with db_session() as db:
-        rows = db.execute('SELECT * FROM sitroom_volcanoes ORDER BY start_date DESC LIMIT 50').fetchall()
+        rows = db.execute('SELECT * FROM sitroom_volcanoes ORDER BY start_date DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return jsonify({'volcanoes': [dict(r) for r in rows]})
 
 
 @situation_room_bp.route('/api/sitroom/predictions')
 def api_sitroom_predictions():
     """Return cached prediction markets."""
+    try:
+        limit = min(int(request.args.get('limit', 50)), 200)
+        offset = int(request.args.get('offset', 0))
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
     with db_session() as db:
-        rows = db.execute('SELECT * FROM sitroom_predictions WHERE active = 1 ORDER BY volume DESC LIMIT 20').fetchall()
+        rows = db.execute('SELECT * FROM sitroom_predictions WHERE active = 1 ORDER BY volume DESC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
     return jsonify({'predictions': [dict(r) for r in rows]})
 
 

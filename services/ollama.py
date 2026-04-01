@@ -329,6 +329,7 @@ def chat(model: str, messages: list[dict], stream: bool = True):
     except requests.HTTPError as e:
         if e.response is not None and e.response.status_code == 404:
             raise RuntimeError(f'Model "{model}" not found. Pull it first from the AI Models tab.')
+        resp.close()
         raise
 
     if stream:

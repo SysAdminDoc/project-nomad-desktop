@@ -1,17 +1,49 @@
-const CACHE_NAME = 'nomad-v2';
+const CACHE_NAME = 'nomad-v3';
 const SITROOM_CACHE = 'nomad-sitroom-v1';
 const SITROOM_CACHE_TTL = 300000; // 5 minutes
 
 const STATIC_ASSETS = [
+  '/',
+  // Manifest & top-level assets
   '/static/manifest.json',
-  '/static/css/app.css',
-  '/static/css/premium.css',
-  '/static/css/app/45_situation_room.css',
   '/static/logo.png',
+  '/static/nomad-mark.svg',
+  // App CSS
+  '/static/css/app.css',
+  '/static/css/app/00_theme_tokens.css',
+  '/static/css/app/10_shell_layout.css',
+  '/static/css/app/20_primary_workspaces.css',
+  '/static/css/app/30_secondary_workspaces.css',
+  '/static/css/app/40_preparedness_media.css',
+  '/static/css/app/45_situation_room.css',
+  '/static/css/app/50_home_customize.css',
+  '/static/css/app/60_accessibility_platform.css',
+  '/static/css/app/70_cleanup_utilities.css',
+  // Premium CSS
+  '/static/css/premium.css',
+  '/static/css/premium/00_base.css',
+  '/static/css/premium/10_refresh.css',
+  '/static/css/premium/20_workspaces.css',
+  '/static/css/premium/30_preparedness_ops.css',
+  '/static/css/premium/40_customize_maps.css',
+  '/static/css/premium/50_settings.css',
+  '/static/css/premium/60_benchmark_tools.css',
+  '/static/css/premium/70_layout_hardening.css',
+  '/static/css/premium/80_dark_theme_overrides.css',
+  '/static/css/premium/90_theme_consistency.css',
+  // Vendor libraries
   '/static/maplibre-gl.js',
   '/static/maplibre-gl.css',
   '/static/pmtiles.js',
-  '/static/js/epub.min.js'
+  // App JS
+  '/static/js/api.js',
+  '/static/js/battery.js',
+  '/static/js/chart.js',
+  '/static/js/epub.min.js',
+  '/static/js/events.js',
+  '/static/js/i18n.js',
+  '/static/js/offline.js',
+  '/static/js/toast.js',
 ];
 
 // Cache static assets on install
