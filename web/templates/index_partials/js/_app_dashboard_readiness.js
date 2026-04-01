@@ -51,23 +51,22 @@ function drawSparkline(canvasId, data, color, opts = {}) {
 
 // Load sparkline data for dashboard widgets
 async function loadDashboardSparklines() {
-  // Power history sparkline
-  const powerData = await safeFetch('/api/power/history?period=24h', {}, []);
-  if (powerData.length > 1) {
-    const socData = powerData.map(r => r.battery_soc || 0);
-    setTimeout(() => drawSparkline('spark-power', socData, '#f9a825', {min: 0, max: 100}), 100);
+  const powerSparkline = document.getElementById('spark-power');
+  if (powerSparkline) {
+    const powerData = await safeFetch('/api/power/history?period=24h', {}, []);
+    if (powerData.length > 1) {
+      const socData = powerData.map(r => r.battery_soc || 0);
+      setTimeout(() => drawSparkline('spark-power', socData, '#f9a825', {min: 0, max: 100}), 100);
+    }
   }
-  // Weather pressure sparkline
-  const weatherData = await safeFetch('/api/dashboard/live', {}, null);
-  // We already have _liveDashData — use that for pressure if available
 }
 
 /* ─── Getting Started Checklist ─── */
 async function loadGettingStarted() {
-  const data = await safeFetch('/api/system/getting-started', {}, null);
-  if (!data) return;
   const panel = document.getElementById('getting-started-panel');
   if (!panel) return;
+  const data = await safeFetch('/api/system/getting-started', {}, null);
+  if (!data) return;
   // Hide if all steps complete
   if (data.pct >= 100) { panel.style.display = 'none'; return; }
   panel.style.display = '';
@@ -263,6 +262,13 @@ async function loadSuggestedActions() {
 window._widgetConfig = null;
 
 async function loadWidgetConfig() {
+  const workspace = document.getElementById('dash-workspace');
+  const liveDashboard = document.getElementById('live-dashboard');
+  const widgetContainer = document.getElementById('dash-live-widgets');
+  if (!workspace && !liveDashboard && !widgetContainer) {
+    window._widgetConfig = null;
+    return window._widgetConfig;
+  }
   try {
     const resp = await fetch('/api/dashboard/widgets');
     const data = await resp.json();
@@ -483,6 +489,10 @@ let _liveDashTimer = null;
 let _liveDashData = null;
 
 async function loadLiveDashboard() {
+  const workspace = document.getElementById('dash-workspace');
+  const liveDashboard = document.getElementById('live-dashboard');
+  const widgetContainer = document.getElementById('dash-live-widgets');
+  if (!workspace && !liveDashboard && !widgetContainer) return;
   const data = await safeFetch('/api/dashboard/live', {}, null);
   if (!data) return;
   _liveDashData = data;
@@ -686,6 +696,10 @@ function timeAgo(dateStr) {
 
 function startLiveDashPolling() {
   if (_liveDashTimer) clearInterval(_liveDashTimer);
+  const workspace = document.getElementById('dash-workspace');
+  const liveDashboard = document.getElementById('live-dashboard');
+  const widgetContainer = document.getElementById('dash-live-widgets');
+  if (!workspace && !liveDashboard && !widgetContainer) return;
   loadLiveDashboard();
   _liveDashTimer = setInterval(() => {
     if (!document.getElementById('dash-workspace')?.classList.contains('active')) return;
@@ -695,12 +709,13 @@ function startLiveDashPolling() {
 
 /* ─── Command Dashboard ─── */
 async function loadCmdDashboard() {
+  const el = document.getElementById('cmd-dashboard');
+  if (!el) return;
   try {
     const [d, crit] = await Promise.all([
       fetch('/api/dashboard/overview').then(r=>{if(!r.ok)throw new Error();return r.json()}),
       fetch('/api/dashboard/critical').then(r => r.json()).catch(() => ({critical_burn:[], expiring_items:[]}))
     ]);
-    const el = document.getElementById('cmd-dashboard');
     const sitLabels = {green:'ALL CLEAR',yellow:'CAUTION',orange:'CONCERN',red:'CRITICAL'};
       const sitColors = {green:'var(--green)',yellow:'var(--warning)',orange:'var(--orange)',red:'var(--red)'};
     const metricCard = ({ label, value, tone = 'var(--accent)', meta = '', nav = '', valueClass = '' }) =>
@@ -744,14 +759,14 @@ async function loadCmdDashboard() {
 
 /* ─── Readiness Score ─── */
 async function loadReadinessScore() {
+  const gradeEl = document.getElementById('rs-grade');
+  const totalEl = document.getElementById('rs-total');
+  const fill = document.getElementById('rs-bar-fill');
+  const cats = document.getElementById('rs-categories');
+  if (!gradeEl || !totalEl || !fill || !cats) return;
   try {
     const d = await (await fetch('/api/readiness-score')).json();
-      const gradeColors = {A:'var(--green)',B:'var(--green)',C:'var(--warning)',D:'var(--orange)',F:'var(--red)'};
-    const gradeEl = document.getElementById('rs-grade');
-    const totalEl = document.getElementById('rs-total');
-    const fill = document.getElementById('rs-bar-fill');
-    const cats = document.getElementById('rs-categories');
-    if (!gradeEl || !totalEl || !fill || !cats) return;
+    const gradeColors = {A:'var(--green)',B:'var(--green)',C:'var(--warning)',D:'var(--orange)',F:'var(--red)'};
     gradeEl.textContent = d.grade;
     gradeEl.style.color = gradeColors[d.grade] || 'var(--text)';
     totalEl.textContent = `${d.total}/100`;

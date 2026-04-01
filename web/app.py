@@ -45,7 +45,7 @@ except Exception:
         logging.getLogger('nomad.web').warning('Could not import channel catalog — media features will be limited')
         CHANNEL_CATALOG = []
         CHANNEL_CATEGORIES = []
-from db import get_db, get_db_path, db_session, log_activity
+from db import get_db, get_db_path, db_session, init_db, log_activity
 from web.print_templates import render_print_document
 from web.sql_safety import safe_table, safe_columns, build_update, build_insert
 from services import ollama, kiwix, cyberchef, kolibri, qdrant, stirling, flatnotes
@@ -100,6 +100,8 @@ def _check_origin(req):
         abort(403, 'Cross-origin request blocked')
 
 _state_lock = threading.Lock()
+_db_bootstrap_lock = threading.Lock()
+_db_bootstrap_done = False
 
 SERVICE_MODULES = {
     'ollama': ollama,
@@ -166,7 +168,12 @@ def _load_bundle_manifest():
 
 
 def create_app():
-    global _cpu_monitor_started
+    global _cpu_monitor_started, _db_bootstrap_done
+    if not _db_bootstrap_done:
+        with _db_bootstrap_lock:
+            if not _db_bootstrap_done:
+                init_db()
+                _db_bootstrap_done = True
     if not _cpu_monitor_started:
         _cpu_monitor_started = True
         threading.Thread(target=_cpu_monitor, daemon=True).start()
@@ -5689,13 +5696,14 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
         """SSE endpoint — pushes real-time events to connected clients."""
         ip = request.remote_addr or 'unknown'
         now = time.time()
-        with _sse_lock:
-            connects = _sse_connects.get(ip, [])
-            connects = [t for t in connects if now - t < 60]
-            if len(connects) >= 10:
-                return jsonify({'error': 'rate limited'}), 429
-            connects.append(now)
-            _sse_connects[ip] = connects
+        if ip not in ('127.0.0.1', '::1', 'localhost'):
+            with _sse_lock:
+                connects = _sse_connects.get(ip, [])
+                connects = [t for t in connects if now - t < 60]
+                if len(connects) >= 10:
+                    return jsonify({'error': 'rate limited'}), 429
+                connects.append(now)
+                _sse_connects[ip] = connects
         with _sse_lock:
             if len(_sse_clients) >= MAX_SSE_CLIENTS:
                 return jsonify({'error': 'Too many SSE connections'}), 429
