@@ -60,6 +60,7 @@ class TorrentManager:
 
     def __init__(self):
         self._session = None
+        # RLock (reentrant) — allows nested acquisition (e.g. add_magnet -> _get_session)
         self._lock = threading.RLock()
         # hash -> lt handle
         self._handles: dict[str, object] = {}

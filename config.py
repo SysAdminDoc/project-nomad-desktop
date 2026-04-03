@@ -10,7 +10,6 @@ hardcoded values used throughout the application.
 import os
 import json
 import logging
-import secrets
 import threading
 
 # Optional .env support — gracefully skip if python-dotenv is not installed
@@ -82,7 +81,8 @@ class Config:
     def secret_key(cls):
         """Return a secret key, generating one if not configured."""
         if not cls.SECRET_KEY:
-            cls.SECRET_KEY = secrets.token_hex(32)
+            cls.SECRET_KEY = os.urandom(32).hex()
+            log.debug('No NOMAD_SECRET_KEY set — generated random secret key for this session')
         return cls.SECRET_KEY
 
 # Config cache — avoids re-reading config.json from disk on every get_data_dir() call

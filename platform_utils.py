@@ -447,7 +447,10 @@ def extract_archive(archive_path: str, dest_dir: str):
                     if not info.is_dir() and os.path.isfile(extracted):
                         unix_mode = info.external_attr >> 16
                         if unix_mode:
-                            os.chmod(extracted, unix_mode)
+                            try:
+                                os.chmod(extracted, unix_mode)
+                            except OSError:
+                                pass
     elif archive_path.endswith(('.tar.gz', '.tgz', '.tar.xz', '.tar.bz2')):
         import tarfile
         if archive_path.endswith('.tar.xz'):

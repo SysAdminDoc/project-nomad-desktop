@@ -19,10 +19,7 @@ _pull_queue_active = False
 _pull_queue_lock = threading.Lock()
 
 # ─── Wizard Setup ────────────────────────────────────────────────────
-# NOTE: _wizard_state is accessed from background threads without a lock.
-# Single-key dict updates are GIL-atomic under CPython, but a proper
-# threading.Lock should be added if compound read-modify-write sequences
-# are ever introduced.
+_wizard_lock = threading.Lock()
 _wizard_state = {
     'status': 'idle', 'phase': '', 'current_item': '', 'item_progress': 0,
     'overall_progress': 0, 'completed': [], 'errors': [], 'total_items': 0,
@@ -38,6 +35,7 @@ _ytdlp_dl_lock = threading.Lock()
 _ytdlp_install_state = {'status': 'idle', 'percent': 0, 'error': None}
 
 # ─── Proactive Alert System ──────────────────────────────────────────
+# Guarded by _state_lock (defined in web/app.py) for thread-safe access
 _alert_check_running = False
 
 # ─── Peer Discovery ──────────────────────────────────────────────────

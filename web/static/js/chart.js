@@ -43,6 +43,12 @@ const NomadChart = {
       return this._noData(ctx, W, H);
     }
 
+    // Cap unbounded chart data
+    if (data.labels.length > 2000) {
+      data.labels = data.labels.slice(-2000);
+      data.datasets.forEach(ds => { if (ds.values && ds.values.length > 2000) ds.values = ds.values.slice(-2000); });
+    }
+
     const pad = {top: 30, right: 20, bottom: 40, left: 55};
     if (options.rightAxis) pad.right = 55;
     const plotW = W - pad.left - pad.right;
@@ -207,6 +213,12 @@ const NomadChart = {
     ctx.clearRect(0, 0, W, H);
 
     if (!data.labels || !data.labels.length) return this._noData(ctx, W, H);
+
+    // Cap unbounded chart data
+    if (data.labels.length > 2000) {
+      data.labels = data.labels.slice(-2000);
+      data.datasets.forEach(ds => { if (ds.values && ds.values.length > 2000) ds.values = ds.values.slice(-2000); });
+    }
 
     const pad = {top: 30, right: 20, bottom: 40, left: 55};
     if (options.lineOverlay) pad.right = 55;

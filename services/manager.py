@@ -132,7 +132,7 @@ def download_file(url: str, dest: str, service_id: str = '') -> str:
                     speed_str = f'{speed:.0f} B/s'
 
                 _download_progress[service_id].update({
-                    'percent': int(downloaded / total * 100) if total > 0 else 0,
+                    'percent': min(int(downloaded / total * 100), 100) if total > 0 else 0,
                     'speed': speed_str,
                     'downloaded': downloaded,
                     'total': total,
@@ -189,6 +189,7 @@ def start_process(service_id: str, exe_path, args: list[str] = None,
         )
 
         # Start background thread to read output into _service_logs
+        # NOTE: service logs may contain filesystem paths — acceptable for local desktop app
         _service_logs.setdefault(service_id, [])
         def _read_output():
             try:

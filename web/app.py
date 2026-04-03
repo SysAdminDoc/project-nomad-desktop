@@ -59,6 +59,7 @@ _CREATION_FLAGS = {'creationflags': 0x08000000} if sys.platform == 'win32' else 
 
 
 def _esc(s):
+    # NOTE: duplicated in blueprints/inventory.py, blueprints/medical.py
     """Escape HTML for print/template output (None-safe wrapper around html.escape)."""
     return _html_escape(str(s)) if s else ''
 
@@ -79,14 +80,20 @@ def _validate_download_url(url):
     # Block obvious private hostnames
     if hostname in ('localhost', '') or hostname.endswith('.local'):
         raise ValueError('URLs pointing to internal hosts are not allowed')
-    # Resolve and check for private IPs
+    # Resolve and check for private/internal IPs (SSRF protection)
     try:
         import socket
-        resolved = socket.getaddrinfo(hostname, None)
+        old_timeout = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(5)
+        try:
+            resolved = socket.getaddrinfo(hostname, None)
+        finally:
+            socket.setdefaulttimeout(old_timeout)
         for _family, _type, _proto, _canonname, sockaddr in resolved:
             ip = ipaddress.ip_address(sockaddr[0])
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-                raise ValueError(f'URL resolves to a private/internal IP: {ip}')
+            if (ip.is_private or ip.is_loopback or ip.is_link_local
+                    or ip.is_reserved or ip.is_multicast):
+                raise ValueError('URL resolves to a blocked IP range')
     except (socket.gaierror, OSError):
         raise ValueError(f'Cannot resolve hostname: {hostname}')
     return url
@@ -199,6 +206,8 @@ def create_app():
     app.config['MAX_CONTENT_LENGTH'] = Config.MAX_CONTENT_LENGTH
     # DEBUG off by default; set NOMAD_DEBUG=1 to enable for development
     app.config['DEBUG'] = os.environ.get('NOMAD_DEBUG', '0') == '1'
+    if app.config['DEBUG']:
+        log.warning('Debug mode enabled -- do not use in production')
     app.secret_key = Config.secret_key()
 
     # ─── Rate Limiting (optional) ─────────────────────────────────────
@@ -360,10 +369,13 @@ def create_app():
     def handle_unhandled_exception(e):
         """Catch-all: return JSON error for API routes, let others fall through."""
         if request.path.startswith('/api/'):
-            log.error(f'Unhandled error on {request.method} {request.path}: {e}', exc_info=True)
             status = getattr(e, 'code', 500) if hasattr(e, 'code') else 500
-            # Don't leak internal error details — only show message for HTTP errors
-            msg = str(e) if hasattr(e, 'code') and status < 500 else 'Internal server error'
+            log.warning(f'API error on {request.method} {request.path} ({status}): {e}')
+            # Use generic messages — don't leak internal details
+            _http_messages = {400: 'Bad request', 403: 'Forbidden', 404: 'Not found',
+                              405: 'Method not allowed', 409: 'Conflict', 413: 'Payload too large',
+                              429: 'Too many requests'}
+            msg = _http_messages.get(status, 'Request error' if status < 500 else 'Internal server error')
             return jsonify({'error': msg}), status
         # Non-API routes: re-raise to let Flask's default handler render HTML
         raise e

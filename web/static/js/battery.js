@@ -57,7 +57,7 @@ const BatteryManager = {
     }
     // Reduce OfflineSync interval if available
     if (typeof OfflineSync !== 'undefined' && OfflineSync._syncInterval) {
-      OfflineSync.stopAutoSync();
+      try { OfflineSync.stopAutoSync(); } catch(e) { console.debug('[Battery] stopAutoSync error:', e); }
       OfflineSync.startAutoSync(severity === 'critical' ? 1800000 : 900000, true);
     }
   },
@@ -67,7 +67,7 @@ const BatteryManager = {
     this._throttled = false;
     document.documentElement.classList.remove('battery-saver', 'battery-critical');
     if (typeof OfflineSync !== 'undefined') {
-      OfflineSync.stopAutoSync();
+      try { OfflineSync.stopAutoSync(); } catch(e) { console.debug('[Battery] stopAutoSync error:', e); }
       OfflineSync.startAutoSync(300000, true);
     }
   },

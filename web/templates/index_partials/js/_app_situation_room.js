@@ -507,6 +507,20 @@ function _isSitroomActive() {
   return document.getElementById('tab-situation-room')?.classList.contains('active') || false;
 }
 
+// Cleanup intervals on tab leave to prevent memory leaks
+if (!window._nomadTabLeaveCallbacks) window._nomadTabLeaveCallbacks = {};
+window._nomadTabLeaveCallbacks['situation-room'] = function() {
+  if (_sitroomAutoTimer) { clearInterval(_sitroomAutoTimer); _sitroomAutoTimer = null; }
+  if (_sitroomClockTimer) { clearInterval(_sitroomClockTimer); _sitroomClockTimer = null; }
+  if (_sitroomWorldClockTimer) { clearInterval(_sitroomWorldClockTimer); _sitroomWorldClockTimer = null; }
+  if (_sitroomRefreshPollTimer) { clearInterval(_sitroomRefreshPollTimer); _sitroomRefreshPollTimer = null; }
+  window.NomadShellRuntime?.stopInterval('sitroom.smart-poll');
+  window.NomadShellRuntime?.stopInterval('sitroom.utc-clock');
+  window.NomadShellRuntime?.stopInterval('sitroom.world-clock');
+  window.NomadShellRuntime?.stopInterval('sitroom.refresh-status');
+  if (_sitroomResizeMap) window.removeEventListener('resize', _sitroomResizeMap);
+};
+
 function _sitroomRefreshPanels() {
   loadSitroomSummary();
   loadSitroomNews();

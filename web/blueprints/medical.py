@@ -15,6 +15,7 @@ medical_bp = Blueprint('medical', __name__)
 
 
 def _esc(s):
+    # NOTE: duplicated in app.py, blueprints/inventory.py
     """Escape HTML for print output."""
     return (s or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
 

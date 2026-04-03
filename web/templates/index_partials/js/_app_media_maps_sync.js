@@ -1,4 +1,9 @@
 /* ─── Media Tab ─── */
+async function _fetchJson(url, opts) {
+  const resp = await fetch(url, opts);
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  return resp.json();
+}
 let _mediaItems = [];
 let _mediaFolder = '';
 let _mediaViewGrid = true;
@@ -51,7 +56,7 @@ async function runMediaYtdlpInstallPoll() {
     return;
   }
   try {
-    const p = await (await fetch('/api/ytdlp/install-progress')).json();
+    const p = await _fetchJson('/api/ytdlp/install-progress');
     fill.style.width = `${p.percent || 0}%`;
     if (p.status === 'complete') {
       stopMediaYtdlpInstallPolling();
@@ -97,7 +102,7 @@ async function runMediaDownloadPoll() {
     return;
   }
   try {
-    const all = await (await fetch('/api/ytdlp/progress')).json();
+    const all = await _fetchJson('/api/ytdlp/progress');
     let active = null;
     for (const [id, p] of Object.entries(all)) {
       if (_mediaDlWatchId && id === _mediaDlWatchId) { active = p; break; }
@@ -255,7 +260,7 @@ function resumeMedia(type, id) {
 
 async function checkYtdlpStatus() {
   try {
-    const s = await (await fetch('/api/ytdlp/status')).json();
+    const s = await _fetchJson('/api/ytdlp/status');
     setMediaVisibility('media-ytdlp-banner', !s.installed);
     if (s.installed) setMediaVisibility('ytdlp-install-progress', false);
   } catch(e) {}
@@ -274,7 +279,7 @@ async function installYtdlp() {
 
 async function loadMediaContent() {
   const apiMap = {videos: '/api/videos', audio: '/api/audio', books: '/api/books'};
-  try { _mediaItems = await (await fetch(apiMap[_mediaSub])).json(); } catch(e) { _mediaItems = []; }
+  try { _mediaItems = await _fetchJson(apiMap[_mediaSub]); } catch(e) { _mediaItems = []; }
   renderMediaItems();
   loadMediaFolders();
   loadMediaSidebarStats();
@@ -369,7 +374,7 @@ function renderBooks(el, items) {
 async function loadMediaFolders() {
   const statsMap = {videos:'/api/videos/stats', audio:'/api/audio/stats', books:'/api/books/stats'};
   try {
-    const stats = await (await fetch(statsMap[_mediaSub])).json();
+    const stats = await _fetchJson(statsMap[_mediaSub]);
     const el = document.getElementById('media-folder-list');
     const labels = {videos:'All Videos',audio:'All Audio',books:'All Books'};
     let html = `<div class="media-folder-item${_mediaFolder===''?' active':''}" data-media-action="select-folder" data-media-folder="" role="button" tabindex="0" aria-pressed="${_mediaFolder===''?'true':'false'}">${labels[_mediaSub]} <span class="media-folder-count">${stats.total}</span></div>`;
@@ -384,14 +389,14 @@ async function loadMediaFolders() {
 async function loadMediaSidebarStats() {
   const statsMap = {videos:'/api/videos/stats', audio:'/api/audio/stats', books:'/api/books/stats'};
   try {
-    const s = await (await fetch(statsMap[_mediaSub])).json();
+    const s = await _fetchJson(statsMap[_mediaSub]);
     document.getElementById('media-stats-footer').textContent = `${s.total} items, ${s.total_size_fmt}`;
   } catch(e) {}
 }
 
 async function loadTotalMediaStats() {
   try {
-    const s = await (await fetch('/api/media/stats')).json();
+    const s = await _fetchJson('/api/media/stats');
     document.getElementById('media-total-stats').textContent = `${s.videos.count} videos, ${s.audio.count} audio, ${s.books.count} books (${s.total_size_fmt})`;
   } catch(e) {}
 }
@@ -453,7 +458,7 @@ async function batchMoveMedia() {
   if (!_mediaSelected.size) return;
   const foldersMap = {videos:'/api/videos/folders', audio:'/api/audio/folders', books:'/api/books/folders'};
   let folders = [];
-  try { folders = await (await fetch(foldersMap[_mediaSub])).json(); } catch(e) {}
+  try { folders = await _fetchJson(foldersMap[_mediaSub]); } catch(e) {}
   const name = prompt('Move to folder:\n\nExisting: ' + (folders.length ? folders.join(', ') : 'none'));
   if (name === null) return;
   await fetch('/api/media/batch-move', {method:'POST', headers:{'Content-Type':'application/json'},
@@ -1793,7 +1798,7 @@ function renderChannels(channels) {
 }
 
 async function downloadChannelVideo(channelUrl, channelName, category) {
-  const s = await (await fetch('/api/ytdlp/status')).json();
+  const s = await _fetchJson('/api/ytdlp/status');
   if (!s.installed) { toast('Install the downloader first from the Videos tab', 'warning'); return; }
   // Download latest video from channel, preserving channel name as folder
   const folder = category;
@@ -1851,7 +1856,7 @@ async function loadMoreResults() {
   _ytSearchLimit += 15;
   const results = document.getElementById('yt-video-results');
   try {
-    const videos = await (await fetch(`/api/youtube/search?q=${encodeURIComponent(_lastYtSearch)}&limit=${_ytSearchLimit}`)).json();
+    const videos = await _fetchJson(`/api/youtube/search?q=${encodeURIComponent(_lastYtSearch)}&limit=${_ytSearchLimit}`);
     if (!videos.error) renderVideoResults(videos, `Search: "${_lastYtSearch}"`);
   } catch(e) { toast('Failed to load more results', 'error'); }
   finally { _ytSearching = false; }
@@ -1866,7 +1871,7 @@ async function browseChannelVideos(channelUrl, channelName) {
   setMediaVisibility(channels, false);
   results.innerHTML = mediaBrowserLoadingHtml(`Loading videos from ${channelName}…`);
   try {
-    const videos = await (await fetch(`/api/youtube/channel-videos?url=${encodeURIComponent(channelUrl)}&limit=15`)).json();
+    const videos = await _fetchJson(`/api/youtube/channel-videos?url=${encodeURIComponent(channelUrl)}&limit=15`);
     if (videos.error) {
       if (videos.error.includes('not installed')) {
         results.innerHTML = mediaBrowserStatusHtml({
@@ -1903,7 +1908,7 @@ async function autoInstallYtdlp(channelUrl, channelName) {
     // Poll install progress
     for (let i = 0; i < 60; i++) {
       await new Promise(res => setTimeout(res, 2000));
-      const s = await (await fetch('/api/ytdlp/status')).json();
+      const s = await _fetchJson('/api/ytdlp/status');
       if (s.installed) {
         toast('Video downloader installed', 'success');
         browseChannelVideos(channelUrl, channelName);
@@ -1978,7 +1983,7 @@ function closeYtWatch() {
 }
 
 async function downloadYtVideo(url, title) {
-  const s = await (await fetch('/api/ytdlp/status')).json();
+  const s = await _fetchJson('/api/ytdlp/status');
   if (!s.installed) { toast('Install the downloader first from the Videos tab', 'warning'); return; }
   try {
     const r = await fetch('/api/ytdlp/download', {method:'POST', headers:{'Content-Type':'application/json'},
@@ -1990,7 +1995,7 @@ async function downloadYtVideo(url, title) {
 }
 
 async function downloadYtAudio(url, title) {
-  const s = await (await fetch('/api/ytdlp/status')).json();
+  const s = await _fetchJson('/api/ytdlp/status');
   if (!s.installed) { toast('Install the downloader first from the Videos tab', 'warning'); return; }
   try {
     const r = await fetch('/api/ytdlp/download-audio', {method:'POST', headers:{'Content-Type':'application/json'},
@@ -2172,7 +2177,7 @@ async function moveMediaItem(id, type) {
   const foldersMap = {videos:'/api/videos/folders', audio:'/api/audio/folders', books:'/api/books/folders'};
   const apiMap = {videos:'/api/videos', audio:'/api/audio', books:'/api/books'};
   let folders = [];
-  try { folders = await (await fetch(foldersMap[type])).json(); } catch(e) {}
+  try { folders = await _fetchJson(foldersMap[type]); } catch(e) {}
   const name = prompt('Move to folder:\n\nExisting: ' + (folders.length ? folders.join(', ') : 'none'));
   if (name === null) return;
   await fetch(`${apiMap[type]}/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({folder:name})});
@@ -2191,13 +2196,13 @@ async function downloadMediaURL() {
   const input = document.getElementById('media-url-input');
   const url = input.value.trim();
   if (!url) { toast('Paste a URL first', 'warning'); return; }
-  const s = await (await fetch('/api/ytdlp/status')).json();
+  const s = await _fetchJson('/api/ytdlp/status');
   if (!s.installed) {
     toast('Installing downloader first...', 'info');
     await fetch('/api/ytdlp/install', {method:'POST'});
     for (let i = 0; i < 60; i++) {
       await new Promise(r => setTimeout(r, 2000));
-      const p = await (await fetch('/api/ytdlp/install-progress')).json();
+      const p = await _fetchJson('/api/ytdlp/install-progress');
       if (p.status === 'complete') break;
       if (p.status === 'error') { toast('Install failed: ' + p.error, 'error'); return; }
     }
@@ -2234,7 +2239,7 @@ function toggleDlQueue() {
 
 async function refreshDlQueue() {
   try {
-    const all = await (await fetch('/api/ytdlp/progress')).json();
+    const all = await _fetchJson('/api/ytdlp/progress');
     const el = document.getElementById('dl-queue-list');
     const entries = Object.entries(all);
     if (!entries.length) {
@@ -2278,7 +2283,7 @@ async function loadSubscriptions() {
   setMediaVisibility(results, false);
   setMediaVisibility(channels, true);
   try {
-    const subs = await (await fetch('/api/subscriptions')).json();
+    const subs = await _fetchJson('/api/subscriptions');
     if (!subs.length) {
       channels.innerHTML = '<div class="media-browser-empty"><strong>No subscriptions yet</strong><div class="media-browser-status-copy">Click the + button on any channel to subscribe.</div></div>';
       return;
@@ -2344,7 +2349,7 @@ async function loadActiveCatalog() {
   const isAudio = _mediaSub === 'audio';
   const catalogUrl = isAudio ? '/api/audio/catalog' : '/api/videos/catalog';
   try {
-    const catalog = await (await fetch(catalogUrl)).json();
+    const catalog = await _fetchJson(catalogUrl);
     const existing = new Set(_mediaItems.filter(v => v.url).map(v => v.url));
     const el = document.getElementById('media-catalog-list');
     const dlAllBtn = document.getElementById('media-catalog-dl-all');
@@ -2371,7 +2376,7 @@ async function loadActiveCatalog() {
 
 async function loadBookCatalog() {
   try {
-    const catalog = await (await fetch('/api/books/catalog')).json();
+    const catalog = await _fetchJson('/api/books/catalog');
     const existing = new Set(_mediaItems.filter(b => b.url).map(b => b.url));
     const el = document.getElementById('media-catalog-list');
     const dlAllBtn = document.getElementById('media-catalog-dl-all');
@@ -2429,10 +2434,10 @@ async function downloadRefBook(btn, item) {
 }
 
 async function downloadAllCatalog() {
-  const s = await (await fetch('/api/ytdlp/status')).json();
+  const s = await _fetchJson('/api/ytdlp/status');
   if (!s.installed) { toast('Install the downloader first', 'warning'); return; }
   try {
-    const catalog = await (await fetch('/api/videos/catalog')).json();
+    const catalog = await _fetchJson('/api/videos/catalog');
     const r = await fetch('/api/ytdlp/download-catalog', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({items:catalog})});
     const d = await r.json();
     if (d.error) { toast(d.error, 'error'); return; }
@@ -2442,10 +2447,10 @@ async function downloadAllCatalog() {
 }
 
 async function downloadAllAudioCatalog() {
-  const s = await (await fetch('/api/ytdlp/status')).json();
+  const s = await _fetchJson('/api/ytdlp/status');
   if (!s.installed) { toast('Install the downloader first', 'warning'); return; }
   try {
-    const catalog = await (await fetch('/api/audio/catalog')).json();
+    const catalog = await _fetchJson('/api/audio/catalog');
     // Download each one as audio
     const toDownload = catalog.filter(item => !_mediaItems.find(a => a.url === item.url));
     if (!toDownload.length) { toast('All audio catalog items already downloaded!', 'success'); return; }
@@ -2746,7 +2751,7 @@ async function printMapView() {
   // Get waypoints for the legend
   let waypointHtml = '';
   try {
-    const wps = await (await fetch('/api/waypoints')).json();
+    const wps = await _fetchJson('/api/waypoints');
     if (wps && wps.length) {
       waypointHtml = '<h3 class="map-print-section-title">Waypoints</h3><table class="map-print-table"><tr><th class="map-print-head">Name</th><th class="map-print-head">Lat</th><th class="map-print-head">Lng</th><th class="map-print-head">Category</th></tr>';
       for (const w of wps) {
@@ -2880,7 +2885,7 @@ function handleBearingClick(lngLat) {
 /* ─── Multi-Node Federation ─── */
 async function loadNodeIdentity() {
   try {
-    const n = await (await fetch('/api/node/identity')).json();
+    const n = await _fetchJson('/api/node/identity');
     document.getElementById('node-id-badge').textContent = `Node: ${n.node_name} (${n.node_id})`;
     document.getElementById('node-name-input').value = n.node_name;
   } catch(e) {}
@@ -2935,7 +2940,7 @@ async function syncToPeer(ip, port, name) {
 
 async function loadSyncLog() {
   try {
-    const logs = await (await fetch('/api/node/sync-log')).json();
+    const logs = await _fetchJson('/api/node/sync-log');
     const el = document.getElementById('sync-log-list');
     if (!logs.length) { el.innerHTML = '<div class="settings-empty-state">No sync history yet.</div>'; return; }
     el.innerHTML = logs.map(l => {
@@ -3117,7 +3122,7 @@ async function importSyncPack() {
   const formData = new FormData();
   formData.append('file', input.files[0]);
   try {
-    const r = await (await fetch('/api/sync/import', {method:'POST', body:formData})).json();
+    const r = await _fetchJson('/api/sync/import', {method:'POST', body:formData});
     input.value = '';
     if (r.tables) {
       const summary = Object.entries(r.tables).map(([t,c]) => `${t}: ${c}`).join(', ');
@@ -3133,8 +3138,8 @@ async function composeDeadDrop() {
   const secret = document.getElementById('dd-secret').value.trim();
   if (!message || !secret) { toast('Message and shared secret are required', 'warning'); return; }
   try {
-    const r = await (await fetch('/api/deaddrop/compose', {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message, recipient, secret})})).json();
+    const r = await _fetchJson('/api/deaddrop/compose', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({message, recipient, secret})});
     if (r.error) { toast(r.error, 'error'); return; }
     // Download as JSON file
     const blob = new Blob([JSON.stringify(r.payload, null, 2)], {type:'application/json'});
@@ -3159,8 +3164,8 @@ async function importDeadDrop() {
     // Try to decrypt
     const secret = prompt('Enter the shared secret to decrypt this message:');
     if (!secret) { toast('Message imported but not decrypted', 'info'); return; }
-    const r = await (await fetch('/api/deaddrop/decrypt', {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({payload, secret})})).json();
+    const r = await _fetchJson('/api/deaddrop/decrypt', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({payload, secret})});
     if (r.error) { toast(r.error, 'error'); return; }
     const el = document.getElementById('dd-received');
     if (el) {
@@ -3175,7 +3180,7 @@ async function importDeadDrop() {
 
 async function loadDeadDropMessages() {
   try {
-    const msgs = await (await fetch('/api/deaddrop/messages')).json();
+    const msgs = await _fetchJson('/api/deaddrop/messages');
     const el = document.getElementById('dd-received');
     if (!el) return;
     if (!msgs.length) { el.innerHTML = '<div class="settings-empty-state">No dead drop messages received yet.</div>'; return; }
@@ -3190,7 +3195,7 @@ async function loadDeadDropMessages() {
 /* ─── Multi-Node Group Training Exercises ─── */
 async function loadGroupExercises() {
   try {
-    const exercises = await (await fetch('/api/group-exercises')).json();
+    const exercises = await _fetchJson('/api/group-exercises');
     const el = document.getElementById('group-exercises-list');
     if (!el) return;
     if (!exercises.length) { el.innerHTML = '<div class="settings-empty-state">No group exercises yet. Create one to train with your federation peers.</div>'; return; }
@@ -3231,8 +3236,8 @@ async function createGroupExercise() {
   const types = ['grid_down', 'medical_crisis', 'evacuation', 'winter_storm', 'custom'];
   const type = prompt('Scenario type (' + types.join(', ') + '):', 'grid_down');
   try {
-    const r = await (await fetch('/api/group-exercises', {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({title, description: desc, scenario_type: type || 'custom'})})).json();
+    const r = await _fetchJson('/api/group-exercises', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({title, description: desc, scenario_type: type || 'custom'})});
     if (r.exercise_id) {
       toast(`Exercise created! Invited ${r.invited} peers.`, 'success');
       loadGroupExercises();
@@ -3242,7 +3247,7 @@ async function createGroupExercise() {
 
 async function joinGroupExercise(exerciseId) {
   try {
-    const r = await (await fetch(`/api/group-exercises/${exerciseId}/join`, {method:'POST'})).json();
+    const r = await _fetchJson(`/api/group-exercises/${exerciseId}/join`, {method:'POST'});
     toast(`Joined exercise! ${r.participants} participants now.`, 'success');
     loadGroupExercises();
   } catch(e) { toast('Join failed', 'error'); }
@@ -3252,9 +3257,10 @@ async function advanceGroupExercise(exerciseId) {
   const decision = prompt('Your decision/action for this phase:');
   if (!decision) return;
   try {
-    await fetch(`/api/group-exercises/${exerciseId}/update-state`, {method:'POST', headers:{'Content-Type':'application/json'},
+    const _resp = await fetch(`/api/group-exercises/${exerciseId}/update-state`, {method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({decision, event: `Phase advanced with decision: ${decision}`,
-        phase: (await (await fetch('/api/group-exercises')).json()).find(e => e.exercise_id === exerciseId)?.current_phase + 1 || 1})});
+        phase: (await _fetchJson('/api/group-exercises')).find(e => e.exercise_id === exerciseId)?.current_phase + 1 || 1})});
+    if (!_resp.ok) throw new Error('HTTP ' + _resp.status);
     toast('Phase advanced', 'success');
     loadGroupExercises();
   } catch(e) { toast('Failed', 'error'); }
@@ -3272,7 +3278,7 @@ async function completeGroupExercise(exerciseId) {
 /* ─── LoRA Fine-Tuning Pipeline ─── */
 async function loadTrainingDatasets() {
   try {
-    const ds = await (await fetch('/api/ai/training/datasets')).json();
+    const ds = await _fetchJson('/api/ai/training/datasets');
     const el = document.getElementById('training-datasets-list');
     if (!el) return;
     if (!ds.length) { el.innerHTML = '<div class="training-empty-state">No training datasets. Create one from your conversation history.</div>'; return; }
@@ -3289,8 +3295,8 @@ async function createTrainingDataset() {
   if (!name) return;
   toast('Extracting training data from conversations...', 'info');
   try {
-    const r = await (await fetch('/api/ai/training/datasets', {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({name, source:'conversations'})})).json();
+    const r = await _fetchJson('/api/ai/training/datasets', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name, source:'conversations'})});
     toast(`Dataset created with ${r.records} training records`, 'success');
     loadTrainingDatasets();
     loadTrainingJobs();
@@ -3299,7 +3305,7 @@ async function createTrainingDataset() {
 
 async function loadTrainingJobs() {
   try {
-    const jobs = await (await fetch('/api/ai/training/jobs')).json();
+    const jobs = await _fetchJson('/api/ai/training/jobs');
     const el = document.getElementById('training-jobs-list');
     if (!el) return;
     if (!jobs.length) { el.innerHTML = '<div class="training-empty-state">No training jobs yet.</div>'; return; }
@@ -3322,15 +3328,15 @@ async function loadTrainingJobs() {
 }
 
 async function createTrainingJob() {
-  const ds = await (await fetch('/api/ai/training/datasets')).json();
+  const ds = await _fetchJson('/api/ai/training/datasets');
   if (!ds.length) { toast('Create a training dataset first', 'warning'); return; }
   const model = prompt('Base model name:', 'llama3.2');
   if (!model) return;
   const output = prompt('Output model name:', 'nomad-custom');
   if (!output) return;
   try {
-    const r = await (await fetch('/api/ai/training/jobs', {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({dataset_id: ds[0].id, base_model: model, output_model: output})})).json();
+    const r = await _fetchJson('/api/ai/training/jobs', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({dataset_id: ds[0].id, base_model: model, output_model: output})});
     toast(`Training job created \u2014 Modelfile at ${r.modelfile}`, 'success');
     loadTrainingJobs();
   } catch(e) { toast('Failed', 'error'); }
@@ -3348,7 +3354,7 @@ async function runTrainingJob(jid) {
 /* ─── Perimeter Security Zones ─── */
 async function loadPerimeterZones() {
   try {
-    const zones = await (await fetch('/api/security/zones')).json();
+    const zones = await _fetchJson('/api/security/zones');
     const el = document.getElementById('perimeter-zones-list');
     if (!el) return;
     if (!zones.length) { el.innerHTML = prepEmptyBlock('No perimeter zones defined.'); return; }
@@ -3371,8 +3377,8 @@ async function createPerimeterZone() {
   const threat = prompt('Threat level (normal, elevated, high):', 'normal');
   const color = prompt('Zone color (hex):', '#ff4444');
   try {
-    const r = await (await fetch('/api/security/zones', {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({name, threat_level: threat || 'normal', color: color || '#ff4444', zone_type: 'perimeter'})})).json();
+    const r = await _fetchJson('/api/security/zones', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name, threat_level: threat || 'normal', color: color || '#ff4444', zone_type: 'perimeter'})});
     if (r.id) { toast('Perimeter zone created', 'success'); loadPerimeterZones(); }
     else { toast(r.error || 'Failed', 'error'); }
   } catch(e) { toast('Failed', 'error'); }
@@ -3418,7 +3424,7 @@ async function importChecklistJSON() {
   const formData = new FormData();
   formData.append('file', input.files[0]);
   try {
-    const r = await (await fetch('/api/checklists/import-json', {method:'POST', body:formData})).json();
+    const r = await _fetchJson('/api/checklists/import-json', {method:'POST', body:formData});
     input.value = '';
     if (r.id) { toast('Checklist imported!', 'success'); loadChecklists(); selectChecklist(r.id); }
     else { toast(r.error || 'Import failed', 'error'); }
@@ -3462,7 +3468,7 @@ function sendNotification(title, body) {
 /* ─── External Ollama Host ─── */
 async function loadOllamaHost() {
   try {
-    const r = await (await fetch('/api/settings/ollama-host')).json();
+    const r = await _fetchJson('/api/settings/ollama-host');
     document.getElementById('ollama-host-input').value = r.host || '';
   } catch(e) {}
 }
@@ -3504,7 +3510,7 @@ async function hostPower(action) {
 /* ─── PDF Library ─── */
 async function loadPDFList() {
   try {
-    const files = await (await fetch('/api/library/pdfs')).json();
+    const files = await _fetchJson('/api/library/pdfs');
     const el = document.getElementById('pdf-list');
     if (!files.length) { el.innerHTML = '<span class="library-pdf-empty">No documents uploaded. Click Upload to add PDFs, ePubs, or text files.</span>'; return; }
     el.innerHTML = files.map(f => `
@@ -3563,7 +3569,7 @@ async function uploadChatFile(file) {
   formData.append('file', file);
   toast(`Reading ${file.name}...`, 'info');
   try {
-    const r = await (await fetch('/api/ai/upload-context', {method:'POST', body:formData})).json();
+    const r = await _fetchJson('/api/ai/upload-context', {method:'POST', body:formData});
     if (r.error) { toast(r.error, 'error'); return; }
     _chatFileContext = r.content;
     document.getElementById('chat-file-context').style.display = 'block';
@@ -3595,7 +3601,7 @@ async function logComms() {
 
 async function loadCommsLog() {
   try {
-    const logs = await (await fetch('/api/comms-log')).json();
+    const logs = await _fetchJson('/api/comms-log');
     const el = document.getElementById('comms-log-list');
     if (!logs.length) { el.innerHTML = '<div class="prep-empty-state">No communications logged yet.</div>'; return; }
     el.innerHTML = logs.map(l => {
@@ -3624,7 +3630,7 @@ async function deleteCommsLog(id) {
 /* ─── Shopping List ─── */
 async function showShoppingList() {
   try {
-    const items = await (await fetch('/api/inventory/shopping-list')).json();
+    const items = await _fetchJson('/api/inventory/shopping-list');
     if (!items.length) { toast('No items needed — inventory is fully stocked!', 'success'); return; }
     let body = '<div class="shopping-list-shell">';
     let lastCat = '';
@@ -3645,7 +3651,7 @@ async function showShoppingList() {
 /* ─── Status Report ─── */
 async function generateStatusReport() {
   try {
-    const r = await (await fetch('/api/status-report')).json();
+    const r = await _fetchJson('/api/status-report');
     const palette = getThemePalette();
 const html = `<html><head><title>NOMAD Status Report</title><style>:root{color-scheme:${document.documentElement.getAttribute('data-theme') === 'nomad' || document.documentElement.getAttribute('data-theme') === 'eink' ? 'light' : 'dark'};}body{font-family:var(--font-data,monospace);background:${palette.bg};color:${palette.text};padding:20px;font-size:13px;white-space:pre-wrap;line-height:1.6;}.status-report-copy{background:${palette.accent};color:${palette.textInverse};border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-right:8px;font-size:12px;}.status-report-rule{border:0;border-top:1px solid ${palette.border};margin:12px 0;}.status-report-shell{min-height:120px;}</style></head><body><button id="copy-report-btn" class="status-report-copy">Copy to Clipboard</button><hr class="status-report-rule"><div id="rpt" class="status-report-shell">${escapeHtml(r.text)}</div><script>document.getElementById('copy-report-btn').addEventListener('click',function(){navigator.clipboard.writeText(document.getElementById('rpt').textContent);});<\/script></body></html>`;
     openAppFrameHTML('Status Report', html);
@@ -3655,7 +3661,7 @@ const html = `<html><head><title>NOMAD Status Report</title><style>:root{color-s
 /* ─── Drill History ─── */
 async function loadDrillHistory() {
   try {
-    const drills = await (await fetch('/api/drills/history')).json();
+    const drills = await _fetchJson('/api/drills/history');
     const el = document.getElementById('drill-history-list');
     if (!drills.length) { el.innerHTML = '<div class="settings-empty-state">No drills completed yet. Run a drill above to start tracking.</div>'; return; }
     const ordered = [...drills].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -3742,7 +3748,7 @@ if (window.NomadShellRuntime) {
 /* ─── Inventory Visualization ─── */
 async function loadInvViz() {
   try {
-    const summary = await (await fetch('/api/inventory/summary')).json();
+    const summary = await _fetchJson('/api/inventory/summary');
     const el = document.getElementById('inv-viz');
     if (!summary.categories.length) { el.innerHTML = ''; return; }
     const maxQty = Math.max(...summary.categories.map(c => c.total_qty), 1);
@@ -3873,8 +3879,8 @@ async function submitCustomChecklist() {
   const inp = document.getElementById('custom-cl-name-input');
   const name = inp.value.trim();
   if (!name) { toast('Enter a name', 'warning'); return; }
-  const r = await (await fetch('/api/checklists', {method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({name, items:[]})})).json();
+  const r = await _fetchJson('/api/checklists', {method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name, items:[]})});
   document.getElementById('custom-cl-name-form').remove();
   toast(`Created: ${name}`, 'success');
   _currentChecklistId = r.id;

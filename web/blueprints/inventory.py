@@ -30,6 +30,7 @@ def _check_origin(req):
 
 
 def _esc(s):
+    # NOTE: duplicated in app.py, blueprints/medical.py
     """Escape HTML entities."""
     return str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
 

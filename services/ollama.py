@@ -246,9 +246,11 @@ def pull_model(model_name: str):
                 continue
             try:
                 data = json.loads(line)
-                status = data.get('status', '')
-                total = data.get('total', 0)
-                completed = data.get('completed', 0)
+                if not isinstance(data, dict):
+                    continue
+                status = str(data.get('status', ''))
+                total = int(data.get('total', 0) or 0)
+                completed = int(data.get('completed', 0) or 0)
                 pct = int(completed / total * 100) if total > 0 else 0
                 # Prevent backward jumps when Ollama switches layers
                 _pull_max_pct = max(_pull_max_pct, pct)
@@ -276,8 +278,8 @@ def pull_model(model_name: str):
                     'percent': _pull_max_pct,
                     'detail': f'{status} {size_str} {speed_str}'.strip(),
                 }
-            except Exception:
-                pass
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                logging.debug('pull_model parse error: %s', exc)
 
         _pull_progress = {'status': 'complete', 'model': model_name, 'percent': 100, 'detail': 'Done'}
         log.info(f'Model {model_name} pulled successfully')
@@ -299,6 +301,10 @@ def get_pull_progress():
 
 def delete_model(model_name: str) -> bool:
     """Delete a downloaded model."""
+    import re
+    if not re.match(r'^[a-zA-Z0-9._:/-]+$', model_name):
+        log.warning('Invalid model name rejected: %s', model_name)
+        return False
     try:
         resp = requests.delete(
             f'http://localhost:{OLLAMA_PORT}/api/delete',
