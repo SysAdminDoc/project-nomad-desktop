@@ -120,12 +120,13 @@ def _analyze_document(doc_id, text, filename):
     """Background: classify, summarize, extract entities from a document using AI."""
     with db_session() as db:
         try:
-            if not ollama.running() or not ollama.list_models():
+            models = ollama.list_models() if ollama.running() else []
+            if not models:
                 db.execute("UPDATE documents SET doc_category = 'other', summary = 'AI analysis unavailable \u2014 start Ollama for document intelligence.' WHERE id = ?", (doc_id,))
                 db.commit()
                 return
 
-            model = ollama.list_models()[0]['name']
+            model = models[0]['name']
             import requests as req
             text_sample = text[:3000]
 

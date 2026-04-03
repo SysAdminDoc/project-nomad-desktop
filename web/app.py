@@ -2419,7 +2419,8 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
         scenario_type = scenario['scenario_type'] if scenario else ''
 
         try:
-            if not ollama.running() or not ollama.list_models():
+            _models = ollama.list_models() if ollama.running() else []
+            if not _models:
                 score, breakdown = _calculate_scenario_score(decisions, scenario_type)
                 # Record skill progression
                 with db_session() as db:
@@ -2429,7 +2430,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
                 return jsonify({'score': score, 'breakdown': breakdown, 'aar': f'Score: {score}/100\n\nCompleted {len(decisions)} phases with {len(complications)} complications handled. Practice regularly to improve response times and decision quality.'})
             import requests as req
             resp = req.post(f'http://localhost:{ollama.OLLAMA_PORT}/api/generate',
-                           json={'model': ollama.list_models()[0]['name'], 'prompt': prompt, 'stream': False}, timeout=45)
+                           json={'model': _models[0]['name'], 'prompt': prompt, 'stream': False}, timeout=45)
             resp.raise_for_status()
             aar_text = resp.json().get('response', '').strip()
             # Try to extract score
