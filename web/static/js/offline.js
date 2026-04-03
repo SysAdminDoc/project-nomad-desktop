@@ -114,7 +114,7 @@ const OfflineSync = {
     if (this._syncInterval) clearInterval(this._syncInterval);
     this._syncInterval = setInterval(() => this.incrementalSync(), intervalMs || 300000); // 5 min default
     // Do initial full sync unless called from battery throttle
-    if (!skipInitialSync) this.fullSync();
+    if (!skipInitialSync) this.fullSync().catch(err => console.warn('[Offline] Initial sync failed:', err));
   },
 
   stopAutoSync() {
