@@ -189,7 +189,7 @@ function cycleInfra(key) {
 }
 
 /* ─── Vehicle Readiness ─── */
-let _vehicles = JSON.parse(localStorage.getItem('nomad-vehicles') || '[]');
+let _vehicles; try { _vehicles = JSON.parse(localStorage.getItem('nomad-vehicles') || '[]'); } catch(e) { _vehicles = []; }
 function _syncVehicles() {
   localStorage.setItem('nomad-vehicles', JSON.stringify(_vehicles));
   fetch('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({vehicles: JSON.stringify(_vehicles)})});
