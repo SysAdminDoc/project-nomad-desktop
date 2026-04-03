@@ -1,8 +1,0 @@
-flask>=3.0
-requests
-pillow
-psutil
-qrcode
-pyserial
-cryptography
-reportlab
