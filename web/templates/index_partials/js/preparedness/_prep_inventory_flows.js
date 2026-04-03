@@ -317,6 +317,7 @@ function handleReceiptFileSelect(input) {
 }
 
 function loadReceiptPreview(file) {
+  if (file && !file.type.startsWith('image/')) return;
   _receiptFile = file;
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -499,6 +500,7 @@ function handleVisionFileSelect(input) {
 }
 
 function loadVisionPreview(file) {
+  if (file && !file.type.startsWith('image/')) return;
   _visionFile = file;
   const reader = new FileReader();
   reader.onload = (e) => {

@@ -813,7 +813,7 @@ async function loadReadinessScore() {
     const catMax = {water:20,food:20,medical:15,security:10,comms:10,shelter:10,planning:15};
     const catLinks = {water:'inventory',food:'inventory',medical:'medical',security:'security',comms:'contacts',shelter:'power',planning:'checklists'};
     cats.innerHTML = Object.entries(d.categories).map(([k, v]) => {
-      const pct = Math.round(v.score / catMax[k] * 100);
+      const pct = Math.round(v.score / (catMax[k] || 1) * 100);
       const color = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--orange)' : 'var(--red)';
       const link = catLinks[k] || 'inventory';
       return `<div class="readiness-category-link readiness-category-row" role="button" tabindex="0" data-tab-target="preparedness" data-prep-sub="${link}" data-prep-delay="200" title="${v.detail} — click to improve">

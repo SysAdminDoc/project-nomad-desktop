@@ -22,7 +22,7 @@ from services.manager import (
     get_service_resources, SERVICE_HEALTH_URLS, is_healthy,
 )
 import config
-from web.state import _wizard_state, _auto_backup_timer, _update_state, broadcast_event
+from web.state import _wizard_state, _wizard_lock, _auto_backup_timer, _update_state, broadcast_event
 import web.state as _state
 
 log = logging.getLogger('nomad.web')
@@ -198,8 +198,9 @@ def api_wizard_setup():
 
     def do_setup():
         total = len(services_list) + len(zims) + len(models)
-        _wizard_state.update({'status': 'running', 'phase': 'services', 'completed': [],
-                              'errors': [], 'total_items': total, 'overall_progress': 0})
+        with _wizard_lock:
+            _wizard_state.update({'status': 'running', 'phase': 'services', 'completed': [],
+                                  'errors': [], 'total_items': total, 'overall_progress': 0})
         done = 0
 
         # Phase 1: Install services
@@ -207,7 +208,8 @@ def api_wizard_setup():
             mod = SERVICE_MODULES.get(sid)
             if not mod:
                 continue
-            _wizard_state.update({'current_item': f'Installing {SVC_FRIENDLY.get(sid, sid)}', 'item_progress': 0})
+            with _wizard_lock:
+                _wizard_state.update({'current_item': f'Installing {SVC_FRIENDLY.get(sid, sid)}', 'item_progress': 0})
             try:
                 if not mod.is_installed():
                     mod.install()
@@ -215,28 +217,34 @@ def api_wizard_setup():
                     import time
                     for _ in range(300):
                         p = get_download_progress(sid)
-                        _wizard_state['item_progress'] = p.get('percent', 0)
+                        with _wizard_lock:
+                            _wizard_state['item_progress'] = p.get('percent', 0)
                         if p.get('status') in ('complete', 'error'):
                             break
                         time.sleep(1)
                     if get_download_progress(sid).get('status') == 'error':
                         err_msg = get_download_progress(sid).get("error", "unknown")
-                        _wizard_state['errors'].append(f'{sid}: Download failed — {err_msg}. You can retry from the Home tab.')
+                        with _wizard_lock:
+                            _wizard_state['errors'].append(f'{sid}: Download failed — {err_msg}. You can retry from the Home tab.')
             except Exception as e:
-                _wizard_state['errors'].append(f'{sid}: Setup failed — check your internet connection and try again from the Home tab.')
+                with _wizard_lock:
+                    _wizard_state['errors'].append(f'{sid}: Setup failed — check your internet connection and try again from the Home tab.')
             done += 1
-            _wizard_state['overall_progress'] = int(done / total * 100) if total > 0 else 100
-            _wizard_state['completed'].append(sid)
+            with _wizard_lock:
+                _wizard_state['overall_progress'] = int(done / total * 100) if total > 0 else 100
+                _wizard_state['completed'].append(sid)
 
         # Phase 2: Start services that CAN start now (skip Kiwix — needs content first)
-        _wizard_state['phase'] = 'starting'
+        with _wizard_lock:
+            _wizard_state['phase'] = 'starting'
         import time
         for sid in services_list:
             if sid == 'kiwix':
                 continue  # Kiwix needs ZIM files before it can start — handled after downloads
             mod = SERVICE_MODULES.get(sid)
             if mod and mod.is_installed() and not mod.running():
-                _wizard_state['current_item'] = f'Starting {SVC_FRIENDLY.get(sid, sid)}...'
+                with _wizard_lock:
+                    _wizard_state['current_item'] = f'Starting {SVC_FRIENDLY.get(sid, sid)}...'
                 try:
                     mod.start()
                     time.sleep(2)
@@ -246,30 +254,36 @@ def api_wizard_setup():
 
         # Phase 3: Download ZIM content
         if zims:
-            _wizard_state['phase'] = 'content'
+            with _wizard_lock:
+                _wizard_state['phase'] = 'content'
             for zim in zims:
                 url = zim.get('url', '')
                 filename = zim.get('filename', '')
                 name = zim.get('name', filename)
-                _wizard_state.update({'current_item': f'Downloading {name}', 'item_progress': 0})
+                with _wizard_lock:
+                    _wizard_state.update({'current_item': f'Downloading {name}', 'item_progress': 0})
                 try:
                     kiwix.download_zim(url, filename)
                     # Poll progress
                     prog_key = f'kiwix-zim-{filename}'
                     for _ in range(7200):  # up to 2 hours per ZIM
                         p = get_download_progress(prog_key)
-                        _wizard_state['item_progress'] = p.get('percent', 0)
+                        with _wizard_lock:
+                            _wizard_state['item_progress'] = p.get('percent', 0)
                         if p.get('status') in ('complete', 'error'):
                             break
                         time.sleep(1)
                 except Exception as e:
-                    _wizard_state['errors'].append(f'ZIM {filename}: {e}')
+                    with _wizard_lock:
+                        _wizard_state['errors'].append(f'ZIM {filename}: {e}')
                 done += 1
-                _wizard_state['overall_progress'] = int(done / total * 100) if total > 0 else 100
-                _wizard_state['completed'].append(filename)
+                with _wizard_lock:
+                    _wizard_state['overall_progress'] = int(done / total * 100) if total > 0 else 100
+                    _wizard_state['completed'].append(filename)
 
             # NOW start Kiwix — it has content to serve
-            _wizard_state['current_item'] = 'Starting Kiwix with downloaded content...'
+            with _wizard_lock:
+                _wizard_state['current_item'] = 'Starting Kiwix with downloaded content...'
             if kiwix.is_installed():
                 try:
                     if kiwix.running():
@@ -280,44 +294,54 @@ def api_wizard_setup():
                     log.warning(f'Wizard: Kiwix start after content: {e}')
         elif 'kiwix' in services_list:
             # No ZIMs selected but Kiwix installed — note it needs content
-            _wizard_state['current_item'] = 'Kiwix installed (add content from Library tab to start it)'
+            with _wizard_lock:
+                _wizard_state['current_item'] = 'Kiwix installed (add content from Library tab to start it)'
 
         # Phase 4: Pull AI models
         if models:
-            _wizard_state['phase'] = 'models'
+            with _wizard_lock:
+                _wizard_state['phase'] = 'models'
             for model_name in models:
-                _wizard_state.update({'current_item': f'Downloading AI model: {model_name}', 'item_progress': 0})
+                with _wizard_lock:
+                    _wizard_state.update({'current_item': f'Downloading AI model: {model_name}', 'item_progress': 0})
                 try:
                     if not ollama.running():
-                        _wizard_state['errors'].append(f'Model {model_name}: Skipped — AI service is not running. Start it from the Services tab and download models from AI Chat.')
+                        with _wizard_lock:
+                            _wizard_state['errors'].append(f'Model {model_name}: Skipped — AI service is not running. Start it from the Services tab and download models from AI Chat.')
                     else:
                         ollama.pull_model(model_name)
                         # Poll pull progress
                         for _ in range(3600):
                             p = ollama.get_pull_progress()
-                            _wizard_state['item_progress'] = p.get('percent', 0)
+                            with _wizard_lock:
+                                _wizard_state['item_progress'] = p.get('percent', 0)
                             if p.get('status') in ('complete', 'error'):
                                 break
                             time.sleep(1)
                 except Exception as e:
-                    _wizard_state['errors'].append(f'Model {model_name}: {e}')
+                    with _wizard_lock:
+                        _wizard_state['errors'].append(f'Model {model_name}: {e}')
                 done += 1
-                _wizard_state['overall_progress'] = int(done / total * 100) if total > 0 else 100
-                _wizard_state['completed'].append(model_name)
+                with _wizard_lock:
+                    _wizard_state['overall_progress'] = int(done / total * 100) if total > 0 else 100
+                    _wizard_state['completed'].append(model_name)
 
         # Mark wizard complete
         with db_session() as db:
             db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('first_run_complete', '1')")
             db.commit()
-        _wizard_state.update({'status': 'complete', 'phase': 'done', 'overall_progress': 100,
-                              'current_item': 'Setup complete!'})
+        with _wizard_lock:
+            _wizard_state.update({'status': 'complete', 'phase': 'done', 'overall_progress': 100,
+                                  'current_item': 'Setup complete!'})
 
     threading.Thread(target=do_setup, daemon=True).start()
     return jsonify({'status': 'started'})
 
 @system_bp.route('/api/wizard/progress')
 def api_wizard_progress():
-    return jsonify(_wizard_state)
+    with _wizard_lock:
+        state = dict(_wizard_state)
+    return jsonify(state)
 
 @system_bp.route('/api/content-tiers')
 def api_content_tiers():

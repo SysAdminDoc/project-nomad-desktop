@@ -406,29 +406,29 @@ RULES:
             # Emergency contacts
             contacts = [dict(r) for r in db.execute(
                 "SELECT name, callsign, role, phone, email, freq, blood_type, rally_point "
-                "FROM contacts ORDER BY name").fetchall()]
+                "FROM contacts ORDER BY name LIMIT 500").fetchall()]
 
             # Frequencies
             freqs = [dict(r) for r in db.execute(
-                'SELECT frequency, mode, service, description FROM freq_database ORDER BY frequency'
+                'SELECT frequency, mode, service, description FROM freq_database ORDER BY frequency LIMIT 500'
             ).fetchall()]
 
             # Patients
             patients = [dict(r) for r in db.execute(
-                'SELECT * FROM patients ORDER BY name').fetchall()]
+                'SELECT * FROM patients ORDER BY name LIMIT 200').fetchall()]
 
             # Inventory by category
             inventory = [dict(r) for r in db.execute(
                 'SELECT name, category, quantity, unit, location, expiration '
-                'FROM inventory ORDER BY category, name').fetchall()]
+                'FROM inventory ORDER BY category, name LIMIT 2000').fetchall()]
 
             # Active checklists
             checklists = [dict(r) for r in db.execute(
-                'SELECT name, items, updated_at FROM checklists ORDER BY name').fetchall()]
+                'SELECT name, items, updated_at FROM checklists ORDER BY name LIMIT 200').fetchall()]
 
             # Waypoints
             waypoints = [dict(r) for r in db.execute(
-                'SELECT name, lat, lng, category, notes FROM waypoints ORDER BY category, name'
+                'SELECT name, lat, lng, category, notes FROM waypoints ORDER BY category, name LIMIT 500'
             ).fetchall()]
 
             # Emergency procedures (top 6 notes tagged or titled with "emergency"/"procedure")
@@ -846,16 +846,16 @@ RULES:
             # Frequencies
             freqs = [dict(r) for r in db.execute(
                 'SELECT frequency, mode, bandwidth, service, description, notes '
-                'FROM freq_database ORDER BY frequency').fetchall()]
+                'FROM freq_database ORDER BY frequency LIMIT 500').fetchall()]
 
             # Radio profiles
             profiles = [dict(r) for r in db.execute(
-                'SELECT radio_model, name, channels FROM radio_profiles ORDER BY name').fetchall()]
+                'SELECT radio_model, name, channels FROM radio_profiles ORDER BY name LIMIT 100').fetchall()]
 
             # Contacts with callsigns
             contacts = [dict(r) for r in db.execute(
                 "SELECT name, callsign, role, freq FROM contacts "
-                "WHERE callsign != '' OR freq != '' ORDER BY callsign, name").fetchall()]
+                "WHERE callsign != '' OR freq != '' ORDER BY callsign, name LIMIT 500").fetchall()]
 
         now = datetime.now().strftime('%Y-%m-%d %H:%M')
         date_str = datetime.now().strftime('%d %B %Y')
@@ -1649,7 +1649,7 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
         with db_session() as db:
             rows = db.execute(
                 'SELECT node_id, node_name, situation, updated_at FROM federation_sitboard '
-                'ORDER BY updated_at DESC').fetchall()
+                'ORDER BY updated_at DESC LIMIT 200').fetchall()
 
         CATEGORIES = ['water', 'food', 'medical', 'shelter', 'security', 'comms', 'power']
         nodes = []
@@ -1739,7 +1739,7 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
 
             # Federation peer shared data (from sitboard situation JSON)
             peers = db.execute(
-                'SELECT node_id, node_name, situation FROM federation_sitboard').fetchall()
+                'SELECT node_id, node_name, situation FROM federation_sitboard LIMIT 200').fetchall()
             for peer in peers:
                 try:
                     sit = json.loads(peer['situation'] or '{}')
@@ -1765,7 +1765,7 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
             # Also check community_resources table
             community = db.execute(
                 "SELECT name, skills, contact, trust_level FROM community_resources "
-                "WHERE LOWER(skills) LIKE ?", (f'%{query}%',)
+                "WHERE LOWER(skills) LIKE ? LIMIT 200", (f'%{query}%',)
             ).fetchall()
             for cr in community:
                 results.append({

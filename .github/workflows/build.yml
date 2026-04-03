@@ -54,7 +54,7 @@ jobs:
             libappindicator3-dev gir1.2-appindicator3-0.1
 
       - name: Install Python dependencies
-        run: pip install -r requirements.txt pyinstaller
+        run: pip install -r requirements.txt "pyinstaller>=6.0,<7.0"
 
       - name: Build binary
         run: pyinstaller build.spec
@@ -99,12 +99,24 @@ jobs:
 
       - name: Prepare release assets
         run: |
+          set -e
           mkdir -p release
+          for f in \
+            artifacts/NOMADFieldDesk-Windows/NOMADFieldDesk.exe \
+            artifacts/NOMADFieldDesk-Linux/NOMADFieldDesk \
+            artifacts/NOMADFieldDesk-macOS/NOMADFieldDesk \
+            artifacts/NOMAD-Setup/NOMAD-Setup.exe; do
+            if [ ! -f "$f" ]; then
+              echo "ERROR: Missing expected artifact: $f"
+              exit 1
+            fi
+          done
           cp artifacts/NOMADFieldDesk-Windows/NOMADFieldDesk.exe release/NOMADFieldDesk-Windows.exe
           cp artifacts/NOMADFieldDesk-Linux/NOMADFieldDesk release/NOMADFieldDesk-Linux
           cp artifacts/NOMADFieldDesk-macOS/NOMADFieldDesk release/NOMADFieldDesk-macOS
           cp artifacts/NOMAD-Setup/NOMAD-Setup.exe release/NOMAD-Setup.exe
           chmod +x release/NOMADFieldDesk-Linux release/NOMADFieldDesk-macOS
+          cd release && sha256sum * > SHA256SUMS.txt
 
       - name: Upload release assets
         run: |
@@ -113,6 +125,7 @@ jobs:
             release/NOMAD-Setup.exe \
             release/NOMADFieldDesk-Linux \
             release/NOMADFieldDesk-macOS \
+            release/SHA256SUMS.txt \
             --repo ${{ github.repository }} \
             --clobber
         env:

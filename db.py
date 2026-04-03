@@ -61,7 +61,7 @@ def log_activity(event: str, service: str = None, detail: str = None, level: str
             conn.execute('INSERT INTO activity_log (event, service, detail, level) VALUES (?, ?, ?, ?)',
                          (event, service, detail, level))
             conn.commit()
-    except Exception as e:
+    except (sqlite3.OperationalError, sqlite3.InterfaceError) as e:
         _log.debug(f'Failed to log activity: {e}')
 
 
