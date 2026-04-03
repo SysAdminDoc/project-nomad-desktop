@@ -657,7 +657,7 @@ function initMap() {
     '#offline-badge',
     '#det-counter',
     '#ms-panel',
-    '#search-results'
+    '#nukemap-search-results'
   ]);
   L.control.scale({position: 'bottomleft', imperial: true, metric: true, maxWidth: 200}).addTo(map);
   NM._map = map; // expose for mushroom3d positioning
@@ -1569,7 +1569,7 @@ function initHistorical() {
 }
 
 function initSearch() {
-  const inp = $('search'), res = $('search-results'); let si = -1;
+  const inp = $('search'), res = $('nukemap-search-results'); let si = -1;
   inp.addEventListener('input', () => {
     NM.ensureZipcodesLoaded();
     const items = NM.searchLocations(inp.value); si = -1;
@@ -1588,7 +1588,7 @@ function initSearch() {
 
 function selectResult(it) {
   $('search').value = it.name + (it.detail ? ', ' + it.detail : '');
-  $('search-results').classList.remove('active');
+  $('nukemap-search-results').classList.remove('active');
   map.flyTo([it.lat, it.lng], it.pop > 1e6 ? 11 : it.pop > 1e5 ? 12 : 10, {duration: 1});
 }
 
