@@ -52,8 +52,8 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
 #search::placeholder{color:var(--overlay0)}
 .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--overlay0);pointer-events:none}
 .search-icon svg{width:14px;height:14px;fill:currentColor}
-#search-results{position:absolute;top:calc(100% + 2px);left:0;right:0;max-height:300px;overflow-y:auto;background:var(--surface0);border:1px solid var(--surface1);border-radius:var(--radius-sm);display:none;z-index:100;box-shadow:var(--shadow-lg);scrollbar-width:thin;scrollbar-color:var(--surface1) transparent}
-#search-results.active{display:block}
+#nukemap-search-results{position:absolute;top:calc(100% + 2px);left:0;right:0;max-height:300px;overflow-y:auto;background:var(--surface0);border:1px solid var(--surface1);border-radius:var(--radius-sm);display:none;z-index:100;box-shadow:var(--shadow-lg);scrollbar-width:thin;scrollbar-color:var(--surface1) transparent}
+#nukemap-search-results.active{display:block}
 .sr-item{padding:8px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(69,71,90,0.3);font-size:12px;transition:background .12s}
 .sr-item:last-child{border-bottom:none}
 .sr-item:hover,.sr-item.selected{background:var(--surface1)}
