@@ -54,7 +54,10 @@ jobs:
             libappindicator3-dev gir1.2-appindicator3-0.1
 
       - name: Install Python dependencies
-        run: pip install -r requirements.txt "pyinstaller>=6.0,<7.0"
+        run: pip install -r requirements.txt "pyinstaller>=6.0,<7.0" pytest
+
+      - name: Run tests
+        run: pytest tests/ -x -q --tb=short
 
       - name: Build binary
         run: pyinstaller build.spec
@@ -67,6 +70,23 @@ jobs:
       - name: Build installer
         if: runner.os == 'Windows'
         run: iscc installer.iss
+
+      # Windows: sign binary and installer if code signing cert is configured
+      - name: Sign Windows binaries
+        if: runner.os == 'Windows' && secrets.CODESIGN_CERT_BASE64 != ''
+        env:
+          CODESIGN_CERT: ${{ secrets.CODESIGN_CERT_BASE64 }}
+          CODESIGN_PASS: ${{ secrets.CODESIGN_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          $certBytes = [Convert]::FromBase64String($env:CODESIGN_CERT)
+          $certPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($certPath, $certBytes)
+          & signtool sign /f $certPath /p $env:CODESIGN_PASS /tr http://timestamp.digicert.com /td sha256 /fd sha256 dist\NOMADFieldDesk.exe
+          if (Test-Path NOMAD-Setup.exe) {
+            & signtool sign /f $certPath /p $env:CODESIGN_PASS /tr http://timestamp.digicert.com /td sha256 /fd sha256 NOMAD-Setup.exe
+          }
+          Remove-Item $certPath -Force
 
       # Linux: mark binary executable
       - name: Mark executable
