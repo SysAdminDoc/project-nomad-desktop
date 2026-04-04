@@ -900,16 +900,34 @@ img.avatar, .contact-avatar {
 
 /* ─── color-mix() Fallback ────────────────────────────────────────── */
 @supports not (color: color-mix(in srgb, red, blue)) {
-    :root {
-        /* Fallback values for browsers without color-mix() support */
-        --accent-dim: #1a6b4a;
-        --surface-overlay-soft: rgba(255, 255, 255, 0.06);
-        --panel-highlight: rgba(255, 255, 255, 0.03);
-        --overlay-scrim-strong: rgba(0, 0, 0, 0.7);
-    }
-    [data-theme="nomad"] {
-        --accent-dim: #2e7d5a;
+    :root, [data-theme="nomad"] {
+        --accent-dim: rgba(138, 104, 66, 0.1);
         --surface-overlay-soft: rgba(245, 240, 232, 0.5);
-        --panel-highlight: rgba(245, 240, 232, 0.3);
+        --panel-highlight: rgba(255, 255, 255, 0.62);
+        --overlay-scrim-strong: rgba(20, 18, 14, 0.72);
+    }
+    [data-theme="nightops"] {
+        --accent-dim: rgba(211, 173, 114, 0.12);
+        --surface-overlay-soft: rgba(24, 34, 48, 0.94);
+        --panel-highlight: rgba(255, 255, 255, 0.03);
+        --overlay-scrim-strong: rgba(4, 7, 12, 0.82);
+    }
+    [data-theme="redlight"] {
+        --accent-dim: rgba(223, 133, 92, 0.12);
+        --surface-overlay-soft: rgba(40, 24, 25, 0.92);
+        --panel-highlight: rgba(255, 255, 255, 0.03);
+        --overlay-scrim-strong: rgba(10, 5, 5, 0.8);
+    }
+    [data-theme="cyber"] {
+        --accent-dim: rgba(113, 168, 255, 0.12);
+        --surface-overlay-soft: rgba(22, 38, 58, 0.92);
+        --panel-highlight: rgba(255, 255, 255, 0.03);
+        --overlay-scrim-strong: rgba(3, 8, 14, 0.82);
+    }
+    [data-theme="eink"] {
+        --accent-dim: rgba(0, 0, 0, 0.05);
+        --surface-overlay-soft: #f5f5f5;
+        --panel-highlight: transparent;
+        --overlay-scrim-strong: rgba(0, 0, 0, 0.75);
     }
 }

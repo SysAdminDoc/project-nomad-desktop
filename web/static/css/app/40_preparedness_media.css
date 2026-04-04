@@ -106,7 +106,7 @@
   background: none; border: none; border-radius: var(--radius-sm);
   white-space: nowrap;
 }
-.prep-subtab:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.prep-subtab:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 9%, transparent); }
 .prep-subtab.active { color: var(--text-inverse); background: linear-gradient(135deg, var(--accent), var(--green)); box-shadow: 0 2px 12px var(--accent-glow); }
 .prep-sub { display: none; animation: fadeSlideIn 0.3s ease; }
 .prep-sub.active { display: block; }

@@ -22,7 +22,7 @@
         <!-- Infrastructure Status -->
         <div class="settings-card prep-utility-shell prep-ops-shell">
           <h3 class="prep-utility-header prep-utility-header-compact"><span class="prep-utility-subtitle">Infrastructure Status</span></h3>
-          <div id="infra-status" class="prep-status-list"></div>
+          <div id="infra-status" class="prep-status-list"><div class="prep-empty-state">Infrastructure status will appear after assessment.</div></div>
         </div>
 
         <!-- Vehicle Readiness -->
@@ -33,7 +33,7 @@
             <input id="veh-fuel" name="veh_fuel" type="number" min="0" max="100" value="100" class="prep-toolbar-input prep-toolbar-input-compact" placeholder="Fuel%" data-enter-action="add-vehicle">
             <button type="button" class="btn btn-sm btn-primary text-size-10" data-prep-action="add-vehicle">Add</button>
           </div>
-          <div id="vehicle-list"></div>
+          <div id="vehicle-list"><div class="prep-empty-state">No vehicles registered.</div></div>
         </div>
 
         <!-- SITREP Generator -->

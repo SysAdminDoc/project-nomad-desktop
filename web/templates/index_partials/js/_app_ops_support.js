@@ -877,7 +877,8 @@ async function sendBroadcast() {
   const msg = document.getElementById('bcast-msg').value.trim();
   if (!msg) { toast('Enter a message', 'warning'); return; }
   const severity = document.getElementById('bcast-severity').value;
-  await fetch('/api/broadcast', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg, severity})});
+  const resp = await fetch('/api/broadcast', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg, severity})});
+  if (!resp.ok) { toast('Failed to send broadcast', 'error'); return; }
   toast('Broadcast sent to all LAN devices', 'warning');
   document.getElementById('bcast-msg').value = '';
 }
@@ -922,7 +923,7 @@ async function pollBroadcast() {
       _dismissedBroadcastTs = null;
     }
   } catch(e) {
-    block?.classList.add('is-empty');
+    banner?.classList.add('is-empty');
   }
 }
 
@@ -1236,6 +1237,7 @@ function renderBOBChecklist() {
 
 function calcBOB() {
   if (!document.querySelector('.bob-item')) renderBOBChecklist();
+  if (!document.querySelector('.bob-item')) return;
   const bodyWeight = parseInt(document.getElementById('bob-bodyweight').value) || 180;
   let totalWeight = 0, checkedCount = 0;
   document.querySelectorAll('.bob-item').forEach(cb => {
@@ -1469,7 +1471,8 @@ async function submitJournal() {
   const mood = document.getElementById('journal-mood').value;
   const tags = document.getElementById('journal-tags').value.trim();
   try {
-    await fetch('/api/journal', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({entry, mood, tags})});
+    const resp = await fetch('/api/journal', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({entry, mood, tags})});
+    if (!resp.ok) { toast('Failed to save entry', 'error'); return; }
     document.getElementById('journal-entry').value = '';
     document.getElementById('journal-mood').value = '';
     document.getElementById('journal-tags').value = '';
@@ -1483,9 +1486,12 @@ function exportJournal() {
 }
 
 async function deleteJournalEntry(id) {
-  await fetch(`/api/journal/${id}`, {method:'DELETE'});
-  toast('Entry deleted', 'warning');
-  loadJournal();
+  try {
+    const resp = await fetch(`/api/journal/${id}`, {method:'DELETE'});
+    if (!resp.ok) { toast('Failed to delete entry', 'error'); return; }
+    toast('Entry deleted', 'warning');
+    loadJournal();
+  } catch(e) { toast('Failed to delete entry', 'error'); }
 }
 
 /* ─── Security Module ─── */
