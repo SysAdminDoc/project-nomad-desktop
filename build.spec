@@ -52,6 +52,7 @@ _hiddenimports = [
     'web.blueprints.services',
     'web.blueprints.system',
     'config',
+    'yt_dlp',
 ]
 
 for _optional_hiddenimport in (

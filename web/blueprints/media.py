@@ -112,7 +112,8 @@ def get_video_dir():
     os.makedirs(path, exist_ok=True)
     return path
 
-def get_ytdlp_path():
+def _ytdlp_standalone_path():
+    """Path to the standalone yt-dlp binary (downloaded/updated separately)."""
     from platform_utils import IS_WINDOWS, IS_MACOS
     if IS_WINDOWS:
         name = 'yt-dlp.exe'
@@ -121,6 +122,59 @@ def get_ytdlp_path():
     else:
         name = 'yt-dlp_linux'
     return os.path.join(get_services_dir(), 'yt-dlp', name)
+
+
+def _ytdlp_bundled_available():
+    """Check if yt-dlp is available as a bundled Python module."""
+    try:
+        import yt_dlp  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def get_ytdlp_path():
+    """Return the yt-dlp executable path.
+
+    Priority:
+    1. Standalone binary (services/yt-dlp/) — allows independent updates
+    2. Bundled Python module — writes a wrapper script so subprocess calls work unchanged
+    """
+    standalone = _ytdlp_standalone_path()
+    if os.path.isfile(standalone):
+        return standalone
+    if _ytdlp_bundled_available():
+        return _ensure_bundled_wrapper()
+    return standalone  # Not installed yet — return expected standalone path
+
+
+def _ensure_bundled_wrapper():
+    """Create a small wrapper script that invokes the bundled yt_dlp module.
+
+    This lets all existing subprocess.run([exe, ...]) calls work without changes.
+    """
+    from platform_utils import IS_WINDOWS
+    wrapper_dir = os.path.join(get_services_dir(), 'yt-dlp')
+    os.makedirs(wrapper_dir, exist_ok=True)
+    if IS_WINDOWS:
+        wrapper = os.path.join(wrapper_dir, 'yt-dlp-bundled.cmd')
+        if not os.path.isfile(wrapper):
+            with open(wrapper, 'w') as f:
+                f.write(f'@"{sys.executable}" -m yt_dlp %*\n')
+    else:
+        wrapper = os.path.join(wrapper_dir, 'yt-dlp-bundled')
+        if not os.path.isfile(wrapper):
+            with open(wrapper, 'w') as f:
+                f.write(f'#!/bin/sh\nexec "{sys.executable}" -m yt_dlp "$@"\n')
+            os.chmod(wrapper, 0o755)
+    return wrapper
+
+
+def _ytdlp_installed():
+    """Check if yt-dlp is available (bundled or standalone)."""
+    standalone = _ytdlp_standalone_path()
+    return os.path.isfile(standalone) or _ytdlp_bundled_available()
+
 
 VIDEO_CATEGORIES = ['survival', 'medical', 'repair', 'bushcraft', 'cooking', 'radio', 'farming', 'defense', 'general']
 
@@ -793,23 +847,111 @@ def api_media_batch_move():
 
 @media_bp.route('/api/ytdlp/status')
 def api_ytdlp_status():
-    exe = get_ytdlp_path()
-    installed = os.path.isfile(exe)
+    installed = _ytdlp_installed()
     version = ''
-    if installed:
+    source = 'none'
+    standalone = _ytdlp_standalone_path()
+    if os.path.isfile(standalone):
+        source = 'standalone'
         try:
-            result = subprocess.run([exe, '--version'], capture_output=True, text=True, timeout=5,
+            result = subprocess.run([standalone, '--version'], capture_output=True, text=True, timeout=5,
                                     **_CREATION_FLAGS)
             version = result.stdout.strip()
         except Exception:
             pass
-    return jsonify({'installed': installed, 'version': version, 'path': exe})
+    elif _ytdlp_bundled_available():
+        source = 'bundled'
+        try:
+            result = subprocess.run([sys.executable, '-m', 'yt_dlp', '--version'],
+                                    capture_output=True, text=True, timeout=5, **_CREATION_FLAGS)
+            version = result.stdout.strip()
+        except Exception:
+            pass
+    return jsonify({'installed': installed, 'version': version, 'source': source, 'path': standalone})
+
+@media_bp.route('/api/ytdlp/check-update')
+def api_ytdlp_check_update():
+    """Check if a newer yt-dlp version is available on GitHub."""
+    current = ''
+    exe = get_ytdlp_path()
+    if exe and os.path.isfile(exe):
+        try:
+            result = subprocess.run([exe, '--version'], capture_output=True, text=True, timeout=5,
+                                    **_CREATION_FLAGS)
+            current = result.stdout.strip()
+        except Exception:
+            pass
+    elif _ytdlp_bundled_available():
+        try:
+            result = subprocess.run([sys.executable, '-m', 'yt_dlp', '--version'],
+                                    capture_output=True, text=True, timeout=5, **_CREATION_FLAGS)
+            current = result.stdout.strip()
+        except Exception:
+            pass
+    latest = ''
+    try:
+        import requests as req
+        resp = req.get('https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest',
+                       timeout=10, headers={'Accept': 'application/vnd.github+json'})
+        if resp.ok:
+            latest = resp.json().get('tag_name', '').lstrip('v')
+    except Exception:
+        pass
+    update_available = bool(latest and current and latest != current)
+    return jsonify({'current': current, 'latest': latest, 'update_available': update_available})
+
+@media_bp.route('/api/ytdlp/update', methods=['POST'])
+def api_ytdlp_update():
+    """Download the latest standalone yt-dlp binary, replacing bundled or older version."""
+    exe = _ytdlp_standalone_path()
+    ytdlp_dir = os.path.dirname(exe)
+    os.makedirs(ytdlp_dir, exist_ok=True)
+
+    def do_update():
+        try:
+            _ytdlp_install_state.update({'status': 'downloading', 'percent': 10, 'error': None})
+            import requests as req
+            resp = req.get(_get_ytdlp_url(), stream=True, timeout=120, allow_redirects=True)
+            resp.raise_for_status()
+            total = int(resp.headers.get('content-length', 0))
+            downloaded = 0
+            tmp = exe + '.tmp'
+            with open(tmp, 'wb') as f:
+                for chunk in resp.iter_content(chunk_size=65536):
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total > 0:
+                        _ytdlp_install_state['percent'] = int(downloaded / total * 90) + 10
+            # Atomic replace
+            try:
+                os.replace(tmp, exe)
+            except PermissionError:
+                # Windows: retry with backoff if AV locks the file
+                import time as _t
+                for attempt in range(3):
+                    _t.sleep(0.2 * (attempt + 1))
+                    try:
+                        os.replace(tmp, exe)
+                        break
+                    except PermissionError:
+                        if attempt == 2:
+                            raise
+            from platform_utils import make_executable
+            make_executable(exe)
+            _ytdlp_install_state.update({'status': 'complete', 'percent': 100, 'error': None})
+            log.info('yt-dlp updated to latest')
+        except Exception as e:
+            _ytdlp_install_state.update({'status': 'error', 'percent': 0, 'error': str(e)})
+            log.error(f'yt-dlp update failed: {e}')
+
+    threading.Thread(target=do_update, daemon=True).start()
+    return jsonify({'status': 'updating'})
 
 @media_bp.route('/api/ytdlp/install', methods=['POST'])
 def api_ytdlp_install():
-    exe = get_ytdlp_path()
-    if os.path.isfile(exe):
+    if _ytdlp_installed():
         return jsonify({'status': 'already_installed'})
+    exe = _ytdlp_standalone_path()
     ytdlp_dir = os.path.dirname(exe)
     os.makedirs(ytdlp_dir, exist_ok=True)
 
