@@ -260,6 +260,12 @@ def create_app():
     def _set_cache(key, val):
         with _cache_lock:
             _api_cache[key] = {'val': val, 'ts': time.time()}
+            # Prune expired entries to prevent unbounded growth
+            if len(_api_cache) > 50:
+                now = time.time()
+                stale = [k for k, v in _api_cache.items() if now - v['ts'] > 120]
+                for k in stale:
+                    del _api_cache[k]
 
     try:
         from web.translations import SUPPORTED_LANGUAGES, TRANSLATIONS
