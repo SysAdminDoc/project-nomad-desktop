@@ -339,9 +339,12 @@ function autoSaveNote() {
   if (!currentNoteId) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
-    await fetch(`/api/notes/${currentNoteId}`, {method:'PUT', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({title:document.getElementById('note-title').value, content:document.getElementById('note-content').value})});
-    await loadNotes();
+    try {
+      const resp = await fetch(`/api/notes/${currentNoteId}`, {method:'PUT', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({title:document.getElementById('note-title').value, content:document.getElementById('note-content').value})});
+      if (!resp.ok) { toast('Note save failed', 'error'); return; }
+      await loadNotes();
+    } catch(e) { toast('Note save failed', 'error'); }
   }, 500);
 }
 

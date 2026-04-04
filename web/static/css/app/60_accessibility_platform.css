@@ -325,7 +325,7 @@ summary:focus-visible,
 
 /* === RTL (Right-to-Left) Language Support === */
 [dir="rtl"] .sidebar { right: 0; left: auto; }
-[dir="rtl"] #main-content { margin-right: 268px; margin-left: 0; }
+[dir="rtl"] #main-content { margin-right: var(--density-sidebar-width, 244px); margin-left: 0; }
 [dir="rtl"] .settings-card { direction: rtl; text-align: right; }
 [dir="rtl"] .sidebar-nav .tab { text-align: right; }
 [dir="rtl"] .tab-icon { margin-left: 8px; margin-right: 0; }

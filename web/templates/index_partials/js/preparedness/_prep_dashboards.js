@@ -211,7 +211,8 @@ async function logIncident() {
   if (!desc) { toast('Enter an event description', 'warning'); return; }
   const severity = document.getElementById('inc-severity').value;
   const category = document.getElementById('inc-category').value;
-  await fetch('/api/incidents', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({severity, category, description: desc})});
+  const resp = await fetch('/api/incidents', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({severity, category, description: desc})});
+  if (!resp.ok) { toast('Failed to log event', 'error'); return; }
   document.getElementById('inc-desc').value = '';
   toast('Event logged', severity === 'critical' ? 'error' : severity === 'alert' ? 'warning' : 'success');
   loadIncidents();

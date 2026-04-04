@@ -3,7 +3,7 @@
     <div class="prep-section prep-utility-section prep-security-section">
       <h3 class="prep-heading">Security Operations <button class="help-icon" data-help="security-guide" title="Security module guide">?</button></h3>
 
-      <div id="security-dashboard" class="prep-dashboard-grid prep-security-dashboard"></div>
+      <div id="security-dashboard" class="prep-dashboard-grid prep-security-dashboard"><div class="prep-empty-state prep-empty-state-wide">Security metrics will appear as you add cameras and log events.</div></div>
 
       <div class="prep-subtabs-shell prep-tab-strip">
         <button type="button" class="btn btn-sm prep-utility-tab prep-utility-tab-active" id="sec-tab-cameras" data-security-tab="cameras">Cameras</button>
@@ -24,7 +24,7 @@
         </div>
         <p class="prep-module-note prep-security-note">Supports MJPEG streams (most IP cameras), snapshot URLs (auto-refreshes), and HLS streams. Common camera URLs:<br>
         Reolink: <code>http://IP/cgi-bin/api.cgi?cmd=Snap&channel=0</code> | Amcrest: <code>http://IP/cgi-bin/snapshot.cgi</code> | Wyze: Use rtsp-simple-server bridge | Generic ONVIF: <code>http://IP:port/video</code></p>
-        <div id="camera-grid" class="prep-camera-grid"></div>
+        <div id="camera-grid" class="prep-camera-grid"><div class="prep-empty-state prep-empty-state-wide">No cameras configured. Click '+ Add Camera' to connect your first camera.</div></div>
 
         <div class="prep-data-shell prep-utility-shell prep-motion-shell">
           <div class="prep-utility-header">
@@ -78,7 +78,7 @@
             <button type="button" class="btn btn-sm btn-danger" data-prep-action="clear-access-log">Clear Log</button>
           </div>
         </div>
-        <div id="access-log-list" class="prep-table-wrap prep-access-log-shell"></div>
+        <div id="access-log-list" class="prep-table-wrap prep-access-log-shell"><div class="prep-empty-state">No access events logged.</div></div>
       </div>
 
       <div class="prep-data-shell prep-utility-shell prep-perimeter-shell">

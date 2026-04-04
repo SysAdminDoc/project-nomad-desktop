@@ -1484,6 +1484,12 @@ def _init_db_inner(conn):
         'ALTER TABLE map_annotations ADD COLUMN is_geofence INTEGER DEFAULT 0',
         'ALTER TABLE map_annotations ADD COLUMN properties TEXT DEFAULT "{}"',
         'ALTER TABLE map_annotations ADD COLUMN radius_m REAL DEFAULT 0',
+        # Nutrition tracking columns for food security dashboard
+        'ALTER TABLE inventory ADD COLUMN calories_per_unit REAL DEFAULT 0',
+        'ALTER TABLE inventory ADD COLUMN protein_g REAL DEFAULT 0',
+        'ALTER TABLE inventory ADD COLUMN fat_g REAL DEFAULT 0',
+        'ALTER TABLE inventory ADD COLUMN carbs_g REAL DEFAULT 0',
+        'ALTER TABLE preservation_log ADD COLUMN calories_per_unit REAL DEFAULT 0',
     ]:
         try:
             conn.execute(migration)

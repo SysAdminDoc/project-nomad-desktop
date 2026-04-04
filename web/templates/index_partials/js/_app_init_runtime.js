@@ -760,7 +760,8 @@ async function saveSkill() {
     notes: document.getElementById('skill-notes').value.trim(),
   };
   if (!body.name) { toast('Skill name required', 'error'); return; }
-  await fetch(id ? `/api/skills/${id}` : '/api/skills', {method: id ? 'PUT' : 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const resp = await fetch(id ? `/api/skills/${id}` : '/api/skills', {method: id ? 'PUT' : 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if (!resp.ok) { toast('Failed to save skill', 'error'); return; }
   closeSkillForm();
   loadSkills();
   toast('Skill saved', 'success');
@@ -858,7 +859,8 @@ async function saveAmmo() {
     notes: document.getElementById('ammo-notes').value.trim(),
   };
   if (!body.caliber) { toast('Caliber required', 'error'); return; }
-  await fetch(id ? `/api/ammo/${id}` : '/api/ammo', {method: id ? 'PUT' : 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const resp = await fetch(id ? `/api/ammo/${id}` : '/api/ammo', {method: id ? 'PUT' : 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if (!resp.ok) { toast('Failed to save ammo entry', 'error'); return; }
   closeAmmoForm();
   loadAmmo();
   toast('Saved', 'success');
@@ -932,8 +934,8 @@ function openCommunityForm(p) {
   document.getElementById('comm-dist').value = p ? p.distance_mi : '0.1';
   document.getElementById('comm-trust').value = p ? p.trust_level : 'unknown';
   document.getElementById('comm-contact').value = p ? p.contact : '';
-  document.getElementById('comm-skills').value = p ? JSON.parse(p.skills||'[]').join(', ') : '';
-  document.getElementById('comm-equip').value = p ? JSON.parse(p.equipment||'[]').join(', ') : '';
+  document.getElementById('comm-skills').value = p ? (function(s){try{return JSON.parse(s||'[]').join(', ')}catch(e){return s||''}})(p.skills) : '';
+  document.getElementById('comm-equip').value = p ? (function(s){try{return JSON.parse(s||'[]').join(', ')}catch(e){return s||''}})(p.equipment) : '';
   document.getElementById('comm-notes').value = p ? p.notes : '';
   document.getElementById('comm-edit-id').value = p ? p.id : '';
   document.getElementById('community-form').style.display = 'block';
@@ -957,7 +959,8 @@ async function saveCommunity() {
     notes: document.getElementById('comm-notes').value.trim(),
   };
   if (!body.name) { toast('Name required', 'error'); return; }
-  await fetch(id ? `/api/community/${id}` : '/api/community', {method: id ? 'PUT' : 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const resp = await fetch(id ? `/api/community/${id}` : '/api/community', {method: id ? 'PUT' : 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if (!resp.ok) { toast('Failed to save', 'error'); return; }
   closeCommunityForm();
   loadCommunity();
   toast('Saved', 'success');
@@ -988,7 +991,7 @@ async function loadRadiation() {
 function renderRadiationDashboard(d) {
   const el = document.getElementById('radiation-dashboard');
   if (!el) return;
-  const latest = d.readings[0];
+  const latest = d.readings && d.readings.length > 0 ? d.readings[0] : null;
   const latestRate = latest ? latest.dose_rate_rem : 0;
   const latestClass = latestRate < 0.1 ? 'prep-summary-card-ok' : latestRate < 2 ? 'prep-summary-card-warn' : 'prep-summary-card-danger';
   const cumulativeClass = d.total_rem < 25 ? 'prep-summary-card-ok' : d.total_rem < 100 ? 'prep-summary-card-warn' : 'prep-summary-card-danger';
@@ -1035,8 +1038,9 @@ function renderRadiationLog(readings) {
 async function logRadiation() {
   const rate = parseFloat(document.getElementById('rad-log-rate').value);
   if (!rate && rate !== 0) { toast('Enter a dose rate', 'error'); return; }
-  await fetch('/api/radiation', {method:'POST', headers:{'Content-Type':'application/json'},
+  const resp = await fetch('/api/radiation', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({dose_rate_rem: rate, location: document.getElementById('rad-location').value, notes: document.getElementById('rad-notes').value})});
+  if (!resp.ok) { toast('Failed to log reading', 'error'); return; }
   document.getElementById('rad-log-rate').value = '';
   loadRadiation();
   toast('Reading logged', 'success');
@@ -1051,8 +1055,14 @@ async function clearRadiation() {
 // ═══════════════════════════════════════════════════════════════
 // ICS FORMS
 // ═══════════════════════════════════════════════════════════════
-let _ics309Entries = [];
-let _ics214Entries = [];
+let _ics309Entries = JSON.parse(localStorage.getItem('nomad_ics309') || '[]');
+let _ics214Entries = JSON.parse(localStorage.getItem('nomad_ics214') || '[]');
+function _persistICS() {
+  try {
+    localStorage.setItem('nomad_ics309', JSON.stringify(_ics309Entries));
+    localStorage.setItem('nomad_ics214', JSON.stringify(_ics214Entries));
+  } catch(e) {}
+}
 function showICSTab(tab) {
   ['213','309','214'].forEach(t => {
     const isActive = t === tab;
@@ -1073,7 +1083,7 @@ function printICS213() {
   const replyby = document.getElementById('ics213-replyby').value;
   const reply = document.getElementById('ics213-reply').value;
   const w = window.open('', '_blank');
-  if (!w) { showToast('Pop-up blocked — please allow pop-ups', 'warning'); return; }
+  if (!w) { toast('Pop-up blocked -- please allow pop-ups', 'warning'); return; }
   w.document.write(`<!DOCTYPE html><html><head><title>ICS-213</title>
   <style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px;}table{width:100%;border-collapse:collapse;}
   td,th{border:1px solid #000;padding:4px 6px;}h2{text-align:center;}
@@ -1102,11 +1112,13 @@ function addICS309Entry() {
   };
   if (!entry.msg) return;
   _ics309Entries.push(entry);
+  _persistICS();
   ['ics309-time','ics309-from','ics309-to','ics309-msg'].forEach(id => document.getElementById(id).value = '');
   renderICS309Table();
 }
 function removeICS309Entry(index) {
   _ics309Entries.splice(index, 1);
+  _persistICS();
   renderICS309Table();
 }
 function renderICS309Table() {
@@ -1130,6 +1142,7 @@ function printICS309() {
   const rows = _ics309Entries.map(e =>
     `<tr><td>${escapeHtml(e.time)}</td><td>${escapeHtml(e.from)}</td><td>${escapeHtml(e.to)}</td><td>${escapeHtml(e.msg)}</td></tr>`).join('');
   const w = window.open('', '_blank');
+  if (!w) { toast('Pop-up blocked -- please allow pop-ups', 'warning'); return; }
   w.document.write(`<!DOCTYPE html><html><head><title>ICS-309</title>
   <style>body{font-family:Arial,sans-serif;font-size:11px;margin:20px;}table{width:100%;border-collapse:collapse;}
   td,th{border:1px solid #000;padding:4px 6px;}h2{text-align:center;}
@@ -1142,16 +1155,18 @@ function printICS309() {
   <script>window.print();<\/script></body></html>`);
   w.document.close();
 }
-function clearICS309() { _ics309Entries = []; renderICS309Table(); }
+function clearICS309() { _ics309Entries = []; _persistICS(); renderICS309Table(); }
 function addICS214Entry() {
   const entry = {time: document.getElementById('ics214-time').value, activity: document.getElementById('ics214-activity').value};
   if (!entry.activity) return;
   _ics214Entries.push(entry);
+  _persistICS();
   ['ics214-time','ics214-activity'].forEach(id => document.getElementById(id).value = '');
   renderICS214Table();
 }
 function removeICS214Entry(index) {
   _ics214Entries.splice(index, 1);
+  _persistICS();
   renderICS214Table();
 }
 function renderICS214Table() {
@@ -1175,6 +1190,7 @@ function printICS214() {
   const period = document.getElementById('ics214-period').value;
   const rows = _ics214Entries.map(e => `<tr><td>${escapeHtml(e.time)}</td><td>${escapeHtml(e.activity)}</td></tr>`).join('');
   const w = window.open('', '_blank');
+  if (!w) { toast('Pop-up blocked -- please allow pop-ups', 'warning'); return; }
   w.document.write(`<!DOCTYPE html><html><head><title>ICS-214</title>
   <style>body{font-family:Arial,sans-serif;font-size:11px;margin:20px;}table{width:100%;border-collapse:collapse;}
   td,th{border:1px solid #000;padding:4px 6px;}h2{text-align:center;}.time-col{width:100px;}
@@ -1187,7 +1203,7 @@ function printICS214() {
   <script>window.print();<\/script></body></html>`);
   w.document.close();
 }
-function clearICS214() { _ics214Entries = []; renderICS214Table(); }
+function clearICS214() { _ics214Entries = []; _persistICS(); renderICS214Table(); }
 
 // ═══════════════════════════════════════════════════════════════
 // LAN QR CODE

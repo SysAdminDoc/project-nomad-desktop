@@ -12,13 +12,13 @@
       </div>
       <div id="contact-form" class="prep-form-shell prep-data-shell is-hidden">
         <div class="prep-form-grid prep-form-grid-3">
-          <div class="prep-field"><label class="prep-field-label">Name *</label><input id="ct-name" name="ct_name" class="prep-field-control"></div>
+          <div class="prep-field"><label class="prep-field-label">Name *</label><input id="ct-name" name="ct_name" class="prep-field-control" placeholder="Full name"></div>
           <div class="prep-field"><label class="prep-field-label">Callsign</label><input id="ct-callsign" name="ct_callsign" class="prep-field-control" placeholder="e.g. KD2ABC"></div>
           <div class="prep-field"><label class="prep-field-label">Role</label><input id="ct-role" name="ct_role" class="prep-field-control" placeholder="e.g. Medic, Comms lead"></div>
           <div class="prep-field"><label class="prep-field-label">Skills</label><input id="ct-skills" name="ct_skills" class="prep-field-control" placeholder="e.g. First aid, radio, mechanical"></div>
-          <div class="prep-field"><label class="prep-field-label">Phone</label><input id="ct-phone" name="ct_phone" class="prep-field-control"></div>
+          <div class="prep-field"><label class="prep-field-label">Phone</label><input id="ct-phone" name="ct_phone" class="prep-field-control" placeholder="(555) 123-4567"></div>
           <div class="prep-field"><label class="prep-field-label">Radio Freq</label><input id="ct-freq" name="ct_freq" class="prep-field-control" placeholder="e.g. FRS Ch 3, 146.520"></div>
-          <div class="prep-field"><label class="prep-field-label">Address</label><input id="ct-address" name="ct_address" class="prep-field-control"></div>
+          <div class="prep-field"><label class="prep-field-label">Address</label><input id="ct-address" name="ct_address" class="prep-field-control" placeholder="Street address or coordinates"></div>
           <div class="prep-field"><label class="prep-field-label">Rally Point</label><input id="ct-rally" name="ct_rally" class="prep-field-control" placeholder="e.g. Church parking lot, GPS coords"></div>
           <div class="prep-field"><label class="prep-field-label">Blood Type</label><select id="ct-blood" name="ct_blood" class="prep-field-control"><option value="">Unknown</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
           <div class="prep-field prep-field-span-2"><label class="prep-field-label">Medical Notes</label><input id="ct-medical" name="ct_medical" class="prep-field-control" placeholder="Allergies, conditions, medications"></div>
@@ -30,11 +30,11 @@
           <button class="btn btn-sm" data-prep-action="hide-contact-form">Cancel</button>
         </div>
       </div>
-      <div id="contacts-grid" class="prep-card-grid prep-contacts-grid"></div>
+      <div id="contacts-grid" class="prep-card-grid prep-contacts-grid"><div class="prep-empty-state">No contacts yet. Click '+ Add Contact' to add your first emergency contact.</div></div>
       <!-- Skills Matrix -->
       <div class="prep-secondary-block prep-skills-block">
         <h3 class="prep-secondary-heading">Skills Matrix <button class="btn btn-sm" data-prep-action="load-skills-matrix">Refresh</button></h3>
-        <div id="skills-matrix" class="skills-grid"></div>
+        <div id="skills-matrix" class="skills-grid"><div class="prep-empty-state">Skills matrix will appear after adding contacts with skills.</div></div>
       </div>
     </div>
     </div><!-- /psub-contacts -->

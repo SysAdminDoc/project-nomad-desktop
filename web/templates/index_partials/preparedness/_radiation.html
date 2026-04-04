@@ -3,13 +3,13 @@
     <div class="prep-section">
       <h3>Radiation Dose Tracker</h3>
       <div class="prep-note-block">Log radiation readings from a Geiger counter or dosimeter and keep the current risk picture visible at a glance.</div>
-      <div id="radiation-dashboard" class="prep-resource-summary-grid"></div>
+      <div id="radiation-dashboard" class="prep-resource-summary-grid"><div class="prep-empty-state prep-empty-state-wide">No radiation data. Log your first reading below.</div></div>
       <div class="prep-toolbar-row prep-ops-toolbar">
         <label class="prep-field"><span class="prep-field-label">Dose Rate (R/hr or rem/hr) *</span><input id="rad-log-rate" name="rad_log_rate" type="number" min="0" step="0.001" value="" class="prep-toolbar-input prep-toolbar-input-compact" placeholder="e.g. 0.5"></label>
         <label class="prep-field"><span class="prep-field-label">Location</span><input id="rad-location" name="rad_location" class="prep-toolbar-input prep-toolbar-input-compact" placeholder="Basement, yard, etc."></label>
         <label class="prep-field"><span class="prep-field-label">Notes</span><input id="rad-notes" name="rad_notes" class="prep-toolbar-input prep-toolbar-input-wide" placeholder="Optional" data-enter-action="log-radiation"></label>
         <button type="button" class="btn btn-sm btn-primary" data-prep-action="log-radiation">Log Reading</button>
-        <button type="button" class="btn btn-sm prep-inline-delete" data-prep-action="clear-radiation">Clear Log</button>
+        <button type="button" class="btn btn-sm btn-danger" data-prep-action="clear-radiation">Clear Log</button>
       </div>
       <div class="prep-resource-note">
         <div class="prep-note-heading">Dose Reference Thresholds</div>

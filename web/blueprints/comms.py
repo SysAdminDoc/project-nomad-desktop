@@ -628,7 +628,7 @@ def api_comms_schedules_overdue():
             WHERE cs.active = 1 AND cs.check_in_time <= time('now')
             AND NOT EXISTS (
                 SELECT 1 FROM comms_log cl
-                WHERE cl.frequency = cs.frequency
+                WHERE cl.freq = cs.frequency
                 AND cl.created_at >= date('now')
             )
         """).fetchall()

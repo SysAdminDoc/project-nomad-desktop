@@ -215,19 +215,18 @@ def create_app():
         from flask_limiter import Limiter
         from flask_limiter.util import get_remote_address
 
-        def _rate_limit_key():
-            """Return key for rate limiting; exempt localhost."""
-            addr = get_remote_address()
-            if addr in ('127.0.0.1', '::1'):
-                return None  # exempt localhost
-            return addr
-
         limiter = Limiter(
             app=app,
-            key_func=_rate_limit_key,
+            key_func=get_remote_address,
             default_limits=[Config.RATELIMIT_DEFAULT],
             storage_uri='memory://',
         )
+
+        @limiter.request_filter
+        def _exempt_localhost():
+            """Exempt localhost from rate limiting (desktop app)."""
+            addr = get_remote_address()
+            return addr in ('127.0.0.1', '::1')
 
         # Apply stricter limit to mutating methods via a shared limiter decorator
         _mutating_limit = limiter.shared_limit(

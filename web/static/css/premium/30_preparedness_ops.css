@@ -177,6 +177,12 @@
   -webkit-text-fill-color: transparent;
   color: transparent;
 }
+[data-theme="eink"] .readiness-grade-value {
+  background: none;
+  -webkit-background-clip: unset;
+  -webkit-text-fill-color: #000000;
+  color: #000000;
+}
 
 .readiness-panel-kicker {
   letter-spacing: 0.18em;

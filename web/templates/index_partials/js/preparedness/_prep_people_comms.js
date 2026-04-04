@@ -1,10 +1,12 @@
 /* ─── Contacts ─── */
+let _cachedContacts = [];
 async function loadContacts() {
   const q = document.getElementById('contact-search').value.trim();
   let url = '/api/contacts';
   if (q) url += `?q=${encodeURIComponent(q)}`;
   try {
     const contacts = await (await fetch(url)).json();
+    if (!q) _cachedContacts = contacts;
     const el = document.getElementById('contacts-grid');
     if (!contacts.length) {
       el.innerHTML = '<div class="prep-empty-state prep-empty-state-wide">No contacts yet. Add your emergency contacts, team members, and neighbors.</div>';
@@ -91,10 +93,12 @@ async function saveContact() {
   };
   if (!data.name) { toast('Name is required', 'warning'); return; }
   if (editId) {
-    await fetch(`/api/contacts/${editId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    const resp = await fetch(`/api/contacts/${editId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    if (!resp.ok) { toast('Failed to update contact', 'error'); return; }
     toast('Contact updated', 'success');
   } else {
-    await fetch('/api/contacts', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    const resp = await fetch('/api/contacts', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    if (!resp.ok) { toast('Failed to add contact', 'error'); return; }
     toast('Contact added', 'success');
   }
   FormStateRecovery.clear('contact');
@@ -102,9 +106,8 @@ async function saveContact() {
   loadContacts();
 }
 
-async function editContact(id) {
-  const contacts = await (await fetch('/api/contacts')).json();
-  const c = contacts.find(x => x.id === id);
+function editContact(id) {
+  const c = _cachedContacts.find(x => x.id === id);
   if (c) showContactForm(c);
 }
 

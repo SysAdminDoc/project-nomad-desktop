@@ -75,11 +75,11 @@ const NomadEvents = {
 NomadEvents.on('inventory_update', () => {
     if (typeof loadInventory === 'function') loadInventory();
 });
-NomadEvents.on('weather_update', (data) => {
-    if (typeof updateWeatherDisplay === 'function') updateWeatherDisplay(data);
+NomadEvents.on('weather_update', () => {
+    if (typeof loadWeather === 'function') loadWeather();
 });
 NomadEvents.on('alert', (data) => {
-    if (typeof showToast === 'function') showToast(data.message || 'New alert', data.level || 'info');
+    if (typeof toast === 'function') toast(data.message || 'New alert', data.level || 'info');
 });
 NomadEvents.on('alert_check', (data) => {
     if (!document.hidden && typeof loadAlerts === 'function') loadAlerts();
@@ -102,10 +102,10 @@ NomadEvents.on('task_update', () => {
     if (typeof loadTasks === 'function') loadTasks();
 });
 NomadEvents.on('sync_update', (data) => {
-    if (typeof showToast === 'function') showToast('Sync received from ' + (data.source || 'peer'), 'info');
+    if (typeof toast === 'function') toast('Sync received from ' + (data.source || 'peer'), 'info');
 });
 NomadEvents.on('backup_complete', (data) => {
-    if (typeof showToast === 'function') showToast('Backup complete: ' + (data.filename || ''), 'success');
+    if (typeof toast === 'function') toast('Backup complete: ' + (data.filename || ''), 'success');
 });
 
 // Auto-connect when page loads

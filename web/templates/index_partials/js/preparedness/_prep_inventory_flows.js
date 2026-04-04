@@ -207,10 +207,12 @@ async function saveInvItem() {
   };
   if (!data.name) { toast('Name is required', 'warning'); return; }
   if (editId) {
-    await fetch(`/api/inventory/${editId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    const resp = await fetch(`/api/inventory/${editId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    if (!resp.ok) { toast('Failed to update item', 'error'); return; }
     toast('Item updated', 'success');
   } else {
-    await fetch('/api/inventory', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    const resp = await fetch('/api/inventory', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    if (!resp.ok) { toast('Failed to add item', 'error'); return; }
     toast('Item added', 'success');
   }
   FormStateRecovery.clear('inventory');

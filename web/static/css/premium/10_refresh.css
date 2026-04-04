@@ -179,7 +179,7 @@ body {
   border: 1px solid rgba(255,255,255,0.08);
   background:
     radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 24%, transparent), transparent 34%),
-    linear-gradient(135deg, rgba(15,18,24,0.96), rgba(44,31,22,0.94));
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, var(--surface-solid)), color-mix(in srgb, var(--accent) 8%, var(--surface2)));
   box-shadow: 0 30px 80px rgba(0,0,0,0.18);
 }
 
@@ -205,7 +205,7 @@ body {
   letter-spacing: -0.04em;
   margin-bottom: 10px;
   max-width: 10ch;
-  color: var(--text-inverse);
+  color: var(--text);
 }
 
 .welcome-banner p {
