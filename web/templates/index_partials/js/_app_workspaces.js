@@ -62,8 +62,7 @@ async function downloadMapRegion(regionId) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({region_id: regionId})
     });
-    const data = await resp.json();
-    if (!resp.ok) { toast(data.error || 'Download failed', 'error'); return; }
+    if (!resp.ok) { const data = await resp.json().catch(() => ({})); toast(data.error || 'Download failed', 'error'); return; }
     toast(`Started downloading region "${regionId}". This may take a while — tiles are extracted from the Protomaps planet build.`, 'info');
     startMapDownloadPolling();
   } catch (e) { toast('Download request failed: ' + e.message, 'error'); }
@@ -152,8 +151,7 @@ async function downloadMapFromUrl() {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({url, filename})
     });
-    const data = await resp.json();
-    if (!resp.ok) { toast(data.error || 'Failed', 'error'); return; }
+    if (!resp.ok) { const data = await resp.json().catch(() => ({})); toast(data.error || 'Failed', 'error'); return; }
     toast('Download started: ' + filename, 'info');
     startMapDownloadPolling();
   } catch (e) { toast('Failed: ' + e.message, 'error'); }
@@ -167,8 +165,8 @@ async function importMapFile() {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({path})
     });
+    if (!resp.ok) { const data = await resp.json().catch(() => ({})); toast(data.error || 'Import failed', 'error'); return; }
     const data = await resp.json();
-    if (!resp.ok) { toast(data.error || 'Import failed', 'error'); return; }
     toast(`Imported ${data.filename} (${data.size})`, 'success');
     loadMaps();
   } catch (e) { toast('Import failed: ' + e.message, 'error'); }
