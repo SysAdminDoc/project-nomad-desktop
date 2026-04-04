@@ -238,7 +238,7 @@ body {
 }
 
 .sidebar-brand-kicker {
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 0.18em;
   color: var(--accent);
 }
@@ -281,7 +281,7 @@ body {
 }
 
 .sidebar-group-title {
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 0.18em;
 }
 

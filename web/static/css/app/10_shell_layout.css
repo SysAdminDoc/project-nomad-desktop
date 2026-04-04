@@ -82,7 +82,7 @@
 .live-widget:hover { border-color: var(--border-hover); transform: translateY(-1px); }
 .live-widget:hover::before { opacity: 1; }
 .live-widget-label {
-  font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
   color: var(--text-muted); margin-bottom: 6px;
   font-family: var(--font-data, monospace);
 }
@@ -112,8 +112,8 @@
   font-size: 14px;
 }
 .live-widget-chevron {
-  float: right;
-  font-size: 8px;
+  margin-left: auto;
+  font-size: 10px;
   opacity: 0.5;
 }
 .live-widget-spark-canvas {
@@ -1093,7 +1093,7 @@
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .btn:active { transform: scale(0.97); }
-.btn-primary { background: linear-gradient(135deg, var(--accent), var(--green)); color: var(--text-inverse); border-color: transparent; box-shadow: 0 2px 8px var(--accent-glow); }
+.btn-primary { background: linear-gradient(135deg, var(--accent-hover), var(--accent)); color: var(--text-inverse); border-color: transparent; box-shadow: 0 2px 8px var(--accent-glow); }
 .btn-primary:hover { background: linear-gradient(135deg, var(--accent-hover), var(--accent)); box-shadow: 0 4px 16px var(--accent-glow); transform: translateY(-1px); }
 .btn-danger { color: var(--red); }
 .btn-danger:hover { border-color: var(--red); background: var(--red-dim); }

@@ -196,12 +196,12 @@ def api_note_templates():
         # Add built-in templates if table is empty
         if not templates:
             builtins = [
-                {'name': 'Incident Report', 'icon': '\ud83d\udea8', 'content': '# Incident Report\n\n**Date:** \n**Location:** \n**Severity:** \n\n## Description\n\n\n## Actions Taken\n\n\n## Follow-up Required\n\n'},
-                {'name': 'Patrol Log', 'icon': '\ud83d\udd0d', 'content': '# Patrol Log\n\n**Date:** \n**Route:** \n**Personnel:** \n\n## Observations\n\n\n## Contacts Made\n\n\n## Issues Found\n\n'},
-                {'name': 'Comms Log', 'icon': '\ud83d\udce1', 'content': '# Communications Log\n\n**Date:** \n**Operator:** \n**Freq:** \n\n| Time | Callsign | Direction | Message | Signal |\n|------|----------|-----------|---------|--------|\n| | | | | |\n'},
-                {'name': 'SITREP', 'icon': '\ud83d\udccb', 'content': '# SITREP\n\n**DTG:** \n**From:** \n**To:** \n\n## 1. SITUATION\n\n## 2. ACTIONS\n\n## 3. REQUIREMENTS\n\n## 4. LOGISTICS\n\n## 5. PERSONNEL\n\n'},
-                {'name': 'Meeting Notes', 'icon': '\ud83e\udd1d', 'content': '# Meeting Notes\n\n**Date:** \n**Attendees:** \n\n## Agenda\n\n\n## Discussion\n\n\n## Action Items\n- [ ] \n'},
-                {'name': 'Daily Journal', 'icon': '\ud83d\udcd3', 'content': '# Journal Entry\n\n**Weather:** \n**Mood:** \n\n## Today\n\n\n## Accomplishments\n\n\n## Tomorrow\n\n'},
+                {'name': 'Incident Report', 'icon': '\U0001f6a8', 'content': '# Incident Report\n\n**Date:** \n**Location:** \n**Severity:** \n\n## Description\n\n\n## Actions Taken\n\n\n## Follow-up Required\n\n'},
+                {'name': 'Patrol Log', 'icon': '\U0001f50d', 'content': '# Patrol Log\n\n**Date:** \n**Route:** \n**Personnel:** \n\n## Observations\n\n\n## Contacts Made\n\n\n## Issues Found\n\n'},
+                {'name': 'Comms Log', 'icon': '\U0001f4e1', 'content': '# Communications Log\n\n**Date:** \n**Operator:** \n**Freq:** \n\n| Time | Callsign | Direction | Message | Signal |\n|------|----------|-----------|---------|--------|\n| | | | | |\n'},
+                {'name': 'SITREP', 'icon': '\U0001f4cb', 'content': '# SITREP\n\n**DTG:** \n**From:** \n**To:** \n\n## 1. SITUATION\n\n## 2. ACTIONS\n\n## 3. REQUIREMENTS\n\n## 4. LOGISTICS\n\n## 5. PERSONNEL\n\n'},
+                {'name': 'Meeting Notes', 'icon': '\U0001f91d', 'content': '# Meeting Notes\n\n**Date:** \n**Attendees:** \n\n## Agenda\n\n\n## Discussion\n\n\n## Action Items\n- [ ] \n'},
+                {'name': 'Daily Journal', 'icon': '\U0001f4d3', 'content': '# Journal Entry\n\n**Weather:** \n**Mood:** \n\n## Today\n\n\n## Accomplishments\n\n\n## Tomorrow\n\n'},
             ]
             db.executemany('INSERT INTO note_templates (name, content, icon) VALUES (?, ?, ?)',
                           [(t['name'], t['content'], t['icon']) for t in builtins])

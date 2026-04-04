@@ -65,12 +65,14 @@
   padding: 0 8px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-solid) 90%, transparent);
-  color: var(--text-dim);
+  background: transparent;
+  color: var(--text-muted);
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  cursor: default;
+  pointer-events: none;
 }
 
 .settings-workspace .settings-card {
