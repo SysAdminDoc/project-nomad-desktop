@@ -3004,9 +3004,9 @@ async function addSitroomFeed() {
   if (!n || !u) { toast('Name and URL required', 'warning'); return; }
   try {
     const resp = await fetch('/api/sitroom/feeds', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: n, url: u, category: cat}) });
-    const d = await resp.json();
-    if (resp.ok) { toast('Feed added', 'success'); document.getElementById('sitroom-feed-name').value = ''; document.getElementById('sitroom-feed-url').value = ''; loadSitroomFeeds(); }
-    else toast(d.error || 'Failed', 'error');
+    if (!resp.ok) { const d = await resp.json().catch(() => ({})); toast(d.error || 'Failed to add feed', 'error'); return; }
+    await resp.json();
+    toast('Feed added', 'success'); document.getElementById('sitroom-feed-name').value = ''; document.getElementById('sitroom-feed-url').value = ''; loadSitroomFeeds();
   } catch (e) { toast('Network error', 'error'); }
 }
 
@@ -3908,6 +3908,7 @@ async function _generateMarketBrief() {
   el.innerHTML = '<div class="sr-empty"><div class="sr-radar"></div>Generating brief...</div>';
   try {
     const resp = await fetch('/api/sitroom/market-brief', {method:'POST'});
+    if (!resp.ok) throw new Error('API error');
     const d = await resp.json();
     if (d.brief) {
       let h = escapeHtml(d.brief);
@@ -4273,6 +4274,7 @@ async function _generateAiBriefing() {
   el.innerHTML = '<div class="sr-empty sr-empty-emphasis"><div class="sr-radar"></div><span>Generating intelligence briefing...</span></div>';
   try {
     const resp = await fetch('/api/sitroom/ai-briefing', {method:'POST', headers:{'Content-Type':'application/json'}});
+    if (!resp.ok) throw new Error('API error');
     const d = await resp.json();
     if (d.briefing) {
       el.innerHTML = '<div class="sr-briefing-text">' + _renderBriefing(d.briefing) + '</div>';
