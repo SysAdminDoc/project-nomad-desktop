@@ -23,8 +23,6 @@ function setOfflineAtlasState(state, error) {
   offlineAtlasState = state;
   offlineAtlasError = error || '';
 }
-window.localStorage?.removeItem('nukemap-offline-atlas-cache');
-window.localStorage?.removeItem('viptrack-offline-atlas-cache');
 
 function normalizeAtlasFlatFeature(feature, extraKeys = []) {
   if (!feature || !Array.isArray(feature.points) || feature.points.length < 4) return null;

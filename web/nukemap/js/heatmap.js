@@ -69,6 +69,7 @@ NM.Heatmap = {
   },
 
   toggle(map) {
+    if (!this.layer) return;
     this.visible = !this.visible;
     if (this.visible) {
       this.layer.addTo(map);

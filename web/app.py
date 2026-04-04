@@ -2208,11 +2208,12 @@ def create_app():
         if not data.get('species'):
             return jsonify({'error': 'Species required'}), 400
         with db_session() as db:
-            db.execute('INSERT INTO livestock (species, name, tag, dob, sex, weight_lbs, notes) VALUES (?,?,?,?,?,?,?)',
+            cur = db.execute('INSERT INTO livestock (species, name, tag, dob, sex, weight_lbs, notes) VALUES (?,?,?,?,?,?,?)',
                        (data['species'], data.get('name', ''), data.get('tag', ''), data.get('dob', ''),
                         data.get('sex', ''), data.get('weight_lbs'), data.get('notes', '')))
             db.commit()
-        return jsonify({'status': 'created'}), 201
+            lid = cur.lastrowid
+        return jsonify({'status': 'created', 'id': lid}), 201
 
     @app.route('/api/livestock/<int:lid>', methods=['PUT'])
     def api_livestock_update(lid):

@@ -74,6 +74,7 @@ SETTINGS_WHITELIST = {
     'map_style', 'map_center', 'map_zoom', 'ai_model', 'ai_system_prompt',
     'ai_memory_enabled', 'ai_memory', 'wizard_tier', 'first_run_complete',
     'lan_name', 'lan_sharing', 'lan_password_enabled', 'workspace_memory',
+    'household_size', 'location', 'timezone', 'units',
 }
 
 @system_bp.route('/api/settings', methods=['PUT'])
