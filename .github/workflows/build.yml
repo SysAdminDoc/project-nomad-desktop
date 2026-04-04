@@ -73,12 +73,13 @@ jobs:
 
       # Windows: sign binary and installer if code signing cert is configured
       - name: Sign Windows binaries
-        if: ${{ runner.os == 'Windows' && secrets.CODESIGN_CERT_BASE64 != '' }}
+        if: runner.os == 'Windows'
         env:
           CODESIGN_CERT: ${{ secrets.CODESIGN_CERT_BASE64 }}
           CODESIGN_PASS: ${{ secrets.CODESIGN_CERT_PASSWORD }}
         shell: pwsh
         run: |
+          if (-not $env:CODESIGN_CERT) { Write-Host "No code signing cert configured — skipping"; exit 0 }
           $certBytes = [Convert]::FromBase64String($env:CODESIGN_CERT)
           $certPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
           [IO.File]::WriteAllBytes($certPath, $certBytes)
