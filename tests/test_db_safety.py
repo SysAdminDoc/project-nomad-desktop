@@ -29,6 +29,7 @@ def test_get_db_closes_connection_if_setup_fails(monkeypatch, tmp_path):
     fake = _FakeConn(fail_on_execute=True)
     monkeypatch.setattr(db, 'get_db_path', lambda: str(tmp_path / 'nomad.db'))
     monkeypatch.setattr(db.sqlite3, 'connect', lambda *args, **kwargs: fake)
+    monkeypatch.setattr(db, '_wal_set', False)
 
     with pytest.raises(RuntimeError, match='pragma failed'):
         db.get_db()
@@ -50,6 +51,8 @@ def test_get_db_keeps_connection_open_if_flask_context_binding_fails(monkeypatch
     monkeypatch.setattr(db, 'get_db_path', lambda: str(tmp_path / 'nomad.db'))
     monkeypatch.setattr(db.sqlite3, 'connect', lambda *args, **kwargs: fake)
     monkeypatch.setitem(sys.modules, 'flask', fake_flask)
+    # Reset WAL flag so the pragma executes in this test
+    monkeypatch.setattr(db, '_wal_set', False)
 
     conn = db.get_db()
 
