@@ -235,7 +235,10 @@ def api_inventory_receipt_scan():
                 # Extract JSON array from the response
                 json_match = re.search(r'\[.*\]', raw_text, re.DOTALL)
                 if json_match:
-                    parsed = json.loads(json_match.group())
+                    try:
+                        parsed = json.loads(json_match.group())
+                    except (json.JSONDecodeError, ValueError):
+                        parsed = []
                     for item in parsed:
                         items.append({
                             'name': str(item.get('name', 'Unknown')).strip(),
@@ -318,9 +321,12 @@ def api_inventory_receipt_import():
             name = str(item.get('name', '')).strip()
             if not name:
                 continue
-            qty = float(item.get('quantity', 1))
-            unit_price = float(item.get('unit_price', 0))
-            total_price = float(item.get('total_price', 0))
+            try:
+                qty = float(item.get('quantity', 1))
+                unit_price = float(item.get('unit_price', 0))
+                total_price = float(item.get('total_price', 0))
+            except (ValueError, TypeError):
+                qty, unit_price, total_price = 1, 0, 0
             notes = f'Receipt import — unit price: ${unit_price:.2f}, total: ${total_price:.2f}'
 
             db.execute(
