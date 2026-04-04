@@ -301,10 +301,10 @@ NM.DeliveryArc = {
     }
 
     // Animated polyline that grows
-    const line = L.polyline([], {color: '#f38ba8', weight: 2, opacity: 0.7, dashArray: '8 4'}).addTo(map);
+    const line = L.polyline([], {color: '#f38ba8', weight: 2, opacity: 0.7, dashArray: '8 4'});
     const warhead = L.circleMarker([fromLat, fromLng], {
       radius: 4, color: '#f38ba8', fillColor: '#f38ba8', fillOpacity: 1, weight: 0
-    }).addTo(map);
+    });
 
     this.layer = L.layerGroup([line, warhead]).addTo(map);
 

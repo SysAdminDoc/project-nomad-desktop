@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from html import escape as esc
 from flask import jsonify, request, Response
 
-from db import db_session, log_activity
+from db import db_session, log_activity, get_db_path
 from services import ollama
 from web.print_templates import render_print_document
 
@@ -26,7 +26,7 @@ log = logging.getLogger('nomad.web')
 # ─── Undo System (Phase 19) ─────────────────────────────────────────
 # Module-level deque: stores last 10 destructive operations with 30s TTL
 _undo_stack = deque(maxlen=10)
-_redo_stack = []
+_redo_stack = deque(maxlen=10)
 _undo_lock = threading.Lock()
 
 _UNDO_VALID_TABLES = {'inventory', 'contacts', 'notes', 'waypoints', 'documents',
@@ -361,6 +361,8 @@ RULES:
         fact = data.get('fact', '').strip()
         if not fact:
             return jsonify({'error': 'No fact provided'}), 400
+        if len(fact) > 2000:
+            return jsonify({'error': 'Fact too long (max 2000 chars)'}), 400
         with db_session() as db:
             row = db.execute("SELECT value FROM settings WHERE key = 'ai_memory'").fetchone()
             memories = []
@@ -743,7 +745,9 @@ RULES:
         if rally_points:
             rally_html = '<div class="doc-table-shell"><table><thead><tr><th>Point</th><th>Lat</th><th>Lng</th></tr></thead><tbody>'
             for rp in rally_points:
-                rally_html += f'<tr><td class="doc-strong">{esc(rp["name"])}</td><td>{rp["lat"]:.5f}</td><td>{rp["lng"]:.5f}</td></tr>'
+                lat_str = f'{rp["lat"]:.5f}' if rp["lat"] is not None else 'N/A'
+                lng_str = f'{rp["lng"]:.5f}' if rp["lng"] is not None else 'N/A'
+                rally_html += f'<tr><td class="doc-strong">{esc(rp["name"])}</td><td>{lat_str}</td><td>{lng_str}</td></tr>'
             rally_html += '</tbody></table></div>'
 
         freq_html = '<div class="doc-table-shell"><table><thead><tr><th>Service</th><th>Freq</th><th>Mode</th></tr></thead><tbody>'
@@ -1388,9 +1392,12 @@ Adult: 0.3mg (EpiPen) | Child: 0.15mg (EpiPen Jr) | Infant: 0.01mg/kg</li>
     @app.route('/api/system/db-vacuum', methods=['POST'])
     def api_system_db_vacuum():
         """Run VACUUM and REINDEX to optimize the database."""
-        with db_session() as db:
-            db.execute('VACUUM')
-            db.execute('REINDEX')
+        import sqlite3
+        path = get_db_path()
+        conn = sqlite3.connect(path)
+        conn.execute('VACUUM')
+        conn.execute('REINDEX')
+        conn.close()
         log_activity('db_vacuum', 'system', 'Database vacuumed and reindexed')
         return jsonify({'status': 'ok', 'message': 'VACUUM and REINDEX completed'})
 

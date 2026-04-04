@@ -15,7 +15,7 @@ NM.Experience = {
     if (this.active) {
       map.getContainer().style.cursor = 'help';
     } else {
-      map.getContainer().classList.add('crosshair');
+      map.getContainer().classList.remove('crosshair');
       map.getContainer().style.cursor = '';
       if (this.marker) { map.removeLayer(this.marker); this.marker = null; }
     }
