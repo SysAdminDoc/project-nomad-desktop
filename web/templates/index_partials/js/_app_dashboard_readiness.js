@@ -802,7 +802,9 @@ async function loadReadinessScore() {
   const cats = document.getElementById('rs-categories');
   if (!gradeEl || !totalEl || !fill || !cats) return;
   try {
-    const d = await (await fetch('/api/readiness-score')).json();
+    const _rs = await fetch('/api/readiness-score');
+    if (!_rs.ok) return;
+    const d = await _rs.json();
     const gradeColors = {A:'var(--green)',B:'var(--green)',C:'var(--warning)',D:'var(--orange)',F:'var(--red)'};
     gradeEl.textContent = d.grade;
     gradeEl.style.color = gradeColors[d.grade] || 'var(--text)';
@@ -866,11 +868,15 @@ async function unlockVault() {
   if (!pw) { toast('Enter a password', 'warning'); return; }
   try {
     // Verify password by trying to decrypt the verification entry if one exists
-    const entries = await (await fetch('/api/vault')).json();
+    const _vr = await fetch('/api/vault');
+    if (!_vr.ok) { toast('Failed to access vault', 'error'); return; }
+    const entries = await _vr.json();
     const verifyEntry = entries.find(e => e.title === '__vault_verify__');
     if (verifyEntry) {
       try {
-        const e = await (await fetch(`/api/vault/${verifyEntry.id}`)).json();
+        const _ve = await fetch(`/api/vault/${verifyEntry.id}`);
+        if (!_ve.ok) throw new Error('Failed to load verification entry');
+        const e = await _ve.json();
         const salt = Uint8Array.from(atob(e.salt), c => c.charCodeAt(0));
         const iv = Uint8Array.from(atob(e.iv), c => c.charCodeAt(0));
         const data = Uint8Array.from(atob(e.encrypted_data), c => c.charCodeAt(0));
@@ -928,7 +934,9 @@ async function decryptVaultData(encrypted_data, iv_b64, salt_b64) {
 
 async function loadVaultList() {
   try {
-    const allEntries = await (await fetch('/api/vault')).json();
+    const _vl = await fetch('/api/vault');
+    if (!_vl.ok) return;
+    const allEntries = await _vl.json();
     const entries = allEntries.filter(e => e.title !== '__vault_verify__');
     const el = document.getElementById('vault-list');
     if (!entries.length) { el.innerHTML = '<div class="utility-empty-state vault-empty-state">No entries yet. Click "+ New Entry" to add encrypted documents.</div>'; return; }
@@ -1031,7 +1039,9 @@ async function loadWeather() {
   if (logEl) logEl.innerHTML = Array(3).fill('<div class="skeleton skeleton-line weather-skeleton-row"></div>').join('');
   try {
     // Load trend
-    const trend = await (await fetch('/api/weather/trend')).json();
+    const _wt = await fetch('/api/weather/trend');
+    if (!_wt.ok) { if (trendEl) trendEl.innerHTML = '<span class="text-muted">Weather data unavailable</span>'; return; }
+    const trend = await _wt.json();
     const trendIcons = {rising_fast:'++ ',rising:'+ ',steady:'= ',falling:'- ',falling_fast:'-- ',insufficient:''};
     trendEl.innerHTML = `
       <div class="weather-trend-value ${trend.trend === 'falling' || trend.trend === 'falling_fast' ? 'text-red' : trend.trend === 'rising' || trend.trend === 'rising_fast' ? 'text-green' : trend.trend === 'steady' ? 'text-strong' : 'text-muted'}">${trendIcons[trend.trend]}${trend.current ? trend.current + ' hPa' : 'No data'}</div>
@@ -1039,7 +1049,8 @@ async function loadWeather() {
       <div class="weather-trend-prediction">${trend.prediction}</div>`;
 
     // Load history
-    const history = await (await fetch('/api/weather?limit=20')).json();
+    const _wh = await fetch('/api/weather?limit=20');
+    const history = _wh.ok ? await _wh.json() : [];
     const histEl = document.getElementById('wx-history');
     if (!history.length) { histEl.innerHTML = '<div class="text-muted text-size-12">No observations yet.</div>'; return; }
     histEl.innerHTML = '<table class="freq-table"><thead><tr><th>Time</th><th>hPa</th><th>Temp</th><th>Wind</th><th>Sky</th><th>Notes</th></tr></thead><tbody>' +
@@ -1149,7 +1160,9 @@ async function loadWeatherRules() {
   if (!el) return;
   el.innerHTML = '<div class="skeleton skeleton-line weather-skeleton-row"></div>';
   try {
-    const rules = await (await fetch('/api/weather/action-rules')).json();
+    const _wr = await fetch('/api/weather/action-rules');
+    if (!_wr.ok) { el.innerHTML = ''; return; }
+    const rules = await _wr.json();
     // Seed defaults if empty
     if (rules.length === 0) {
       await Promise.all(_wxRuleDefaults.map(def =>
@@ -1306,7 +1319,9 @@ async function importInvCSV() {
   const formData = new FormData();
   formData.append('file', input.files[0]);
   try {
-    const r = await (await fetch('/api/inventory/import-csv', {method:'POST', body:formData})).json();
+    const _resp = await fetch('/api/inventory/import-csv', {method:'POST', body:formData});
+    if (!_resp.ok) { const _e = await _resp.json().catch(() => ({})); toast(_e.error || 'Import failed', 'error'); input.value = ''; return; }
+    const r = await _resp.json();
     input.value = '';
     toast(`Imported ${r.count} items`, 'success');
     loadInventory();
@@ -1319,7 +1334,9 @@ async function importContactsCSV() {
   const formData = new FormData();
   formData.append('file', input.files[0]);
   try {
-    const r = await (await fetch('/api/contacts/import-csv', {method:'POST', body:formData})).json();
+    const _resp = await fetch('/api/contacts/import-csv', {method:'POST', body:formData});
+    if (!_resp.ok) { const _e = await _resp.json().catch(() => ({})); toast(_e.error || 'Import failed', 'error'); input.value = ''; return; }
+    const r = await _resp.json();
     input.value = '';
     toast(`Imported ${r.count} contacts`, 'success');
     loadContacts();

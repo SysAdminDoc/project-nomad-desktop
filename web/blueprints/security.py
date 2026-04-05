@@ -164,8 +164,14 @@ def api_security_zones():
     result = []
     for r in rows:
         entry = dict(r)
-        entry['camera_ids'] = json.loads(entry.get('camera_ids') or '[]')
-        entry['waypoint_ids'] = json.loads(entry.get('waypoint_ids') or '[]')
+        try:
+            entry['camera_ids'] = json.loads(entry.get('camera_ids') or '[]')
+        except (json.JSONDecodeError, TypeError, ValueError):
+            entry['camera_ids'] = []
+        try:
+            entry['waypoint_ids'] = json.loads(entry.get('waypoint_ids') or '[]')
+        except (json.JSONDecodeError, TypeError, ValueError):
+            entry['waypoint_ids'] = []
         result.append(entry)
     return jsonify(result)
 

@@ -260,8 +260,8 @@ RULES:
         # Pattern: "add [qty] [item] to inventory"
         m = re.match(r'add\s+(\d+)\s+(.+?)\s+to\s+inventory', action, re.IGNORECASE)
         if m:
-            qty = int(m.group(1))
-            item_name = m.group(2).strip()
+            qty = max(1, min(int(m.group(1)), 100000))
+            item_name = m.group(2).strip()[:200]
             with db_session() as db:
                 db.execute(
                     'INSERT INTO inventory (name, quantity, category) VALUES (?, ?, ?)',
@@ -319,6 +319,9 @@ RULES:
                 lng = float(m.group(3))
             except ValueError:
                 return jsonify({'error': 'Invalid coordinates — lat and lng must be numbers'}), 400
+            if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+                return jsonify({'error': 'Coordinates out of range (lat: -90..90, lng: -180..180)'}), 400
+            wp_name = wp_name[:200]
             with db_session() as db:
                 db.execute(
                     'INSERT INTO waypoints (name, lat, lng) VALUES (?, ?, ?)',
