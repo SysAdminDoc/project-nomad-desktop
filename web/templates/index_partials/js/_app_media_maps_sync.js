@@ -1555,9 +1555,10 @@ async function torrentOpenFolder(hash) {
   await fetch('/api/torrent/open-folder/' + hash, {method: 'POST'});
 }
 async function openTorrentSaveDir() {
-  const r = await fetch('/api/torrent/dir');
-  const d = await r.json();
-  toast('Downloads folder: ' + (d.path || '?'), 'info');
+  try {
+    const d = await _fetchJson('/api/torrent/dir');
+    toast('Downloads folder: ' + (d.path || '?'), 'info');
+  } catch(e) { toast('Could not get downloads folder', 'error'); }
 }
 
 // ── Download trigger ──────────────────────────────────────────────────────
@@ -1739,8 +1740,8 @@ let _channelCategories = [];
 async function loadChannelBrowser() {
   try {
     const [channels, categories] = await Promise.all([
-      fetch('/api/channels/catalog').then(r => r.json()),
-      fetch('/api/channels/categories').then(r => r.json()),
+      _fetchJson('/api/channels/catalog'),
+      _fetchJson('/api/channels/categories'),
     ]);
     _channelData = channels;
     _channelCategories = categories;
@@ -2189,7 +2190,8 @@ async function moveMediaItem(id, type) {
   try { folders = await _fetchJson(foldersMap[type]); } catch(e) {}
   const name = prompt('Move to folder:\n\nExisting: ' + (folders.length ? folders.join(', ') : 'none'));
   if (name === null) return;
-  await fetch(`${apiMap[type]}/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({folder:name})});
+  const resp = await fetch(`${apiMap[type]}/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({folder:name})});
+  if (!resp.ok) { toast('Failed to move item', 'error'); return; }
   toast('Moved to ' + (name || 'Unsorted'), 'success');
   loadMediaContent();
 }

@@ -1062,21 +1062,26 @@ def api_ytdlp_download():
                 **_CREATION_FLAGS,
             )
 
-            for line in proc.stdout:
-                line = line.strip()
-                if '[download]' in line and '%' in line:
-                    try:
-                        pct_str = line.split('%')[0].split()[-1]
-                        pct = float(pct_str)
-                        _ytdlp_downloads[dl_id]['percent'] = min(int(pct), 99)
-                        # Extract speed
-                        if 'at' in line:
-                            speed_part = line.split('at')[-1].strip().split('ETA')[0].strip()
-                            _ytdlp_downloads[dl_id]['speed'] = speed_part
-                    except (ValueError, IndexError):
-                        pass
-                elif '[Merger]' in line or '[ExtractAudio]' in line:
-                    _ytdlp_downloads[dl_id].update({'status': 'merging', 'percent': 95})
+            try:
+                for line in proc.stdout:
+                    line = line.strip()
+                    if '[download]' in line and '%' in line:
+                        try:
+                            pct_str = line.split('%')[0].split()[-1]
+                            pct = float(pct_str)
+                            _ytdlp_downloads[dl_id]['percent'] = min(int(pct), 99)
+                            if 'at' in line:
+                                speed_part = line.split('at')[-1].strip().split('ETA')[0].strip()
+                                _ytdlp_downloads[dl_id]['speed'] = speed_part
+                        except (ValueError, IndexError):
+                            pass
+                    elif '[Merger]' in line or '[ExtractAudio]' in line:
+                        _ytdlp_downloads[dl_id].update({'status': 'merging', 'percent': 95})
+            except Exception:
+                try:
+                    proc.terminate()
+                except OSError:
+                    pass
 
             proc.wait(timeout=3600)
 
@@ -1244,16 +1249,22 @@ def api_ytdlp_download_catalog():
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                     **_CREATION_FLAGS,
                 )
-                for line in proc.stdout:
-                    line = line.strip()
-                    if '[download]' in line and '%' in line:
-                        try:
-                            pct = float(line.split('%')[0].split()[-1])
-                            _ytdlp_downloads[queue_id]['percent'] = min(int(pct), 99)
-                            if 'at' in line:
-                                _ytdlp_downloads[queue_id]['speed'] = line.split('at')[-1].strip().split('ETA')[0].strip()
-                        except (ValueError, IndexError):
-                            pass
+                try:
+                    for line in proc.stdout:
+                        line = line.strip()
+                        if '[download]' in line and '%' in line:
+                            try:
+                                pct = float(line.split('%')[0].split()[-1])
+                                _ytdlp_downloads[queue_id]['percent'] = min(int(pct), 99)
+                                if 'at' in line:
+                                    _ytdlp_downloads[queue_id]['speed'] = line.split('at')[-1].strip().split('ETA')[0].strip()
+                            except (ValueError, IndexError):
+                                pass
+                except Exception:
+                    try:
+                        proc.terminate()
+                    except OSError:
+                        pass
                 proc.wait(timeout=3600)
 
                 if proc.returncode == 0:
@@ -1448,16 +1459,22 @@ def api_ytdlp_download_audio():
 
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     text=True, **_CREATION_FLAGS)
-            for line in proc.stdout:
-                line = line.strip()
-                if '[download]' in line and '%' in line:
-                    try:
-                        pct = float(line.split('%')[0].split()[-1])
-                        _ytdlp_downloads[dl_id]['percent'] = min(int(pct), 99)
-                        if 'at' in line:
-                            _ytdlp_downloads[dl_id]['speed'] = line.split('at')[-1].strip().split('ETA')[0].strip()
-                    except (ValueError, IndexError):
-                        pass
+            try:
+                for line in proc.stdout:
+                    line = line.strip()
+                    if '[download]' in line and '%' in line:
+                        try:
+                            pct = float(line.split('%')[0].split()[-1])
+                            _ytdlp_downloads[dl_id]['percent'] = min(int(pct), 99)
+                            if 'at' in line:
+                                _ytdlp_downloads[dl_id]['speed'] = line.split('at')[-1].strip().split('ETA')[0].strip()
+                        except (ValueError, IndexError):
+                            pass
+            except Exception:
+                try:
+                    proc.terminate()
+                except OSError:
+                    pass
             proc.wait(timeout=1800)
 
             if proc.returncode == 0:
@@ -1531,8 +1548,8 @@ def api_ffmpeg_install():
                         basename = os.path.basename(member)
                         if basename in (ffmpeg_name, ffprobe_name, 'ffmpeg', 'ffprobe'):
                             # Path traversal protection
-                            target = os.path.normpath(os.path.join(ffmpeg_dir, member))
-                            if not target.startswith(os.path.normpath(ffmpeg_dir)):
+                            target = os.path.normcase(os.path.normpath(os.path.join(ffmpeg_dir, member)))
+                            if not target.startswith(os.path.normcase(os.path.normpath(ffmpeg_dir)) + os.sep):
                                 continue
                             tf.extract(member, ffmpeg_dir)
                             extracted = os.path.join(ffmpeg_dir, member)
