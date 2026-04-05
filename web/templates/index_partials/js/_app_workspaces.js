@@ -1507,7 +1507,7 @@ async function showDocDetails(id) {
     const entities = d.entities || [];
     const linked = d.linked_records || [];
     let html = `<h3 class="kb-detail-title">${escapeHtml(d.filename)}</h3>`;
-    html += `<div class="kb-detail-category-row"><span class="kb-doc-category kb-doc-category-strong" style="--kb-doc-category-tone:${catColors[d.doc_category]||'#666'};">${d.doc_category||'unclassified'}</span></div>`;
+    html += `<div class="kb-detail-category-row"><span class="kb-doc-category kb-doc-category-strong" style="--kb-doc-category-tone:${catColors[d.doc_category]||'#666'};">${escapeHtml(d.doc_category||'unclassified')}</span></div>`;
     if (d.summary) html += `<div class="kb-detail-summary"><strong>Summary:</strong> ${escapeHtml(d.summary)}</div>`;
     if (entities.length) {
       html += `<div class="kb-detail-section"><strong class="kb-detail-label">Extracted Entities (${entities.length}):</strong><div class="kb-detail-entity-list">`;
@@ -1531,7 +1531,7 @@ async function showDocDetails(id) {
       });
       html += `</div></div>`;
     }
-    html += `<div class="kb-detail-meta">File size: ${d.file_size ? Math.round(d.file_size/1024) + ' KB' : '?'} | Chunks: ${d.chunks_count || 0} | Status: ${d.status}</div>`;
+    html += `<div class="kb-detail-meta">File size: ${d.file_size ? Math.round(d.file_size/1024) + ' KB' : '?'} | Chunks: ${d.chunks_count || 0} | Status: ${escapeHtml(d.status || 'unknown')}</div>`;
     html += `<div class="modal-footer"><button class="btn btn-sm" type="button" data-shell-action="close-modal-overlay">Close</button></div>`;
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
