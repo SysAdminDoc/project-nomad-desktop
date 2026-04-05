@@ -5656,8 +5656,8 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
 
             node_id = _get_node_id()
             node_name = _get_node_name()
-            participants = json.loads(row['participants'] or '[]')
-            if not any(p['node_id'] == node_id for p in participants):
+            participants = _safe_json_list(row['participants'])
+            if not any(isinstance(p, dict) and p.get('node_id') == node_id for p in participants):
                 participants.append({'node_id': node_id, 'node_name': node_name, 'role': 'participant', 'joined_at': time.strftime('%Y-%m-%dT%H:%M:%S')})
 
             db.execute("UPDATE group_exercises SET participants = ?, status = 'active', updated_at = datetime('now') WHERE exercise_id = ?",
@@ -5687,9 +5687,9 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             row = db.execute('SELECT participants FROM group_exercises WHERE exercise_id = ?', (exercise_id,)).fetchone()
             if not row:
                 return jsonify({'error': 'Not found'}), 404
-            participants = json.loads(row['participants'] or '[]')
+            participants = _safe_json_list(row['participants'])
             node_id = data.get('node_id', '')
-            if not any(p['node_id'] == node_id for p in participants):
+            if not any(isinstance(p, dict) and p.get('node_id') == node_id for p in participants):
                 participants.append({'node_id': node_id, 'node_name': data.get('node_name', ''), 'role': 'participant', 'joined_at': time.strftime('%Y-%m-%dT%H:%M:%S')})
             db.execute("UPDATE group_exercises SET participants = ?, updated_at = datetime('now') WHERE exercise_id = ?",
                        (json.dumps(participants), exercise_id))
@@ -5705,8 +5705,13 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
             if not row:
                 return jsonify({'error': 'Not found'}), 404
 
-            shared_state = json.loads(row['shared_state'] or '{}')
-            decisions_log = json.loads(row['decisions_log'] or '[]')
+            try:
+                shared_state = json.loads(row['shared_state'] or '{}')
+                if not isinstance(shared_state, dict):
+                    shared_state = {}
+            except (json.JSONDecodeError, TypeError, ValueError):
+                shared_state = {}
+            decisions_log = _safe_json_list(row['decisions_log'])
 
             if 'phase' in data:
                 shared_state['phase'] = data['phase']
@@ -5731,7 +5736,7 @@ Respond as plain text, not JSON. Start with "Score: XX/100" on the first line.""
                        (json.dumps(shared_state), json.dumps(decisions_log), shared_state.get('phase', 0),
                         status, score, aar_text, exercise_id))
             db.commit()
-            participants = json.loads(row['participants'] or '[]')
+            participants = _safe_json_list(row['participants'])
 
         # Broadcast state to all participants
         peers = _get_trusted_peers()

@@ -1312,7 +1312,10 @@ def api_tracks_add_point(tid):
         if row['ended_at']:
             return jsonify({'error': 'Track already stopped'}), 400
 
-        geojson = json.loads(row['geojson'])
+        try:
+            geojson = json.loads(row['geojson'])
+        except (json.JSONDecodeError, TypeError, ValueError):
+            geojson = {'type': 'Feature', 'geometry': {'type': 'LineString', 'coordinates': []}, 'properties': {}}
         coords = geojson.get('geometry', {}).get('coordinates', [])
 
         total_distance = row['total_distance_m'] or 0
@@ -1375,7 +1378,10 @@ def api_tracks_export_gpx(tid):
         if not row:
             return jsonify({'error': 'Track not found'}), 404
 
-        geojson = json.loads(row['geojson'])
+        try:
+            geojson = json.loads(row['geojson'])
+        except (json.JSONDecodeError, TypeError, ValueError):
+            geojson = {'geometry': {'coordinates': []}}
         coords = geojson.get('geometry', {}).get('coordinates', [])
 
         gpx = '<?xml version="1.0" encoding="UTF-8"?>\n'

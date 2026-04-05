@@ -1597,7 +1597,10 @@ def api_backup_config_get():
     with db_session() as db:
         row = db.execute("SELECT value FROM settings WHERE key = 'auto_backup_config'").fetchone()
     if row and row['value']:
-        config = json.loads(row['value'])
+        try:
+            config = json.loads(row['value'])
+        except (json.JSONDecodeError, TypeError, ValueError):
+            config = {}
         config['has_password'] = bool(config.get('_derived_key'))
         config.pop('password', None)
         config.pop('_derived_key', None)

@@ -240,7 +240,10 @@ def api_node_sync_push():
         vc_rows = db.execute('SELECT table_name, row_hash, clock FROM vector_clocks LIMIT 50000').fetchall()
         payload['vector_clocks'] = {r['table_name']: {} for r in vc_rows}
         for r in vc_rows:
-            payload['vector_clocks'][r['table_name']][r['row_hash']] = json.loads(r['clock'] or '{}')
+            try:
+                payload['vector_clocks'][r['table_name']][r['row_hash']] = json.loads(r['clock'] or '{}')
+            except (json.JSONDecodeError, TypeError, ValueError):
+                payload['vector_clocks'][r['table_name']][r['row_hash']] = {}
 
     # Sign the payload
     priv_key, pub_key = _get_or_create_node_key()
@@ -408,7 +411,11 @@ def api_node_vector_clock():
         tname = r['table_name']
         if tname not in clocks:
             clocks[tname] = []
-        clocks[tname].append({'row_hash': r['row_hash'], 'clock': json.loads(r['clock'] or '{}'), 'last_node': r['last_node'], 'updated_at': r['updated_at']})
+        try:
+            clock_val = json.loads(r['clock'] or '{}')
+        except (json.JSONDecodeError, TypeError, ValueError):
+            clock_val = {}
+        clocks[tname].append({'row_hash': r['row_hash'], 'clock': clock_val, 'last_node': r['last_node'], 'updated_at': r['updated_at']})
     return jsonify(clocks)
 
 
@@ -462,10 +469,20 @@ def api_node_conflict_resolve(conflict_id):
         if not row:
             return jsonify({'error': 'Conflict not found'}), 404
 
-        conflicts = json.loads(row['conflict_details'] or '[]')
+        try:
+            conflicts = json.loads(row['conflict_details'] or '[]')
+            if not isinstance(conflicts, list):
+                conflicts = []
+        except (json.JSONDecodeError, TypeError, ValueError):
+            conflicts = []
 
         if resolution == 'remote':
-            tables_synced = json.loads(row['tables_synced'] or '{}')
+            try:
+                tables_synced = json.loads(row['tables_synced'] or '{}')
+                if not isinstance(tables_synced, dict):
+                    tables_synced = {}
+            except (json.JSONDecodeError, TypeError, ValueError):
+                tables_synced = {}
             for conflict in conflicts:
                 tname = conflict.get('table', '')
                 incoming_clock = conflict.get('incoming_clock', {})
@@ -519,7 +536,12 @@ def api_conflict_diff(cid):
         row = db.execute('SELECT * FROM sync_log WHERE id = ?', (cid,)).fetchone()
     if not row:
         return jsonify({'error': 'Conflict not found'}), 404
-    details = json.loads(row['conflict_details'] or '[]')
+    try:
+        details = json.loads(row['conflict_details'] or '[]')
+        if not isinstance(details, list):
+            details = []
+    except (json.JSONDecodeError, TypeError, ValueError):
+        details = []
     result_conflicts = []
     for conflict in details:
         local_row = conflict.get('local_row') or {}
