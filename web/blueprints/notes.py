@@ -172,7 +172,7 @@ def api_note_backlinks(note_id):
         rows = db.execute(
             '''SELECT n.id, n.title, n.updated_at FROM notes n
                JOIN note_links l ON l.source_note_id = n.id
-               WHERE l.target_note_id = ? ORDER BY n.updated_at DESC''',
+               WHERE l.target_note_id = ? ORDER BY n.updated_at DESC LIMIT 200''',
             (note_id,)
         ).fetchall()
         return jsonify([dict(r) for r in rows])
