@@ -3084,6 +3084,11 @@ dd + dt {
   backdrop-filter: none !important;
 }
 
+/* ── Toast action buttons ── */
+.toast-actions { margin-top: 4px; }
+.toast-action-btn { font-size: 0.8em; padding: 2px 8px; text-decoration: underline; opacity: 0.9; }
+.toast-action-btn:hover { opacity: 1; }
+
 /* ── Settings search ── */
 .settings-search-wrap { padding: 0 0 var(--sp-3, 12px); }
 .settings-search-wrap input { max-width: 360px; }

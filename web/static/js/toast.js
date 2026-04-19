@@ -20,20 +20,32 @@ function _removeToast(el) {
   }, 250);
 }
 
-function toast(msg, type='info') {
+function toast(msg, type='info', options) {
   const el = document.createElement('div');
   el.className = `toast toast-${type}`;
   el.setAttribute('role', type === 'error' ? 'alert' : 'status');
   el.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+  let actionsHtml = '';
+  if (options && options.actions) {
+    actionsHtml = '<div class="toast-actions">' + options.actions.map(a =>
+      `<button type="button" class="btn btn-sm toast-action-btn">${_esc(a.label)}</button>`
+    ).join('') + '</div>';
+  }
   el.innerHTML = `
     <span class="toast-icon" aria-hidden="true">${_toastIcons[type]||_toastIcons.info}</span>
     <div class="toast-body">
       <div class="toast-title">${_toastTitles[type] || _toastTitles.info}</div>
       <div class="toast-message">${_esc(msg)}</div>
+      ${actionsHtml}
     </div>
     <button type="button" class="toast-close" aria-label="Dismiss notification">&times;</button>
   `;
   document.body.appendChild(el);
+  if (options && options.actions) {
+    el.querySelectorAll('.toast-action-btn').forEach((btn, i) => {
+      btn.addEventListener('click', () => { options.actions[i].onClick(); _removeToast(el); });
+    });
+  }
   if (_toastStack.length >= 5) {
     const oldest = _toastStack.shift();
     oldest.remove();
@@ -43,7 +55,7 @@ function toast(msg, type='info') {
   const closeBtn = el.querySelector('.toast-close');
   if (closeBtn) closeBtn.addEventListener('click', () => _removeToast(el));
   requestAnimationFrame(() => el.classList.add('show'));
-  const dur = type === 'error' ? 6000 : type === 'warning' ? 4500 : 3000;
+  const dur = options && options.duration ? options.duration : (type === 'error' ? 6000 : type === 'warning' ? 4500 : 3000);
   setTimeout(() => {
     _removeToast(el);
   }, dur);

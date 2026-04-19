@@ -316,7 +316,12 @@ function editInvItem(id) {
 async function deleteInvItem(id) {
   try {
     await apiDelete(`/api/inventory/${id}`);
-    toast('Item deleted', 'warning');
+    toast('Item deleted', 'warning', {
+      duration: 6000,
+      actions: [{ label: 'Undo', onClick: () => {
+        apiPost('/api/undo').then(() => { toast('Undo successful', 'success'); loadInventory(); }).catch(() => toast('Undo expired', 'info'));
+      }}]
+    });
     loadInventory();
   } catch(e) { toast(e?.data?.error || e?.message || 'Failed to delete item', 'error'); }
 }

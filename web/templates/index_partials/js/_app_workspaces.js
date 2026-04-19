@@ -373,6 +373,12 @@ async function deleteNote() {
     currentNoteId = null;
     titleInput.value = '';
     contentInput.value = '';
+    toast('Note deleted', 'warning', {
+      duration: 6000,
+      actions: [{ label: 'Undo', onClick: () => {
+        apiPost('/api/undo').then(() => { toast('Undo successful', 'success'); loadNotes(); }).catch(() => toast('Undo expired', 'info'));
+      }}]
+    });
     await loadNotes();
   } catch (e) {
     toast(e.message || 'Failed to delete note', 'error');

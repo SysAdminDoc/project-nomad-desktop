@@ -116,7 +116,12 @@ async function deleteContact(id) {
   if (!confirm('Delete this contact?')) return;
   try {
     await apiDelete(`/api/contacts/${id}`);
-    toast('Contact deleted', 'warning');
+    toast('Contact deleted', 'warning', {
+      duration: 6000,
+      actions: [{ label: 'Undo', onClick: () => {
+        apiPost('/api/undo').then(() => { toast('Undo successful', 'success'); loadContacts(); }).catch(() => toast('Undo expired', 'info'));
+      }}]
+    });
     loadContacts();
   } catch(e) { toast(e?.data?.error || e?.message || 'Failed to delete contact', 'error'); }
 }
