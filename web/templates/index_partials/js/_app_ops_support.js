@@ -4708,6 +4708,32 @@ openAppFrameHTML(`${_currentGuide.title} — Decision Path`, `<!DOCTYPE html><ht
 let _alertBarVisible = false;
 let _lastAlertCount = 0;
 
+/* ─── Favicon badge ─── */
+let _faviconOriginal = null;
+function _updateFaviconBadge(count) {
+  const link = document.querySelector('link[rel="icon"]') || document.querySelector('link[rel="shortcut icon"]');
+  if (!link) return;
+  if (!_faviconOriginal) _faviconOriginal = link.href;
+  if (!count || count <= 0) { link.href = _faviconOriginal; return; }
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = function() {
+    const size = 32;
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, size, size);
+    const label = count > 9 ? '9+' : String(count);
+    const r = 8; const cx = size - r; const cy = r;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI); ctx.fillStyle = '#e74c3c'; ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, cx, cy + 1);
+    try { link.href = canvas.toDataURL('image/png'); } catch(_) {}
+  };
+  img.onerror = function() {};
+  img.src = _faviconOriginal;
+}
+
 async function loadAlerts() {
   const badge = document.getElementById('alert-badge');
   const bar = document.getElementById('alert-bar');
@@ -4724,6 +4750,7 @@ async function loadAlerts() {
         items.innerHTML = '<div class="alert-clear-state">All clear. No active alerts.</div>';
       }
       if (count) count.textContent = '';
+      _updateFaviconBadge(0);
       return;
     }
 
@@ -4733,6 +4760,7 @@ async function loadAlerts() {
       badge.textContent = alerts.length;
     }
     if (count) count.textContent = `(${alerts.length})`;
+    _updateFaviconBadge(alerts.length);
 
     // Notify on NEW alerts (ones we haven't seen before)
     if (alerts.length > _lastAlertCount && _lastAlertCount > 0) {
