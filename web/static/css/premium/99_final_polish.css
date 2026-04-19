@@ -3084,6 +3084,12 @@ dd + dt {
   backdrop-filter: none !important;
 }
 
+/* ── Empty-state cards ── */
+.empty-state-card { text-align: center; padding: var(--sp-6, 24px) var(--sp-4, 16px); }
+.empty-state-icon { font-size: 2.5rem; margin-bottom: var(--sp-2, 8px); opacity: 0.5; line-height: 1; }
+.empty-state-title { font-weight: 600; font-size: var(--text-base, 1rem); margin-bottom: var(--sp-1, 4px); }
+.empty-state-text { color: var(--text-secondary, #999); font-size: var(--text-sm, 0.85rem); max-width: 360px; margin: 0 auto var(--sp-3, 12px); line-height: 1.5; }
+
 /* ── Toast action buttons ── */
 .toast-actions { margin-top: 4px; }
 .toast-action-btn { font-size: 0.8em; padding: 2px 8px; text-decoration: underline; opacity: 0.9; }

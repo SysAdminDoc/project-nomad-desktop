@@ -150,7 +150,7 @@ async function loadInventory() {
     _updateInvSortIndicators();
     const tbody = document.getElementById('inv-tbody');
     if (!items.length) {
-      tbody.innerHTML = '<tr><td colspan="10" class="prep-table-empty">No items found.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="prep-table-empty"><div class="empty-state-card"><div class="empty-state-icon">&#128230;</div><div class="empty-state-title">No supplies tracked yet</div><div class="empty-state-text">Start building your inventory by adding food, water, medical supplies, and gear. Use templates to bootstrap common kits.</div><button type="button" class="btn btn-sm btn-primary" data-prep-action="show-inv-form">+ Add First Item</button></div></td></tr>';
       document.getElementById('inv-tfoot').innerHTML = '';
     } else {
       const today = new Date().toISOString().slice(0,10);
