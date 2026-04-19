@@ -2711,7 +2711,7 @@ function toggleCommandPalette(force) {
     input.value = '';
     clearTimeout(_commandPaletteTimer);
     renderCommandPalette('');
-    requestAnimationFrame(() => input.focus());
+    requestAnimationFrame(() => { input.focus(); input.select(); });
     return;
   }
   setShellVisibility(overlay, false);
