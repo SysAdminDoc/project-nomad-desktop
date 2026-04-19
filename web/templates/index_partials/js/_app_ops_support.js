@@ -4753,17 +4753,18 @@ sendNotification('NOMAD Alert', newest.title);
     const sevOrder = {critical: 0, warning: 1, info: 2};
     alerts.sort((a, b) => (sevOrder[a.severity] || 9) - (sevOrder[b.severity] || 9));
     if (items) {
-      items.innerHTML = alerts.map(a => `
-        <div class="alert-item">
+      items.innerHTML = alerts.map(a => {
+        const ago = a.created_at && typeof timeAgo === 'function' ? timeAgo(a.created_at) : '';
+        return `<div class="alert-item">
           <span class="alert-sev ${a.severity}">${a.severity}</span>
           <div class="alert-body">
             <div class="alert-title">${escapeHtml(a.title)}</div>
-            <div class="alert-msg">${escapeHtml(a.message)}</div>
+            <div class="alert-msg">${escapeHtml(a.message)}${ago ? ` <span class="tone-muted text-size-11">(${ago})</span>` : ''}</div>
           </div>
           <button type="button" class="alert-dismiss alert-dismiss-link" data-shell-action="snooze-alert" data-alert-id="${a.id}" title="Snooze 1hr">snooze</button>
           <button type="button" class="alert-dismiss" data-shell-action="dismiss-alert" data-alert-id="${a.id}" title="Dismiss" aria-label="Dismiss alert">x</button>
-        </div>
-      `).join('');
+        </div>`;
+      }).join('');
     }
     // Append predictive alerts
     if (items) loadPredictiveAlerts();
