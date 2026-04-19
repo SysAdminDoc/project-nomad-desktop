@@ -2245,10 +2245,11 @@ async function loadActivity() {
       const t = new Date(a.created_at);
       const time = t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
       const date = t.toLocaleDateString([], {month:'short',day:'numeric'});
+      const ago = typeof timeAgo === 'function' ? timeAgo(a.created_at) : '';
       const event = a.event.replace(/_/g, ' ');
       const eventToneClass = a.level === 'error' ? 'activity-event-error' : a.level === 'warning' ? 'activity-event-warning' : 'activity-event-info';
       return `<div class="activity-item">
-        <span class="activity-time">${date} ${time}</span>
+        <span class="activity-time">${date} ${time}${ago ? ` <span class="activity-ago tone-muted">(${ago})</span>` : ''}</span>
         <span class="activity-event ${eventToneClass}">${event}</span>
         ${a.service ? `<span class="activity-service-tag">${escapeHtml(a.service)}</span>` : ''}
         ${a.detail ? `<span class="activity-detail">${escapeHtml(a.detail)}</span>` : ''}
@@ -2710,7 +2711,7 @@ function toggleCommandPalette(force) {
     input.value = '';
     clearTimeout(_commandPaletteTimer);
     renderCommandPalette('');
-    requestAnimationFrame(() => input.focus());
+    requestAnimationFrame(() => { input.focus(); input.select(); });
     return;
   }
   setShellVisibility(overlay, false);

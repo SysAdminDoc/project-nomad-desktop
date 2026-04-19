@@ -1375,3 +1375,40 @@ document.addEventListener('keydown', e => {
   }
   // Ctrl/Cmd+K — handled by _app_workspaces.js toggleCommandPalette()
 });
+
+/* ─── Collapsible Sidebar Groups ─── */
+(function() {
+  let collapsed = {};
+  try { collapsed = JSON.parse(localStorage.getItem('nomad-sidebar-collapsed')) || {}; } catch(_) {}
+  function applySidebarGroupState(groupEl, isCollapsed) {
+    // Read customize-hidden tabs so we don't re-show tabs the user hid via Customize
+    let hiddenTabs = [];
+    try {
+      const cust = JSON.parse(localStorage.getItem('nomad-customize')) || {};
+      hiddenTabs = Array.isArray(cust.hiddenTabs) ? cust.hiddenTabs : [];
+    } catch(_) {}
+    let sibling = groupEl.nextElementSibling;
+    while (sibling && !sibling.matches('[data-sidebar-group]') && !sibling.matches('.sidebar-context-hub, .sidebar-footer')) {
+      if (isCollapsed) {
+        sibling.style.display = 'none';
+      } else {
+        // Only show if not hidden by customize panel
+        const tabId = sibling.dataset?.tab;
+        sibling.style.display = (tabId && hiddenTabs.includes(tabId)) ? 'none' : '';
+      }
+      sibling = sibling.nextElementSibling;
+    }
+    groupEl.setAttribute('aria-expanded', !isCollapsed);
+    groupEl.classList.toggle('sidebar-group-collapsed', isCollapsed);
+  }
+  document.querySelectorAll('[data-sidebar-group]').forEach(groupEl => {
+    const id = groupEl.dataset.sidebarGroup;
+    if (collapsed[id]) applySidebarGroupState(groupEl, true);
+    groupEl.addEventListener('click', () => {
+      collapsed[id] = !collapsed[id];
+      applySidebarGroupState(groupEl, collapsed[id]);
+      try { localStorage.setItem('nomad-sidebar-collapsed', JSON.stringify(collapsed)); } catch(_) {}
+    });
+    groupEl.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); groupEl.click(); } });
+  });
+})();

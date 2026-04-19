@@ -54,19 +54,116 @@ function calcPower() {
 
 /* ─── Inventory ─── */
 let _cachedInvItems = [];
+let _invSortCol = null;
+let _invSortDir = 'asc';
+try {
+  const saved = JSON.parse(localStorage.getItem('nomad-inv-sort'));
+  if (saved && saved.col) { _invSortCol = saved.col; _invSortDir = saved.dir || 'asc'; }
+} catch(_) {}
+
+function _sortInventoryItems(items) {
+  if (!_invSortCol) return items;
+  const col = _invSortCol;
+  const dir = _invSortDir === 'desc' ? -1 : 1;
+  const today = new Date().toISOString().slice(0,10);
+  return [...items].sort((a, b) => {
+    let va, vb;
+    if (col === 'days_left') {
+      const daysA = a.daily_usage > 0 ? a.quantity / a.daily_usage : (a.expiration ? Math.round((new Date(a.expiration) - new Date(today)) / 86400000) : Infinity);
+      const daysB = b.daily_usage > 0 ? b.quantity / b.daily_usage : (b.expiration ? Math.round((new Date(b.expiration) - new Date(today)) / 86400000) : Infinity);
+      return (daysA - daysB) * dir;
+    }
+    va = a[col]; vb = b[col];
+    if (col === 'quantity' || col === 'cost') return ((va || 0) - (vb || 0)) * dir;
+    va = (va || '').toString().toLowerCase(); vb = (vb || '').toString().toLowerCase();
+    return va < vb ? -dir : va > vb ? dir : 0;
+  });
+}
+
+function sortInventoryBy(col) {
+  if (_invSortCol === col) { _invSortDir = _invSortDir === 'asc' ? 'desc' : 'asc'; }
+  else { _invSortCol = col; _invSortDir = 'asc'; }
+  try { localStorage.setItem('nomad-inv-sort', JSON.stringify({col: _invSortCol, dir: _invSortDir})); } catch(_) {}
+  _updateInvSortIndicators();
+  loadInventory();
+}
+
+function _updateInvSortIndicators() {
+  document.querySelectorAll('#inv-table th[data-inv-sort]').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    if (th.dataset.invSort === _invSortCol) {
+      th.classList.add(_invSortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+      th.setAttribute('aria-sort', _invSortDir === 'asc' ? 'ascending' : 'descending');
+    } else {
+      th.removeAttribute('aria-sort');
+    }
+  });
+}
+
+document.getElementById('inv-table')?.addEventListener('click', e => {
+  const th = e.target.closest('th[data-inv-sort]');
+  if (th) sortInventoryBy(th.dataset.invSort);
+});
+document.getElementById('inv-table')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    const th = e.target.closest('th[data-inv-sort]');
+    if (th) { e.preventDefault(); sortInventoryBy(th.dataset.invSort); }
+  }
+});
+
+/* ─── Inline quantity editing ─── */
+document.getElementById('inv-table')?.addEventListener('dblclick', e => {
+  const qtyVal = e.target.closest('.inventory-qty-value');
+  if (!qtyVal || qtyVal.querySelector('input')) return;
+  const row = qtyVal.closest('tr');
+  const editBtn = row?.querySelector('[data-prep-action="edit-inv-item"]');
+  const itemId = editBtn?.dataset.invId;
+  if (!itemId) return;
+  const item = _cachedInvItems.find(i => String(i.id) === String(itemId));
+  if (!item) return;
+  const origText = qtyVal.textContent;
+  const input = document.createElement('input');
+  input.type = 'number'; input.min = '0'; input.step = 'any';
+  input.value = item.quantity; input.className = 'inv-inline-qty-input';
+  input.style.cssText = 'width:60px;text-align:center;';
+  input.setAttribute('aria-label', `Edit quantity for ${item.name || 'item'}`);
+  qtyVal.textContent = '';
+  qtyVal.appendChild(input);
+  input.focus(); input.select();
+  const commit = async () => {
+    const newQty = parseFloat(input.value);
+    if (isNaN(newQty) || newQty < 0 || newQty === item.quantity) { qtyVal.textContent = origText; return; }
+    try {
+      await apiPut(`/api/inventory/${itemId}`, { quantity: newQty });
+      item.quantity = newQty;
+      toast('Quantity updated', 'success');
+      loadInventory();
+    } catch(_) { qtyVal.textContent = origText; toast('Failed to update quantity', 'error'); }
+  };
+  let cancelled = false;
+  input.addEventListener('blur', () => { if (!cancelled) commit(); }, { once: true });
+  input.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
+    if (ev.key === 'Escape') { cancelled = true; qtyVal.textContent = origText; input.blur(); }
+  });
+});
 async function loadInventory() {
   const cat = document.getElementById('inv-cat-filter').value;
   const q = document.getElementById('inv-search').value.trim();
   let url = '/api/inventory?';
   if (cat) url += `category=${encodeURIComponent(cat)}&`;
   if (q) url += `q=${encodeURIComponent(q)}&`;
+  const tbody = document.getElementById('inv-tbody');
+  if (tbody && !_cachedInvItems.length) tbody.innerHTML = Array(3).fill('<tr><td colspan="10"><div class="skeleton skeleton-card"></div></td></tr>').join('');
   try {
-    const items = await safeFetch(url, {}, []);
+    let items = await safeFetch(url, {}, []);
     if (!Array.isArray(items)) throw new Error('invalid inventory payload');
     _cachedInvItems = items;
+    items = _sortInventoryItems(items);
+    _updateInvSortIndicators();
     const tbody = document.getElementById('inv-tbody');
     if (!items.length) {
-      tbody.innerHTML = '<tr><td colspan="10" class="prep-table-empty">No items found.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="prep-table-empty"><div class="empty-state-card"><div class="empty-state-icon">&#128230;</div><div class="empty-state-title">No supplies tracked yet</div><div class="empty-state-text">Start building your inventory by adding food, water, medical supplies, and gear. Use templates to bootstrap common kits.</div><button type="button" class="btn btn-sm btn-primary" data-prep-action="show-inv-form">+ Add First Item</button></div></td></tr>';
       document.getElementById('inv-tfoot').innerHTML = '';
     } else {
       const today = new Date().toISOString().slice(0,10);
@@ -234,7 +331,12 @@ function editInvItem(id) {
 async function deleteInvItem(id) {
   try {
     await apiDelete(`/api/inventory/${id}`);
-    toast('Item deleted', 'warning');
+    toast('Item deleted', 'warning', {
+      duration: 6000,
+      actions: [{ label: 'Undo', onClick: () => {
+        apiPost('/api/undo').then(() => { toast('Undo successful', 'success'); loadInventory(); }).catch(() => toast('Undo expired', 'info'));
+      }}]
+    });
     loadInventory();
   } catch(e) { toast(e?.data?.error || e?.message || 'Failed to delete item', 'error'); }
 }

@@ -13,6 +13,7 @@ from werkzeug.utils import secure_filename
 from db import db_session, log_activity
 from services import ollama
 from services.manager import format_size
+from web.blueprints.undo import push_undo
 from web.print_templates import render_print_document
 from web.sql_safety import safe_table, safe_columns, build_update, build_insert
 from web.validation import validate_json, validate_file_upload
@@ -151,12 +152,14 @@ def api_inventory_update(item_id):
 @require_auth('admin')
 def api_inventory_delete(item_id):
     with db_session() as db:
+        row = db.execute('SELECT * FROM inventory WHERE id = ?', (item_id,)).fetchone()
+        if not row:
+            return jsonify({'error': 'not found'}), 404
+        push_undo('delete', f'Delete inventory item "{row["name"]}"', 'inventory', dict(row))
         db.execute('DELETE FROM inventory_photos WHERE inventory_id = ?', (item_id,))
         db.execute('DELETE FROM inventory_checkouts WHERE inventory_id = ?', (item_id,))
         db.execute('DELETE FROM shopping_list WHERE inventory_id = ?', (item_id,))
-        r = db.execute('DELETE FROM inventory WHERE id = ?', (item_id,))
-        if r.rowcount == 0:
-            return jsonify({'error': 'not found'}), 404
+        db.execute('DELETE FROM inventory WHERE id = ?', (item_id,))
         db.commit()
     broadcast_event('inventory_update', {'action': 'delete', 'id': item_id})
     return jsonify({'status': 'deleted'})

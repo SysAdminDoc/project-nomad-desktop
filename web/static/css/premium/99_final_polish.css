@@ -3083,3 +3083,35 @@ dd + dt {
   background: var(--bg) !important;
   backdrop-filter: none !important;
 }
+
+/* ── Empty-state cards ── */
+.empty-state-card { text-align: center; padding: var(--sp-6, 24px) var(--sp-4, 16px); }
+.empty-state-icon { font-size: 2.5rem; margin-bottom: var(--sp-2, 8px); opacity: 0.5; line-height: 1; }
+.empty-state-title { font-weight: 600; font-size: var(--text-base, 1rem); margin-bottom: var(--sp-1, 4px); }
+.empty-state-text { color: var(--text-secondary, #999); font-size: var(--text-sm, 0.85rem); max-width: 360px; margin: 0 auto var(--sp-3, 12px); line-height: 1.5; }
+
+/* ── Toast action buttons ── */
+.toast-actions { margin-top: 4px; }
+.toast-action-btn { font-size: 0.8em; padding: 2px 8px; text-decoration: underline; opacity: 0.9; }
+.toast-action-btn:hover { opacity: 1; }
+
+/* ── Settings search ── */
+.settings-search-wrap { padding: 0 0 var(--sp-3, 12px); }
+.settings-search-wrap input { max-width: 360px; }
+
+/* ── Collapsible sidebar groups ── */
+.sidebar-group-label[data-sidebar-group] { cursor: pointer; }
+.sidebar-group-label[data-sidebar-group]::after {
+  content: '\25BE'; font-size: 0.8em; opacity: 0.5; margin-left: auto; transition: transform var(--duration-fast, 150ms) ease;
+}
+.sidebar-group-label[data-sidebar-group].sidebar-group-collapsed::after {
+  transform: rotate(-90deg);
+}
+.sidebar-group-label[data-sidebar-group]:hover { opacity: 0.85; }
+
+/* ── Sortable table headers ── */
+.sortable-th { cursor: pointer; user-select: none; position: relative; white-space: nowrap; }
+.sortable-th::after { content: ''; display: inline-block; width: 0; margin-left: 4px; }
+.sortable-th.sort-asc::after { content: '\25B2'; font-size: 0.7em; vertical-align: middle; opacity: 0.7; }
+.sortable-th.sort-desc::after { content: '\25BC'; font-size: 0.7em; vertical-align: middle; opacity: 0.7; }
+.sortable-th:hover { color: var(--accent); }

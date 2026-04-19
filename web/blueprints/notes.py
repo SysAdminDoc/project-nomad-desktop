@@ -7,6 +7,7 @@ from werkzeug.utils import secure_filename
 
 from config import get_data_dir
 from db import db_session, log_activity
+from web.blueprints.undo import push_undo
 
 notes_bp = Blueprint('notes', __name__)
 
@@ -55,11 +56,13 @@ def api_notes_update(note_id):
 @notes_bp.route('/api/notes/<int:note_id>', methods=['DELETE'])
 def api_notes_delete(note_id):
     with db_session() as db:
+        row = db.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
+        if not row:
+            return jsonify({'error': 'not found'}), 404
+        push_undo('delete', f'Delete note "{row["title"] or "Untitled"}"', 'notes', dict(row))
         db.execute('DELETE FROM note_tags WHERE note_id = ?', (note_id,))
         db.execute('DELETE FROM note_links WHERE source_note_id = ? OR target_note_id = ?', (note_id, note_id))
-        r = db.execute('DELETE FROM notes WHERE id = ?', (note_id,))
-        if r.rowcount == 0:
-            return jsonify({'error': 'not found'}), 404
+        db.execute('DELETE FROM notes WHERE id = ?', (note_id,))
         db.commit()
         return jsonify({'status': 'deleted'})
 # --- Notes Pin/Tag ---

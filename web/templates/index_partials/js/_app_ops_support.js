@@ -1,3 +1,13 @@
+/* ─── Settings Search/Filter ─── */
+document.getElementById('settings-search')?.addEventListener('input', function() {
+  const q = this.value.toLowerCase().trim();
+  document.querySelectorAll('#tab-settings .settings-card').forEach(card => {
+    if (!q) { card.style.display = ''; return; }
+    const text = card.textContent.toLowerCase();
+    card.style.display = text.includes(q) ? '' : 'none';
+  });
+});
+
 /* ─── Help / Guide ─── */
 function showHelp(section) {
   const palette = getThemePalette();
@@ -4708,6 +4718,32 @@ openAppFrameHTML(`${_currentGuide.title} — Decision Path`, `<!DOCTYPE html><ht
 let _alertBarVisible = false;
 let _lastAlertCount = 0;
 
+/* ─── Favicon badge ─── */
+let _faviconOriginal = null;
+function _updateFaviconBadge(count) {
+  const link = document.querySelector('link[rel="icon"]') || document.querySelector('link[rel="shortcut icon"]');
+  if (!link) return;
+  if (!_faviconOriginal) _faviconOriginal = link.href;
+  if (!count || count <= 0) { link.href = _faviconOriginal; return; }
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = function() {
+    const size = 32;
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, size, size);
+    const label = count > 9 ? '9+' : String(count);
+    const r = 8; const cx = size - r; const cy = r;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI); ctx.fillStyle = '#e74c3c'; ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, cx, cy + 1);
+    try { link.href = canvas.toDataURL('image/png'); } catch(_) {}
+  };
+  img.onerror = function() {};
+  img.src = _faviconOriginal;
+}
+
 async function loadAlerts() {
   const badge = document.getElementById('alert-badge');
   const bar = document.getElementById('alert-bar');
@@ -4724,6 +4760,7 @@ async function loadAlerts() {
         items.innerHTML = '<div class="alert-clear-state">All clear. No active alerts.</div>';
       }
       if (count) count.textContent = '';
+      _updateFaviconBadge(0);
       return;
     }
 
@@ -4733,6 +4770,7 @@ async function loadAlerts() {
       badge.textContent = alerts.length;
     }
     if (count) count.textContent = `(${alerts.length})`;
+    _updateFaviconBadge(alerts.length);
 
     // Notify on NEW alerts (ones we haven't seen before)
     if (alerts.length > _lastAlertCount && _lastAlertCount > 0) {
@@ -4753,17 +4791,18 @@ sendNotification('NOMAD Alert', newest.title);
     const sevOrder = {critical: 0, warning: 1, info: 2};
     alerts.sort((a, b) => (sevOrder[a.severity] || 9) - (sevOrder[b.severity] || 9));
     if (items) {
-      items.innerHTML = alerts.map(a => `
-        <div class="alert-item">
+      items.innerHTML = alerts.map(a => {
+        const ago = a.created_at && typeof timeAgo === 'function' ? timeAgo(a.created_at) : '';
+        return `<div class="alert-item">
           <span class="alert-sev ${a.severity}">${a.severity}</span>
           <div class="alert-body">
             <div class="alert-title">${escapeHtml(a.title)}</div>
-            <div class="alert-msg">${escapeHtml(a.message)}</div>
+            <div class="alert-msg">${escapeHtml(a.message)}${ago ? ` <span class="tone-muted text-size-11">(${ago})</span>` : ''}</div>
           </div>
           <button type="button" class="alert-dismiss alert-dismiss-link" data-shell-action="snooze-alert" data-alert-id="${a.id}" title="Snooze 1hr">snooze</button>
           <button type="button" class="alert-dismiss" data-shell-action="dismiss-alert" data-alert-id="${a.id}" title="Dismiss" aria-label="Dismiss alert">x</button>
-        </div>
-      `).join('');
+        </div>`;
+      }).join('');
     }
     // Append predictive alerts
     if (items) loadPredictiveAlerts();
@@ -4798,6 +4837,8 @@ async function dismissAlert(id) {
 }
 
 async function dismissAllAlerts() {
+  const count = document.getElementById('alert-items')?.children.length || 0;
+  if (count > 0 && !confirm(`Dismiss all ${count} alert${count !== 1 ? 's' : ''}?`)) return;
   try {
     await apiPost('/api/alerts/dismiss-all');
     const panel = document.getElementById('alert-summary-panel');
@@ -4906,6 +4947,24 @@ function updateTabBadges() {
       else { preparednessBadge.style.display = 'none'; }
     });
   }
+
+  // Overdue tasks badge on Settings tab
+  safeFetch('/api/tasks/due', {}, []).then(tasks => {
+    if (!Array.isArray(tasks)) return;
+    const today = new Date().toISOString().slice(0,10);
+    const overdue = tasks.filter(t => t.next_due && t.next_due < today).length;
+    const settingsTab = document.querySelector('.tab[data-tab="settings"]');
+    if (!settingsTab) return;
+    let taskBadge = document.getElementById('badge-settings');
+    if (!taskBadge) {
+      taskBadge = document.createElement('span');
+      taskBadge.id = 'badge-settings';
+      taskBadge.className = 'tab-badge is-hidden';
+      settingsTab.appendChild(taskBadge);
+    }
+    if (overdue > 0) { taskBadge.textContent = overdue; taskBadge.className = 'tab-badge red'; }
+    else { taskBadge.className = 'tab-badge is-hidden'; }
+  }).catch(() => {});
 
   // AI Chat badge: green dot if Ollama running, red dot if not
   if (!aiBadge) return;

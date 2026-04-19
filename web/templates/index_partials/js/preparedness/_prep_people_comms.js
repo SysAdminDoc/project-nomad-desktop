@@ -4,12 +4,13 @@ async function loadContacts() {
   const q = document.getElementById('contact-search').value.trim();
   let url = '/api/contacts';
   if (q) url += `?q=${encodeURIComponent(q)}`;
+  const el = document.getElementById('contacts-grid');
+  if (el && !el.children.length) el.innerHTML = Array(3).fill('<div class="skeleton skeleton-card"></div>').join('');
   try {
     const contacts = await apiFetch(url);
     if (!q) _cachedContacts = contacts;
-    const el = document.getElementById('contacts-grid');
     if (!contacts.length) {
-      el.innerHTML = '<div class="prep-empty-state prep-empty-state-wide">No contacts yet. Add your emergency contacts, team members, and neighbors.</div>';
+      el.innerHTML = '<div class="prep-empty-state prep-empty-state-wide"><div class="empty-state-card"><div class="empty-state-icon">&#128101;</div><div class="empty-state-title">No contacts yet</div><div class="empty-state-text">Add emergency contacts, team members, and neighbors. Include callsigns, frequencies, and rally points for field coordination.</div><button type="button" class="btn btn-sm btn-primary" data-prep-action="show-contact-form">+ Add Contact</button></div></div>';
       return;
     }
     el.innerHTML = contacts.map(c => {
@@ -116,7 +117,12 @@ async function deleteContact(id) {
   if (!confirm('Delete this contact?')) return;
   try {
     await apiDelete(`/api/contacts/${id}`);
-    toast('Contact deleted', 'warning');
+    toast('Contact deleted', 'warning', {
+      duration: 6000,
+      actions: [{ label: 'Undo', onClick: () => {
+        apiPost('/api/undo').then(() => { toast('Undo successful', 'success'); loadContacts(); }).catch(() => toast('Undo expired', 'info'));
+      }}]
+    });
     loadContacts();
   } catch(e) { toast(e?.data?.error || e?.message || 'Failed to delete contact', 'error'); }
 }
