@@ -1381,9 +1381,21 @@ document.addEventListener('keydown', e => {
   let collapsed = {};
   try { collapsed = JSON.parse(localStorage.getItem('nomad-sidebar-collapsed')) || {}; } catch(_) {}
   function applySidebarGroupState(groupEl, isCollapsed) {
+    // Read customize-hidden tabs so we don't re-show tabs the user hid via Customize
+    let hiddenTabs = [];
+    try {
+      const cust = JSON.parse(localStorage.getItem('nomad-customize')) || {};
+      hiddenTabs = Array.isArray(cust.hiddenTabs) ? cust.hiddenTabs : [];
+    } catch(_) {}
     let sibling = groupEl.nextElementSibling;
     while (sibling && !sibling.matches('[data-sidebar-group]') && !sibling.matches('.sidebar-context-hub, .sidebar-footer')) {
-      sibling.style.display = isCollapsed ? 'none' : '';
+      if (isCollapsed) {
+        sibling.style.display = 'none';
+      } else {
+        // Only show if not hidden by customize panel
+        const tabId = sibling.dataset?.tab;
+        sibling.style.display = (tabId && hiddenTabs.includes(tabId)) ? 'none' : '';
+      }
       sibling = sibling.nextElementSibling;
     }
     groupEl.setAttribute('aria-expanded', !isCollapsed);

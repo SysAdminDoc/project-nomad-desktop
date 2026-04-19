@@ -4951,7 +4951,8 @@ function updateTabBadges() {
   // Overdue tasks badge on Settings tab
   safeFetch('/api/tasks/due', {}, []).then(tasks => {
     if (!Array.isArray(tasks)) return;
-    const overdue = tasks.filter(t => t.status !== 'completed' && t.due_date && t.due_date < new Date().toISOString().slice(0,10)).length;
+    const today = new Date().toISOString().slice(0,10);
+    const overdue = tasks.filter(t => t.next_due && t.next_due < today).length;
     const settingsTab = document.querySelector('.tab[data-tab="settings"]');
     if (!settingsTab) return;
     let taskBadge = document.getElementById('badge-settings');

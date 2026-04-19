@@ -8,6 +8,7 @@ import time
 from flask import Blueprint, request, jsonify, Response
 
 from db import db_session, log_activity
+from web.blueprints.undo import push_undo
 from web.auth import require_auth
 from web.print_templates import render_print_document
 from web.sql_safety import safe_columns
@@ -115,9 +116,11 @@ def api_contacts_update(cid):
 @require_auth('admin')
 def api_contacts_delete(cid):
     with db_session() as db:
-        r = db.execute('DELETE FROM contacts WHERE id = ?', (cid,))
-        if r.rowcount == 0:
+        row = db.execute('SELECT * FROM contacts WHERE id = ?', (cid,)).fetchone()
+        if not row:
             return jsonify({'error': 'not found'}), 404
+        push_undo('delete', f'Delete contact "{row["name"]}"', 'contacts', dict(row))
+        db.execute('DELETE FROM contacts WHERE id = ?', (cid,))
         db.commit()
     log_activity('contact_deleted', service='contacts', detail=f'id={cid}')
     return jsonify({'status': 'deleted'})

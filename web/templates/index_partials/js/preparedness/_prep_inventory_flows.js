@@ -136,8 +136,8 @@ document.getElementById('inv-table')?.addEventListener('dblclick', e => {
     try {
       await apiPut(`/api/inventory/${itemId}`, { quantity: newQty });
       item.quantity = newQty;
-      qtyVal.textContent = newQty + ' ' + (item.unit || '');
       toast('Quantity updated', 'success');
+      loadInventory();
     } catch(_) { qtyVal.textContent = origText; toast('Failed to update quantity', 'error'); }
   };
   let cancelled = false;
