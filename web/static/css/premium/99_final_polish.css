@@ -3084,6 +3084,10 @@ dd + dt {
   backdrop-filter: none !important;
 }
 
+/* ── Settings search ── */
+.settings-search-wrap { padding: 0 0 var(--sp-3, 12px); }
+.settings-search-wrap input { max-width: 360px; }
+
 /* ── Collapsible sidebar groups ── */
 .sidebar-group-label[data-sidebar-group] { cursor: pointer; }
 .sidebar-group-label[data-sidebar-group]::after {

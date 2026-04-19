@@ -1,3 +1,13 @@
+/* ─── Settings Search/Filter ─── */
+document.getElementById('settings-search')?.addEventListener('input', function() {
+  const q = this.value.toLowerCase().trim();
+  document.querySelectorAll('#tab-settings .settings-card').forEach(card => {
+    if (!q) { card.style.display = ''; return; }
+    const text = card.textContent.toLowerCase();
+    card.style.display = text.includes(q) ? '' : 'none';
+  });
+});
+
 /* ─── Help / Guide ─── */
 function showHelp(section) {
   const palette = getThemePalette();
